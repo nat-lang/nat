@@ -1,5 +1,0 @@
-.vscode
-.mypy_cache
-docker-stack.yml
-venv
-*.DS_Store
