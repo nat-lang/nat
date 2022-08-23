@@ -1,6 +1,6 @@
 module Mean.Typing
   ( Type (..),
-    TyVar (..)
+    TyVar (..),
   )
 where
 
@@ -11,4 +11,5 @@ data Type
   = TyVar TyVar
   | TyCon String
   | TyFun Type Type
+  | TyNil
   deriving (Eq, Ord)

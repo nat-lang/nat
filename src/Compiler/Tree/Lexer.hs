@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Compiler.Tree.Lexer where
 
 import Compiler.Tree.Syntax

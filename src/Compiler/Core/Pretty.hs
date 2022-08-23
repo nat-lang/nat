@@ -1,18 +1,18 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Compiler.Core.Pretty (
-  ppexpr,
-  pptype
-) where
+module Compiler.Core.Pretty
+  ( ppexpr,
+    pptype,
+  )
+where
 
-import Prelude hiding ((<>))
-import qualified Data.Map as Map
-import Data.List (intersperse)
-import Text.PrettyPrint
-
-import Utils
 import qualified Compiler.Core.Syntax as Syn
 import qualified Compiler.Core.TypeEnv as TE
+import Data.List (intersperse)
+import qualified Data.Map as Map
+import Text.PrettyPrint
+import Utils
+import Prelude hiding ((<>))
 
 angles :: Doc -> Doc
 angles p = char '<' <> p <> char '>'
@@ -25,18 +25,20 @@ class Pretty p where
 
 fnIf :: (Doc -> Doc) -> Bool -> Doc -> Doc
 fnIf fn b = case b of
-  True  -> fn
+  True -> fn
   False -> id
 
 parensIf = fnIf parens
+
 anglesIf = fnIf angles
 
 commaSep = punctuate $ char ','
+
 commaSep1 = intersperse $ char ','
 
 instance Pretty Syn.Lit where
   ppr _ l = case l of
-    Syn.LInt i  -> text (show i)
+    Syn.LInt i -> text (show i)
     Syn.LBool b -> text (show b)
 
 instance Pretty Syn.Binder where
@@ -46,7 +48,7 @@ instance Pretty Syn.Expr where
   ppr p e = case e of
     Syn.Var s -> text s
     Syn.Const c _ -> text c
-    Syn.ELit l  -> ppr p l
+    Syn.ELit l -> ppr p l
     Syn.EBinder b -> (char 'λ') <> ppr 0 b
     Syn.App a b -> parensIf (p > 0) ((ppr (p + 1) a) <+> (ppr p b))
     Syn.Lam b e -> pClosure (char 'λ') b e
@@ -55,28 +57,29 @@ instance Pretty Syn.Expr where
       Syn.Neg -> char '¬' <> (ppr p e)
       Syn.SetCompl -> (ppr p e) <> char '∁'
     Syn.EBinOp op e0 e1 -> case op of
-      Syn.Conj -> infixSep '&' [e0,e1]
-      Syn.Disj -> infixSep '|' [e0,e1]
-      Syn.Impl -> infixSep '→' [e0,e1]
-      Syn.Add -> infixSep '+' [e0,e1]
-      Syn.Mul -> infixSep '*' [e0,e1]
-      Syn.Sub -> infixSep '-' [e0,e1]
-      Syn.Div -> infixSep '/' [e0,e1]
-      Syn.SetUnion -> infixSep '∪' [e0,e1]
-      Syn.SetInter -> infixSep '∩' [e0,e1]
-      Syn.SetDiff -> infixSep '∖' [e0,e1]
+      Syn.Conj -> infixSep '&' [e0, e1]
+      Syn.Disj -> infixSep '|' [e0, e1]
+      Syn.Impl -> infixSep '→' [e0, e1]
+      Syn.Add -> infixSep '+' [e0, e1]
+      Syn.Mul -> infixSep '*' [e0, e1]
+      Syn.Sub -> infixSep '-' [e0, e1]
+      Syn.Div -> infixSep '/' [e0, e1]
+      Syn.SetUnion -> infixSep '∪' [e0, e1]
+      Syn.SetInter -> infixSep '∩' [e0, e1]
+      Syn.SetDiff -> infixSep '∖' [e0, e1]
     Syn.EComparison c e0 e1 -> case c of
-      Syn.Eq -> infixSep '=' [e0,e1]
-      Syn.SetSubS -> infixSep '⊆' [e0,e1]
-      Syn.SetMem -> infixSep '∈' [e0,e1]
-      Syn.LT -> infixSep '<' [e0,e1]
-      Syn.GT -> infixSep '>' [e0,e1]
+      Syn.Eq -> infixSep '=' [e0, e1]
+      Syn.SetSubS -> infixSep '⊆' [e0, e1]
+      Syn.SetMem -> infixSep '∈' [e0, e1]
+      Syn.LT -> infixSep '<' [e0, e1]
+      Syn.GT -> infixSep '>' [e0, e1]
     Syn.EQuant q b e -> case q of
       Syn.Univ -> pClosure (char '∀') b e
       Syn.Exis -> pClosure (char '∃') b e
     where
-      pClosure sym b body = parensIf (p > 0) $
-        sym <> ppr p b <+> ppr (p + 1) body
+      pClosure sym b body =
+        parensIf (p > 0) $
+          sym <> ppr p b <+> ppr (p + 1) body
       infixSep c = hsep . (intersperse $ (char c)) . (map $ ppr p)
 
 instance Pretty Syn.TyVar where
@@ -92,16 +95,17 @@ instance Pretty Syn.Decl where
   ppr p (Syn.Typedef n t) = (text n) <> colon <+> ppr p t
 
 instance Pretty Syn.TyScheme where
-  ppr _ (Syn.Forall tvs ty) = let ppt = ppr 0 ty in
-    if null tvs
-      then ppt
-      else (char '∀') <> (hcat $ commaSep1 $ map (ppr 0) tvs) <+> char '.' <+> ppt
+  ppr _ (Syn.Forall tvs ty) =
+    let ppt = ppr 0 ty
+     in if null tvs
+          then ppt
+          else (char '∀') <> (hcat $ commaSep1 $ map (ppr 0) tvs) <+> char '.' <+> ppt
 
 instance Pretty TE.Env where
-  ppr p TE.TypeEnv{TE.types} = let
-    ts = Map.toList types
-    pp1 (n,tyScheme) = text n <+> colon <+> ppr p tyScheme
-    in vcat $ (map pp1 ts)
+  ppr p TE.TypeEnv {TE.types} =
+    let ts = Map.toList types
+        pp1 (n, tyScheme) = text n <+> colon <+> ppr p tyScheme
+     in vcat $ (map pp1 ts)
 
 instance Show TE.Env where
   show = show . ppr 0

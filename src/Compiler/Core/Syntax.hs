@@ -18,6 +18,7 @@ module Compiler.Core.Syntax
     resolvePredicates,
     tyInt,
     tyBool,
+    mkTyScheme,
     pattern TyIntP,
     pattern TyBoolP,
   )
@@ -84,10 +85,6 @@ data Type
   | TyNil
   deriving (Eq, Ord)
 
-tyInt, tyBool :: Type
-tyInt = TyCon "n"
-tyBool = TyCon "t"
-
 pattern TyIntP = TyCon "n"
 
 pattern TyBoolP = TyCon "t"
@@ -96,6 +93,13 @@ data TyScheme = Forall [TyVar] Type
   deriving (Eq, Ord)
 
 data Decl = Let Name Expr | Typedef Name Type
+
+tyInt, tyBool :: Type
+tyInt = TyCon "n"
+tyBool = TyCon "t"
+
+mkTyScheme :: Type -> TyScheme
+mkTyScheme = Forall []
 
 -- rename n to n' in e
 rename :: Name -> Name -> Expr -> Expr

@@ -37,13 +37,16 @@ library
       FOL.KB
       Interpreter.Compose
       Interpreter.Composition
+      Interpreter.CompositionTFoo
       Interpreter.Evaluation
       Interpreter.Fragment
       Lib.Std
       Mean.Evaluation
+      Mean.Lexer
       Mean.Parser
       Mean.Syntax
       Mean.Typing
+      Mean.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments
       Service.App
@@ -78,6 +81,7 @@ library
     , monad-memo
     , mtl
     , parsec
+    , parser-combinators
     , pretty
     , random >=1.1 && <1.3
     , repline >=0.1.2.0
@@ -123,6 +127,7 @@ executable interpreter-exe
     , monad-memo
     , mtl
     , parsec
+    , parser-combinators
     , pretty
     , random >=1.1 && <1.3
     , repline >=0.1.2.0
@@ -140,11 +145,11 @@ executable interpreter-exe
     , warp
   default-language: Haskell2010
 
-test-suite interpreter-test
+test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      CompositionSpec
+      Mean.ParserSpec
       Paths_interpreter
   hs-source-dirs:
       test
@@ -175,6 +180,7 @@ test-suite interpreter-test
     , monad-memo
     , mtl
     , parsec
+    , parser-combinators
     , pretty
     , random >=1.1 && <1.3
     , repline >=0.1.2.0
@@ -191,3 +197,4 @@ test-suite interpreter-test
     , wai-logger
     , warp
   default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*

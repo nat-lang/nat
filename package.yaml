@@ -64,6 +64,7 @@ dependencies:
   - monad-gen
 
   - megaparsec
+  - parser-combinators
 
 library:
   source-dirs:
@@ -83,9 +84,8 @@ executables:
       - interpreter
 
 tests:
-  interpreter-test:
-    main: Spec.hs
-    source-dirs: test
+  spec:
+    defaults: hspec/hspec@main
     ghc-options:
       - -threaded
       - -rtsopts

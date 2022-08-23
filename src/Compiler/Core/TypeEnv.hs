@@ -1,46 +1,46 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Compiler.Core.TypeEnv (
-  Env(..),
-  empty,
-  lookup,
-  remove,
-  extend,
-  extends,
-  merge,
-  mergeEnvs,
-  singleton,
-  keys,
-  fromList,
-  toList,
-) where
-
-import Prelude hiding (lookup)
+module Compiler.Core.TypeEnv
+  ( Env (..),
+    empty,
+    lookup,
+    remove,
+    extend,
+    extends,
+    merge,
+    mergeEnvs,
+    singleton,
+    keys,
+    fromList,
+    toList,
+    isIn,
+  )
+where
 
 import qualified Compiler.Core.Syntax as Syn
-
-import Data.Monoid
 import Data.Foldable hiding (toList)
 import qualified Data.Map as Map
+import Data.Monoid
+import Prelude hiding (lookup)
 
 -------------------------------------------------------------------------------
 -- Typing Environment
 -------------------------------------------------------------------------------
 
-data Env = TypeEnv { types :: Map.Map Syn.Name Syn.TyScheme }
+newtype Env = TypeEnv {types :: Map.Map Syn.Name Syn.TyScheme}
   deriving (Eq)
 
 empty :: Env
 empty = TypeEnv Map.empty
 
 extend :: Env -> (Syn.Name, Syn.TyScheme) -> Env
-extend env (x, s) = env { types = Map.insert x s (types env) }
+extend env (x, s) = env {types = Map.insert x s (types env)}
 
 remove :: Env -> Syn.Name -> Env
 remove (TypeEnv env) var = TypeEnv (Map.delete var env)
 
 extends :: Env -> [(Syn.Name, Syn.TyScheme)] -> Env
-extends env xs = env { types = Map.union (Map.fromList xs) (types env) }
+extends env xs = env {types = Map.union (Map.fromList xs) (types env)}
 
 lookup :: Syn.Name -> Env -> Maybe Syn.TyScheme
 lookup key (TypeEnv tys) = Map.lookup key tys
@@ -56,6 +56,9 @@ singleton x y = TypeEnv (Map.singleton x y)
 
 keys :: Env -> [Syn.Name]
 keys (TypeEnv env) = Map.keys env
+
+isIn :: Syn.TyScheme -> Env -> Bool
+isIn ty = elem ty . map snd . toList
 
 fromList :: [(Syn.Name, Syn.TyScheme)] -> Env
 fromList xs = TypeEnv (Map.fromList xs)

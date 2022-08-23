@@ -1,8 +1,6 @@
-Runtime:<v,i>;
+[id] = \x . x;
 
-[id] = \x.x;
-
-[V] = \y:<e> . \x:<e> . \e:<v> . V:<v,<e,<e,t>>>(e)(y)(x);
+[V] = \y:<e> . \x:<e> . \e:<v> . V(e)(y)(x);
 [NP] = NP:<e>;
 [PF] = \t:<i> . \p:<v,t> . exists e:<v> . ((Runtime e) subs t) & (p e);
 
@@ -10,7 +8,7 @@ Runtime:<v,i>;
 [t] = t;
 
 C:<i,t>;
-[PAST] = \c:<i,t> . \t:<i> . \i:<i,t> . exists t':<i> . (t' < t) & (c t') & (i t');
+[PAST] = \c:<i,t> . \t:<i> . \i:<i,t> . exists t' . (t' < t) & (c t') & (i t');
 
 [bindt'] = \t':<i>;
 [t'] = t';

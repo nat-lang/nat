@@ -12,9 +12,9 @@ module Compiler.Core.Inference
   )
 where
 
+import Compiler.Core.Fresh (letters)
 import Compiler.Core.Pretty
 import qualified Compiler.Core.Syntax as Syn
-import Compiler.Core.Fresh (letters)
 import Compiler.Core.TypeEnv
 import Control.Monad.Except
 import Control.Monad.Identity
@@ -130,11 +130,27 @@ lookupEnv x = do
     Just s -> do
       instantiate s
 
+isInEnv :: Syn.TyScheme -> Infer Bool
+isInEnv ty = asks (isIn ty)
+
 fresh :: Infer Syn.Type
 fresh = do
   s <- get
   put s {count = count s + 1}
-  return $ Syn.TyVar $ Syn.TV (letters !! count s)
+  freshTyVar s 0
+  where
+    freshTyVar :: InferState -> Int -> Infer Syn.Type
+    freshTyVar s cnt = do
+      let tyVar = Syn.TyVar $ Syn.TV $ letters !! (count s + cnt)
+      isStale <- isInEnv $ Syn.mkTyScheme tyVar
+      if isStale
+        then freshTyVar s (cnt + 1)
+        else pure tyVar
+
+freshIfNil :: Syn.Type -> Infer Syn.Type
+freshIfNil ty = case ty of
+  Syn.TyNil -> fresh
+  _ -> pure ty
 
 instantiate :: Syn.TyScheme -> Infer Syn.Type
 instantiate (Syn.Forall as t) = do
@@ -151,27 +167,27 @@ infer :: Syn.Expr -> Infer (Syn.Type, [Constraint])
 infer expr = case expr of
   Syn.ELit (Syn.LInt _) -> return (Syn.tyInt, [])
   Syn.ELit (Syn.LBool _) -> return (Syn.tyBool, [])
-  Syn.EBinder (Syn.Binder n t) -> pure (t, [])
-  Syn.Const c t -> pure (t, [])
+  Syn.EBinder (Syn.Binder n t) -> do
+    t' <- freshIfNil t
+    pure (t', [])
+  Syn.Const c t -> do
+    t' <- freshIfNil t
+    pure (t', [])
   Syn.Var x -> do
     t <- lookupEnv x
     return (t, [])
-  
   Syn.Lam (Syn.Binder n t) e -> do
-    t' <- binderTy
+    t' <- freshIfNil t
     (t'', cs) <- inEnv (n, Syn.Forall [] t') (infer e)
     return (t' `Syn.TyFun` t'', cs)
-    where
-      binderTy = case t of
-        Syn.TyNil -> fresh
-        _ -> pure t
 
   -- fixme
   Syn.Pred n t es -> do
     env <- ask
+    t' <- freshIfNil t
     case inferMany env es of
       Left err -> throwError err
-      Right infs -> return (t, [])
+      Right infs -> return (t', [])
   -- Right infs -> return (t, concat $ snd $ unzip infs)
 
   Syn.App e0 e1 -> do
@@ -179,7 +195,6 @@ infer expr = case expr of
     (t2, c2) <- infer e1
     tv <- fresh
     return (tv, c1 ++ c2 ++ [(t1, t2 `Syn.TyFun` tv)])
-
   Syn.EComparison c e0 e1 -> do
     (t0, c0) <- infer e0
     (t1, c1) <- infer e1
@@ -187,9 +202,7 @@ infer expr = case expr of
     let c2 = (tv, Syn.tyBool)
 
     return (tv, c2 : c0 ++ c1)
-
   Syn.EUnOp op e -> pure (Syn.tyBool, [])
-
   Syn.EBinOp op e0 e1 -> do
     (t1, c1) <- infer e0
     (t2, c2) <- infer e1
@@ -203,8 +216,8 @@ infer expr = case expr of
 
     return (tv, c1 ++ c2 ++ [(u1, u2), (t1, t2)])
   Syn.EQuant q (Syn.Binder n t) e -> do
-    tv <- fresh
-    (t, c) <- inEnv (n, Syn.Forall [] tv) (infer e)
+    t' <- freshIfNil t
+    (_, c) <- inEnv (n, Syn.Forall [] t') (infer e)
     return (Syn.tyBool, c)
 
 {-

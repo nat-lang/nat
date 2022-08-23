@@ -1,4 +1,4 @@
-module Interpreter.CompositionSpec where
+module Interpreter.CompositionTFoo where
 
 -- import Test.Hspec
 

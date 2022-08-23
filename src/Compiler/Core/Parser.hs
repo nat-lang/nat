@@ -7,9 +7,9 @@ module Compiler.Core.Parser
   )
 where
 
+import Compiler.Core.Fresh (letters)
 import Compiler.Core.Lexer
 import Compiler.Core.Pretty
-import Compiler.Core.Fresh (letters)
 import qualified Compiler.Core.Syntax as Syn
 import Control.Monad (void)
 import Data.Functor ((<&>))
@@ -69,7 +69,10 @@ parseType = Ex.buildExpressionParser tyops tyatom
 -------------------------------------------------------------------------------
 
 parseTypeAssignment :: Parser Syn.Type
-parseTypeAssignment = reservedOp ":" >> parseType
+parseTypeAssignment = (reservedOp ":" >> parseType) <|> tyNil
+
+parseOptionalTypeAssignment :: Parser Syn.Type
+parseOptionalTypeAssignment = parseTypeAssignment <|> tyNil
 
 parseBool :: Parser Syn.Expr
 parseBool =
@@ -87,8 +90,7 @@ parseVar = debugParse "var" $ do
 parseConst :: Parser Syn.Expr
 parseConst = debugParse "const" $ do
   c <- titularIdentifier
-  s <- getState
-  t <- parseTypeAssignment <|> pure (s Map.! c)
+  t <- parseOptionalTypeAssignment
   pure $ Syn.Const c t
 
 parseEBinder :: Parser Syn.Expr
@@ -99,7 +101,7 @@ parseEBinder = debugParse "ebinder" $ do
 parseBinder :: Parser Syn.Binder
 parseBinder = debugParse "binder" $ do
   n <- identifier
-  t <- parseTypeAssignment <|> tyNil
+  t <- parseOptionalTypeAssignment
   modifyState (Map.insert n t)
   pure $ Syn.Binder n t
 
@@ -132,7 +134,7 @@ parseExisQ = debugParse "exisq" $ do
 parsePred :: Parser Syn.Expr
 parsePred = debugParse "pred" $ do
   n <- titularIdentifier
-  t <- parseTypeAssignment
+  t <- parseOptionalTypeAssignment
   args <- parens ((spaces *> parseExpr' <* spaces) `sepBy` char ',')
   pure $ Syn.Pred n t args
 
