@@ -1,0 +1,1 @@
+[smart] = \w:<s> . \x:<e> . Smart:<e,<w,t>>(x)(w);

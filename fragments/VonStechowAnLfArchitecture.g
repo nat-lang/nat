@@ -1,6 +1,6 @@
-Runtime :<v,i>;
+Runtime:<v,i>;
 
-[id] = \x:<A> . x;
+[id] = \x.x;
 
 [V] = \y:<e> . \x:<e> . \e:<v> . V:<v,<e,<e,t>>>(e)(y)(x);
 [NP] = NP:<e>;

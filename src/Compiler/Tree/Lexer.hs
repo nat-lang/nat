@@ -1,13 +1,12 @@
 module Compiler.Tree.Lexer where
 
-import           Data.Void                  (Void)
-import           Control.Monad.State
-import qualified Text.Megaparsec.Char.Lexer as Lexer
-import qualified Text.Megaparsec.Char       as CharParser
-import           Text.Megaparsec            ((<|>))
-import qualified Text.Megaparsec            as Parsec
-
 import Compiler.Tree.Syntax
+import Control.Monad.State
+import Data.Void (Void)
+import Text.Megaparsec ((<|>))
+import qualified Text.Megaparsec as Parsec
+import qualified Text.Megaparsec.Char as CharParser
+import qualified Text.Megaparsec.Char.Lexer as Lexer
 
 type Parser = Parsec.Parsec Void String
 
@@ -33,4 +32,3 @@ identifier :: Parser String
 identifier = lexeme $ Parsec.try p
   where
     p = (:) <$> CharParser.letterChar <*> Parsec.many (CharParser.alphaNumChar <|> CharParser.char '\'')
-

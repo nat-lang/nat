@@ -21,6 +21,10 @@ import Network.Wai.Middleware.RequestLogger
 import Network.Wai.Middleware.RequestLogger.JSON
 import Prelude.Compat
 import Servant
+import Service.App (mkApp)
+import Service.Ctx (AppCtx (..))
+import Service.Logger (LogMsg (..))
+import Service.Settings (SiteConfig (..))
 import System.Log.FastLogger
   ( LoggerSet,
     ToLogStr (..),
@@ -29,12 +33,6 @@ import System.Log.FastLogger
     newStdoutLoggerSet,
     pushLogStrLn,
   )
-
-import Service.Ctx (AppCtx(..))
-import Service.App (mkApp)
-import Service.Settings (SiteConfig(..))
-import Service.Logger (LogMsg(..))
-
 
 port :: Int
 port = 8080

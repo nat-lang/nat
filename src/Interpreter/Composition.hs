@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Interpreter.Compose
+module Interpreter.Composition
   ( ExprTree,
     ExprLabel (..),
     TypeCheckedExpr (..),
@@ -9,6 +9,7 @@ module Interpreter.Compose
     SemanticLabel (..),
     EvaluatedExpr (..),
     compose,
+    collectCompositionErrors,
   )
 where
 
@@ -20,6 +21,7 @@ import Compiler.Tree.Syntax as T
 import Control.Monad.Identity
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Foldable (foldl', toList)
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
 import qualified Interpreter.Evaluation as Sem
@@ -50,6 +52,16 @@ type FragmentCtx = Reader Frag.Fragment
 instance Show TypeCheckedExpr where
   show (TypedExpr e ty) = show e ++ ": " ++ show ty
   show (UntypedExpr e err) = show e ++ ": " ++ show err
+
+data CompositionError = CEvalError Sem.EvalError | CTypeError Inf.TypeError
+
+collectCompositionErrors :: SemanticTree -> [SemanticLabel]
+collectCompositionErrors = filter incl . toList
+  where
+    incl node = case node of
+      (Just (Left _), _, _) -> True
+      (_, Just (UntypedExpr _ _), _) -> True
+      _ -> False
 
 checkLexicon :: S.Name -> FragmentCtx (Maybe S.Expr)
 checkLexicon name = asks (Map.lookup name)
@@ -94,66 +106,64 @@ typeCheckExprTree eTree = runState (mapM typeCheck eTree) TyEnv.empty
 
     typeCheck :: ExprLabel -> State TyEnv.Env TypeCheckedExprLabel
     typeCheck (eLabel, cLabel) = case eLabel of
-      Nothing -> pure $ (Nothing, cLabel)
+      Nothing -> pure (Nothing, cLabel)
       Just expr -> do
         env <- get
         case Inf.inferExpr env expr of
-          Left err -> pure $ (Just $ UntypedExpr expr err, cLabel)
+          Left err -> pure (Just $ UntypedExpr expr err, cLabel)
           Right ty -> case ty of
             gTy@(S.Forall _ iTy) -> do
               modify (updateTypeEnv expr gTy)
               pure $ (Just $ TypedExpr expr iTy, cLabel)
 
-pattern LegalFnNode t tDom tRan e <- T.Node (Just (TypedExpr e t@(S.TyFun tDom tRan)), cl) _ _
+pattern FnNode e tDom <- TypedExpr e (S.TyFun tDom _)
 
-pattern LegalArgNode t e <- T.Node (Just (TypedExpr e t), cl) _ _
+pattern ArgNode e t <- TypedExpr e t
 
-pattern LegalBindNode b <- T.Node (Just (TypedExpr (S.EBinder b) t), cl) _ _
-
-pattern TypedNode t <- T.Node (Just (TypedExpr _ t), _) _ _
-
-tryCompositionOps :: TyEnv.Env -> ConstituencyLabel -> TypeCheckedExprTree -> TypeCheckedExprTree -> TypeCheckedExprTree
-tryCompositionOps env cl c0 c1 = case c0 of
-  -- TypedNode t1 | Inf.unifiable t0 t1 -> predicateModification e0 e1
-  LegalBindNode b -> predicateAbstraction b c1
-  LegalFnNode t0 t1Dom t1Ran e0 -> case c1 of
-    LegalBindNode b -> predicateAbstraction b c0
-    LegalArgNode t1 e1 | Inf.unifiable t1Dom t1 -> functionApplication e0 e1
-    _ -> fallthru
-  LegalArgNode t0 e0 -> case c1 of
-    LegalBindNode b -> predicateAbstraction b c0
-    LegalFnNode t1 t2Dom t2Ran e1 | Inf.unifiable t2Dom t0 -> functionApplication e1 e0
-    _ -> fallthru
-  _ -> fallthru
+functionApplication :: TypeCheckedExpr -> TypeCheckedExpr -> Maybe S.Expr
+functionApplication e0 e1 = case (e0, e1) of
+  (FnNode fn tDom, TypedExpr arg t) | Inf.unifiable tDom t -> doFA fn arg
+  (TypedExpr arg t, FnNode fn tDom) | Inf.unifiable tDom t -> doFA fn arg
+  _ -> Nothing
   where
-    functionApplication :: S.Expr -> S.Expr -> TypeCheckedExprTree
-    functionApplication e0 e1 =
-      let e = S.App e0 e1
-       in case Inf.inferExpr env e of
-            Right (S.Forall _ ty) -> compose $ TypedExpr e ty
-            Left err -> compose $ UntypedExpr e err
+    doFA fn arg = Just $ S.App fn arg
 
-    predicateAbstraction :: S.Binder -> TypeCheckedExprTree -> TypeCheckedExprTree
-    predicateAbstraction b@(S.Binder _ t0) (T.Node (tELabel, _) _ _) = case tELabel of
-      Just (TypedExpr e t1) -> compose $ TypedExpr (S.Lam b e) (S.TyFun t0 t1)
-      _ -> fallthru
+pattern BinderNode b <- TypedExpr (S.EBinder b) _
 
-    -- predicateModification :: S.Expr -> S.Expr -> TypeCheckedExprTree
-    -- predicateModification e0 e1 = case Inf.unifiable of
+predicateAbstraction :: TypeCheckedExpr -> TypeCheckedExpr -> Maybe S.Expr
+predicateAbstraction e0 e1 = case (e0, e1) of
+  (BinderNode b, TypedExpr e t) -> doPA b e
+  (TypedExpr e t, BinderNode b) -> doPA b e
+  _ -> Nothing
+  where
+    doPA b e = Just $ S.Lam b e
 
-    compose label = T.Node (Just label, cl) c0 c1
-    fallthru = T.Node (Nothing, cl) c0 c1
+predicateModification :: TypeCheckedExpr -> TypeCheckedExpr -> Maybe S.Expr
+predicateModification e0 e1 = case (e0, e1) of
+  (TypedExpr e t, TypedExpr e' t') | Inf.unifiable t t' -> doPM e e'
+  _ -> Nothing
+  where
+    doPM e e' = Just $ S.EBinOp S.Conj e e'
 
--- | Construct non-terminal expressions via our composition operations.
+pattern TypedNode e <- T.Node (Just e@TypedExpr {}, _) _ _
+
 composeExprTree :: (TypeCheckedExprTree, TyEnv.Env) -> TypeCheckedExprTree
-composeExprTree (n@(T.Node (_, cnl) c1 c2), env) = case (c1, c2) of
-  (T.Node {}, T.Node {}) ->
-    let s1 = composeExprTree (c1, env)
-        s2 = composeExprTree (c2, env)
-     in tryCompositionOps env cnl s1 s2
-  _ -> n
-
-type ExprTreeEval = StateT Sem.EvalCtx Identity SemanticTree
+composeExprTree (leaf@T.Leaf, _) = leaf
+composeExprTree (node@(T.Node te c0 c1), env) = foldl' tryOp node' ops
+  where
+    node' = T.Node te c0' c1'
+    c0' = composeExprTree (c0, env)
+    c1' = composeExprTree (c1, env)
+    ops = [functionApplication, predicateAbstraction, predicateModification]
+    tryOp node@(T.Node (_, cl) c0 c1) op =
+      let mkNode expr = T.Node (Just expr, cl) c0 c1
+       in case (c0, c1) of
+            (TypedNode e0, TypedNode e1) -> case op e0 e1 of
+              Just expr -> case Inf.inferExpr env expr of
+                Right (S.Forall _ ty) -> mkNode $ TypedExpr expr ty
+                Left err -> mkNode $ UntypedExpr expr err
+              _ -> node
+            _ -> node
 
 -- | Evaluate an expression tree, passing bound variables down.
 evalExprTree :: TypeCheckedExprTree -> SemanticTree
@@ -172,7 +182,7 @@ evalExprTree eTree = evalState (mapM eval eTree) Sem.emptyCtx
             Right v -> do
               modify $ updateCtx v
               pure (Just $ Right v, eLabel, cLabel)
-            Left err -> pure $ (Just $ Left err, eLabel, cLabel)
+            Left err -> pure (Just $ Left err, eLabel, cLabel)
       Nothing -> pure (Nothing, Nothing, cLabel)
 
 compose :: Frag.Fragment -> ConstituencyTree -> SemanticTree

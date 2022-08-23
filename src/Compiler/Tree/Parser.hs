@@ -1,46 +1,46 @@
-module Compiler.Tree.Parser (
-  parseConstituencyTree,
-  parseUnPosConstituencyTree
-) where
+module Compiler.Tree.Parser
+  ( parseConstituencyTree,
+    parseUnPosConstituencyTree,
+  )
+where
 
+import Compiler.Tree.Lexer as L
+import Compiler.Tree.Syntax as S
+import Control.Monad.State
+import Data.Char (digitToInt)
+import Data.Foldable (toList)
+import Data.List (foldl')
 import Debug.Trace (trace, traceM)
-import Data.Foldable                 (toList)
-import Data.Char                     (digitToInt)
-import Data.List                     (foldl')
-import           Control.Monad.State
-import           Text.Megaparsec     ((<|>))
-import qualified Text.Megaparsec  as P
-
-import Compiler.Tree.Lexer        as L
-import Compiler.Tree.Syntax       as S
+import Text.Megaparsec ((<|>))
+import qualified Text.Megaparsec as P
 
 type CTreeParser = L.Parser (S.Tree S.Label)
 
 mkLexNode lex = S.Node (S.LexLabel lex) S.Leaf S.Leaf
-mkBinaryCatNode cat l r = S.Node (S.CatLabel cat) l r
+
+mkBinaryCatNode cat = S.Node (S.CatLabel cat)
+
 mkUnaryCatNode cat l = S.Node (S.CatLabel cat) l S.Leaf
 
 lexNode :: CTreeParser
-lexNode = do
-  label <- identifier
-  pure $ mkLexNode label
+lexNode = do mkLexNode <$> identifier
 
 cTree' :: (CTreeParser -> CTreeParser) -> CTreeParser
-cTree' delimit  = P.try (delimit unaryCatNode) <|> (delimit binaryCatNode)
+cTree' delimit = P.try (delimit unaryCatNode) <|> delimit binaryCatNode
   where
     node = P.try lexNode <|> P.try (delimit lexNode) <|> cTree' delimit
 
     unaryCatNode :: CTreeParser
     unaryCatNode = do
       cat <- identifier
-      l   <- node
+      l <- node
       pure $ mkUnaryCatNode cat l
 
     binaryCatNode :: CTreeParser
     binaryCatNode = do
       cat <- identifier
-      l   <- node
-      r   <- node
+      l <- node
+      r <- node
       pure $ mkBinaryCatNode cat l r
 
 cTree = P.try (cTree' brackets) <|> (cTree' parens)

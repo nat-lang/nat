@@ -23,6 +23,7 @@ source-repository head
 
 library
   exposed-modules:
+      Compiler.Core.Fresh
       Compiler.Core.Inference
       Compiler.Core.Lexer
       Compiler.Core.Parser
@@ -35,9 +36,14 @@ library
       FOL.AristotelianInfEngine
       FOL.KB
       Interpreter.Compose
+      Interpreter.Composition
       Interpreter.Evaluation
       Interpreter.Fragment
       Lib.Std
+      Mean.Evaluation
+      Mean.Parser
+      Mean.Syntax
+      Mean.Typing
       Service.API.ConstituencyTrees
       Service.API.Fragments
       Service.App

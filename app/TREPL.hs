@@ -5,40 +5,37 @@
 
 module TREPL (main) where
 
-import Compiler.Core.Syntax
 import Compiler.Core.Inference
 import Compiler.Core.Parser
 import Compiler.Core.Pretty
+import Compiler.Core.Syntax
 import qualified Compiler.Core.TypeEnv as Env
-import Interpreter.Evaluation
-
-import Data.Monoid
-import qualified Data.Map as Map
-import qualified Data.Text.Lazy as L
-import qualified Data.Text.Lazy.IO as L
-
 import Control.Monad.Identity
 import Control.Monad.State.Strict
-
-import Data.List (isPrefixOf, foldl')
-
-import System.Exit
-import System.Environment
+import Data.List (foldl', isPrefixOf)
+import qualified Data.Map as Map
+import Data.Monoid
+import qualified Data.Text.Lazy as L
+import qualified Data.Text.Lazy.IO as L
+import Interpreter.Evaluation
 import System.Console.Repline
+import System.Environment
+import System.Exit
 
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
 
 data IState = IState
-  { tyctx :: Env.Env  -- Type environment
-  , tmctx :: EvalCtx  -- Value environment
+  { tyctx :: Env.Env, -- Type environment
+    tmctx :: EvalCtx -- Value environment
   }
 
 initState :: IState
 initState = IState Env.empty emptyTmenv
 
 type Repl a = HaskelineT (StateT IState IO) a
+
 hoistErr :: Show e => Either e a -> Repl a
 hoistErr (Right val) = return val
 hoistErr (Left err) = do
@@ -51,7 +48,8 @@ hoistErr (Left err) = do
 
 evalDef :: EvalCtx -> (String, Expr) -> EvalCtx
 evalDef env (nm, ex) = tmctx'
-  where (val, tmctx') = runEval env nm ex
+  where
+    (val, tmctx') = runEval env nm ex
 
 exec :: Bool -> L.Text -> Repl ()
 exec update source = do
@@ -65,9 +63,11 @@ exec update source = do
   tyctx' <- hoistErr $ inferTop (tyctx st) mod
 
   -- Create the new environment
-  let st' = st { tmctx = foldl' evalDef (tmctx st) mod
-               , tyctx = tyctx' <> (tyctx st)
-               }
+  let st' =
+        st
+          { tmctx = foldl' evalDef (tmctx st) mod,
+            tyctx = tyctx' <> (tyctx st)
+          }
 
   -- Update the interpreter state
   when update (put st')
@@ -76,12 +76,12 @@ exec update source = do
   case lookup "it" mod of
     Nothing -> return ()
     Just ex -> do
-      let (val, _) = runEval (tmctx st') "it"  ex
+      let (val, _) = runEval (tmctx st') "it" ex
       showOutput (show val) st'
 
 showOutput :: String -> IState -> Repl ()
 showOutput arg st = do
-  case Env.lookup "it" (tyctx st)  of
+  case Env.lookup "it" (tyctx st) of
     Just val -> liftIO $ putStrLn $ ppsignature (arg, val)
     Nothing -> return ()
 
@@ -123,8 +123,8 @@ quit _ = liftIO $ exitSuccess
 
 -- Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
-defaultMatcher = [
-    (":load"  , fileCompleter)
+defaultMatcher =
+  [ (":load", fileCompleter)
   --, (":type"  , values)
   ]
 
@@ -137,11 +137,11 @@ comp n = do
   return $ filter (isPrefixOf n) (cmds ++ defs)
 
 options :: [(String, [String] -> Repl ())]
-options = [
-    ("load"   , load)
-  , ("browse" , browse)
-  , ("quit"   , quit)
-  , ("type"   , typeof)
+options =
+  [ ("load", load),
+    ("browse", browse),
+    ("quit", quit),
+    ("type", typeof)
   ]
 
 -------------------------------------------------------------------------------
@@ -152,8 +152,9 @@ completer :: CompleterStyle (StateT IState IO)
 completer = Prefix (wordCompleter comp) defaultMatcher
 
 shell :: Repl a -> IO ()
-shell pre = flip evalStateT initState
-     $ evalRepl "Poly> " cmd TREPL.options completer pre
+shell pre =
+  flip evalStateT initState $
+    evalRepl "Poly> " cmd TREPL.options completer pre
 
 -------------------------------------------------------------------------------
 -- Toplevel
@@ -163,7 +164,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    []      -> shell (return ())
+    [] -> shell (return ())
     [fname] -> shell (load [fname])
     ["test", fname] -> shell (load [fname] >> browse [] >> quit ())
     _ -> putStrLn "invalid arguments"

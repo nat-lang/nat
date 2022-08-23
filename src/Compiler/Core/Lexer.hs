@@ -1,18 +1,18 @@
 module Compiler.Core.Lexer where
 
+import qualified Compiler.Core.Syntax as Syn
 import qualified Data.Map as Map
-import Text.Parsec
+import Text.Parsec (Parsec, alphaNum, eof, letter, oneOf, (<|>))
+import Text.Parsec.Language (haskellStyle)
 import qualified Text.Parsec.Token as Tok
 import qualified Text.ParserCombinators.Parsec.Char as CTok
-import Text.Parsec.Language (haskellStyle)
-
-import qualified Compiler.Core.Syntax as Syn
 
 -------------------------------------------------------------------------------
 -- State def
 -------------------------------------------------------------------------------
 
 type SymTypeState = Map.Map Syn.Name Syn.Type
+
 type Parser = Parsec String SymTypeState
 
 -------------------------------------------------------------------------------
@@ -20,14 +20,14 @@ type Parser = Parsec String SymTypeState
 -------------------------------------------------------------------------------
 
 reservedNames :: [String]
-reservedNames = [
-    "exists",
+reservedNames =
+  [ "exists",
     "forall"
   ]
 
 reservedOps :: [String]
-reservedOps = [
-    "->",
+reservedOps =
+  [ "->",
     "\\",
     "+",
     "*",
@@ -37,19 +37,21 @@ reservedOps = [
   ]
 
 lexer :: Tok.TokenParser SymTypeState
-lexer = Tok.makeTokenParser $ Tok.LanguageDef
-  { Tok.commentStart    = "{-"
-  , Tok.commentEnd      = "-}"
-  , Tok.commentLine     = "--"
-  , Tok.nestedComments  = True
-  , Tok.identStart      = letter
-  , Tok.identLetter     = alphaNum <|> oneOf "_'"
-  , Tok.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
-  , Tok.opLetter        = oneOf ":!#$%&*+./=?@\\^|-~"
-  , Tok.reservedNames   = [] -- reservedNames
-  , Tok.reservedOpNames = [] -- reservedOps
-  , Tok.caseSensitive   = True
-  }
+lexer =
+  Tok.makeTokenParser $
+    Tok.LanguageDef
+      { Tok.commentStart = "{-",
+        Tok.commentEnd = "-}",
+        Tok.commentLine = "--",
+        Tok.nestedComments = True,
+        Tok.identStart = letter,
+        Tok.identLetter = alphaNum <|> oneOf "_'",
+        Tok.opStart = oneOf ":!#$%&*+./<=>?@\\^|-~",
+        Tok.opLetter = oneOf ":!#$%&*+./=?@\\^|-~",
+        Tok.reservedNames = [], -- reservedNames
+        Tok.reservedOpNames = [], -- reservedOps
+        Tok.caseSensitive = True
+      }
 
 reserved :: String -> Parser ()
 reserved = Tok.reserved lexer

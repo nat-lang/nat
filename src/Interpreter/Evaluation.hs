@@ -1,11 +1,12 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Interpreter.Evaluation where
 
 import Control.Monad.Except
 import Control.Monad.Identity
 import qualified Data.Map as Map
+import Data.Functor ((<&>))
 
 import Compiler.Core.Pretty
 import qualified Compiler.Core.Syntax as Syn
@@ -43,42 +44,39 @@ type EvalCtx = Map.Map Syn.Name Value
 eval :: EvalCtx -> Syn.Expr -> Evaluation Value
 eval ctx expr = let
 
-  guardBool e = eval ctx e >>= \v -> case v of
-    VBool b -> pure b
-  guardInt e = eval ctx e >>= \v -> case v of
-    VInt i -> pure $ fromIntegral i
-  guardForm ctx' e = eval ctx' e >>= \v -> case v of
+  guardBool e = eval ctx e >>= \(VBool b) -> pure b
+  guardInt e = eval ctx e >>= \(VInt i) -> pure $ fromIntegral i
+  guardForm ctx' e = eval ctx' e >>= \case
     VFormula e' -> pure e'
     v -> throwError $ NotAFormula v
 
   subformula :: Syn.UnOp -> Syn.Expr -> Evaluation Value
-  subformula f e = guardForm ctx e >>= pure . VFormula . (Syn.EUnOp f)
+  subformula f e = guardForm ctx e <&> (VFormula . (Syn.EUnOp f))
 
   subformulae :: ([Syn.Expr] -> Syn.Expr) -> [Syn.Expr] -> Evaluation Value
-  subformulae f es = mapM (guardForm ctx) es >>= pure . VFormula . f 
+  subformulae f es = mapM (guardForm ctx) es <&> (VFormula . f)
 
   subformulae2 :: (Syn.Expr -> Syn.Expr -> Syn.Expr) -> Syn.Expr -> Syn.Expr -> Evaluation Value
   subformulae2 op e0 e1 = do
-    f0 <- (guardForm ctx e0)
-    f1 <- (guardForm ctx e1)
-    pure $ VFormula $ op f0 f1
-  
+    f0 <- guardForm ctx e0
+    VFormula . op f0 <$> (guardForm ctx e1)
+
   bind :: Syn.Binder -> EvalCtx
   bind (Syn.Binder n _) = Map.insert n (VFormula $ Syn.Var n) ctx
 
   simplify :: Syn.Binder -> Syn.Expr -> Evaluation Syn.Expr
   simplify b e = do
-    traceM ("simplifying.." ++ show e)
+    -- traceM ("simplifying.." ++ show e)
     v <- eval (bind b) e
-    traceM ("finished simplifying..")
+    -- traceM "finished simplifying.."
     case v of
       VFormula e' -> do
-        traceM ("\t to vform: " ++ show e')
-        pure $ e'
+        -- traceM ("\t to vform: " ++ show e')
+        pure e'
       VFunc e' -> do
-        traceM ("\t to vfun: " ++ show e')
-        pure $ e'
-      _ -> pure $ expr
+        -- traceM ("\t to vfun: " ++ show e')
+        pure e'
+      _ -> pure expr
 
   arithmeticFormula op e0 e1 = do
     i0 <- guardInt e0
@@ -96,7 +94,7 @@ eval ctx expr = let
     -- (b) bound during simplification of a lambda body
     -- (c) supplied by the caller (i.e. composition)
     Syn.Var n -> do
-      traceM ("looking for: " ++ n)
+      -- traceM ("looking for: " ++ n)
       case Map.lookup n ctx of
         Nothing -> throwError $ UnboundVariable expr
         Just v -> pure v
@@ -115,7 +113,7 @@ eval ctx expr = let
       Syn.Add -> arithmeticFormula (+) e0 e1
       Syn.Mul -> arithmeticFormula (*) e0 e1
       Syn.Sub -> arithmeticFormula (-) e0 e1
-      Syn.Div -> arithmeticFormula (div) e0 e1
+      Syn.Div -> arithmeticFormula div e0 e1
       _ -> subformulae2 (Syn.EBinOp op) e0 e1
 
     Syn.EComparison c e0 e1 -> subformulae2 (Syn.EComparison c) e0 e1

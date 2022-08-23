@@ -1,35 +1,32 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Service.API.Fragments where
 
+import qualified Compiler.Tree.Syntax as ST
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader
-import System.FilePath ((</>), (<.>))
-import GHC.Generics (Generic)
+import qualified Data.Aeson as JSON
+import qualified Data.Aeson.Text as JSONText
 import Data.Proxy
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
-import qualified Data.Aeson.Text as JSONText
-import qualified Data.Aeson as JSON
-import qualified Data.Text as T
-
-import Servant (Capture, JSON, Post, ReqBody, err400, throwError, (:>))
-
-import qualified Compiler.Tree.Syntax as ST
+import GHC.Generics (Generic)
+import qualified Interpreter.Composition as C
 import qualified Interpreter.Fragment as F
-import qualified Interpreter.Compose as C
-
+import Servant (Capture, JSON, Post, ReqBody, err400, throwError, (:>))
 import Service.Ctx
-import Service.Settings
 import Service.Logger (logMsg)
 import Service.Serializers
+import Service.Settings
+import System.FilePath ((<.>), (</>))
 
 data FragmentHandlerResp = FragmentHandlerResp
-  { semanticTree :: !C.SemanticTree }
+  {semanticTree :: !C.SemanticTree}
   deriving (Show, Generic)
 
 instance JSON.ToJSON FragmentHandlerResp where
@@ -46,8 +43,8 @@ fragmentHandler fragmentId syntaxTree = do
 
   logMsg $ "fragment: " <> T.pack fragmentId <> " syntax tree: " <> encodeTreeToText syntaxTree
 
-  fragIO <- liftIO $ F.loadFragment $ (fragmentDir config) </> fragmentId <.> "hs"
+  fragIO <- liftIO $ F.loadFragment $ (fragmentDir config) </> fragmentId <.> "g"
 
   case fragIO of
     Left err -> throwError err400
-    Right frag -> pure $ FragmentHandlerResp { semanticTree = C.compose frag syntaxTree }
+    Right frag -> pure $ FragmentHandlerResp {semanticTree = C.compose frag syntaxTree}

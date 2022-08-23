@@ -1,54 +1,68 @@
-module Compiler.Core.Parser (
-  parseExpr,
-  parseFrag,
-  parseFragS,
-  parseDecl,
-  ParseError
-) where
+module Compiler.Core.Parser
+  ( parseExpr,
+    parseFrag,
+    parseFragS,
+    parseDecl,
+    ParseError,
+  )
+where
 
-import System.IO (IO, FilePath)
+import Compiler.Core.Lexer
+import Compiler.Core.Pretty
+import Compiler.Core.Fresh (letters)
+import qualified Compiler.Core.Syntax as Syn
+import Control.Monad (void)
+import Data.Functor ((<&>))
+import Data.Functor.Identity (Identity)
 import qualified Data.Map as Map
 import Debug.Trace (trace, traceM)
-import Data.Functor.Identity
-import Control.Monad (void)
+import System.IO (FilePath, IO)
 import Text.Parsec
 import qualified Text.Parsec.Expr as Ex
 import Text.ParserCombinators.Parsec.Combinator (choice)
 
-import Compiler.Core.Lexer
-import qualified Compiler.Core.Syntax as Syn
-import Compiler.Core.Pretty
-
 debugParse :: String -> Parser a -> Parser a
-debugParse s p = if False
-  then (tryParse s) *> p <* (completeParse s)
-  else p
-    where
-      tryParse p = parserTrace ("parsing " ++ p ++ "...")
-      completeParse p = parserTrace ("ok, parsed " ++ p)
+debugParse s p =
+  if False
+    then tryParse s *> p <* completeParse s
+    else p
+  where
+    tryParse p = parserTrace ("parsing " ++ p ++ "...")
+    completeParse p = parserTrace ("ok, parsed " ++ p)
 
-titularIdentifier = (lookAhead upper) >> identifier
-lIdentifier = (lookAhead lower) >> identifier
+titularIdentifier = lookAhead upper >> identifier
+
+lIdentifier = lookAhead lower >> identifier
 
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
 
-tyatom :: Parser Syn.Type
-tyatom = tylit <|> (angles parseType)
-
 tylit :: Parser Syn.Type
-tylit = (reservedOp "t" >> pure Syn.tyBool)
-     <|> (reservedOp "n" >> pure Syn.tyInt)
-     <|> (titularIdentifier >>= (pure . Syn.TyVar . Syn.TV))
-     <|> (identifier >>= (pure . Syn.TyCon))
+tylit =
+  (reservedOp "t" >> pure Syn.tyBool)
+    <|> (reservedOp "n" >> pure Syn.tyInt)
+    <|> (titularIdentifier <&> (Syn.TyVar . Syn.TV))
+    <|> (identifier <&> Syn.TyCon)
+
+tyatom :: Parser Syn.Type
+tyatom = tylit <|> angles parseType
+
+isTyVar ty = case ty of
+  Syn.TyVar _ -> True
+  _ -> False
+
+tyNil :: Parser Syn.Type
+tyNil = do
+  pure Syn.TyNil
 
 parseType :: Parser Syn.Type
 parseType = Ex.buildExpressionParser tyops tyatom
   where
     infixOp x f = Ex.Infix (reservedOp x >> pure f)
-    tyops = [ [infixOp "," Syn.TyFun Ex.AssocRight]
-            ]
+    tyops =
+      [ [infixOp "," Syn.TyFun Ex.AssocRight]
+      ]
 
 -------------------------------------------------------------------------------
 -- Expressions
@@ -58,36 +72,34 @@ parseTypeAssignment :: Parser Syn.Type
 parseTypeAssignment = reservedOp ":" >> parseType
 
 parseBool :: Parser Syn.Expr
-parseBool = debugParse "bool" (reserved "True" >> pure (Syn.ELit (Syn.LBool True)))
-         <|> (reserved "False" >> pure (Syn.ELit (Syn.LBool False)))
+parseBool =
+  debugParse "bool" (reserved "True" >> pure (Syn.ELit (Syn.LBool True)))
+    <|> (reserved "False" >> pure (Syn.ELit (Syn.LBool False)))
 
 parseNumber :: Parser Syn.Expr
 parseNumber = debugParse "number" $ do
-  n <- natural
-  pure (Syn.ELit (Syn.LInt (fromIntegral n)))
+  Syn.ELit . Syn.LInt . fromIntegral <$> natural
 
 parseVar :: Parser Syn.Expr
 parseVar = debugParse "var" $ do
-  i <- lIdentifier
-  pure $ Syn.Var i
+  Syn.Var <$> lIdentifier
 
 parseConst :: Parser Syn.Expr
 parseConst = debugParse "const" $ do
   c <- titularIdentifier
   s <- getState
-  t <- parseTypeAssignment <|> (pure $ s Map.! c)
+  t <- parseTypeAssignment <|> pure (s Map.! c)
   pure $ Syn.Const c t
 
 parseEBinder :: Parser Syn.Expr
 parseEBinder = debugParse "ebinder" $ do
   reservedOp "\\"
-  b <- parseBinder
-  pure $ Syn.EBinder b
+  Syn.EBinder <$> parseBinder
 
 parseBinder :: Parser Syn.Binder
 parseBinder = debugParse "binder" $ do
   n <- identifier
-  t <- parseTypeAssignment
+  t <- parseTypeAssignment <|> tyNil
   modifyState (Map.insert n t)
   pure $ Syn.Binder n t
 
@@ -96,8 +108,7 @@ parseLambda = debugParse "lambda" $ do
   reservedOp "\\"
   b <- parseBinder
   reservedOp "."
-  e <- parseExpr'
-  pure (Syn.Lam b e)
+  Syn.Lam b <$> parseExpr'
 
 parseApp :: Parser Syn.Expr
 parseApp = do
@@ -109,16 +120,14 @@ parseUnivQ = debugParse "univq" $ do
   reservedOp "forall"
   b <- parseBinder
   reservedOp "."
-  e <- parseExpr'
-  pure $ Syn.EQuant Syn.Univ b e
+  Syn.EQuant Syn.Univ b <$> parseExpr'
 
 parseExisQ :: Parser Syn.Expr
 parseExisQ = debugParse "exisq" $ do
   reservedOp "exists"
   b <- parseBinder
   reservedOp "."
-  e <- parseExpr'
-  pure $ Syn.EQuant Syn.Exis b e
+  Syn.EQuant Syn.Exis b <$> parseExpr'
 
 parsePred :: Parser Syn.Expr
 parsePred = debugParse "pred" $ do
@@ -127,8 +136,10 @@ parsePred = debugParse "pred" $ do
   args <- parens ((spaces *> parseExpr' <* spaces) `sepBy` char ',')
   pure $ Syn.Pred n t args
 
+{-
 parseSet :: Parser Syn.Expr
-parseSet = brackets ((spaces *> parseExpr' <* spaces) `sepBy` char ',') >>= (pure . Syn.mkSet)
+parseSet = brackets ((spaces *> parseExpr' <* spaces) `sepBy` char ',') <&> Syn.mkSet
+-}
 
 parseTypedef :: Parser Syn.Decl
 parseTypedef = debugParse "typedef" $ do
@@ -145,56 +156,61 @@ parseLet = debugParse "let" $ do
   spaces
   reservedOp "="
   spaces
-  expr <- parseExpr'
-  pure $ Syn.Let name expr
+  Syn.Let name <$> parseExpr'
 
 parseDecl' = parseTypedef <|> parseLet
 
-factor :: Parser Syn.Expr
-factor = (parens parseExpr') <|>
-         (parseBool)         <|>
-         (parseNumber)       <|>
-         (try parseConst)    <|>
-         (try parseUnivQ)        <|>
-         (try parseExisQ)        <|>
-         (parseVar)          <|>
-         (try parseLambda)       <|>
-         parseEBinder
-         -- (parsePred)
-
 binOp :: String -> Syn.BinOp -> Ex.Assoc -> Ex.Operator String SymTypeState Identity Syn.Expr
-binOp name fun assoc = Ex.Infix (reservedOp name >> (pure $ \e0 -> \e1 -> Syn.EBinOp fun e0 e1)) assoc
+binOp name fun = Ex.Infix (reservedOp name >> (pure $ \e0 -> \e1 -> Syn.EBinOp fun e0 e1))
 
 comp :: String -> Syn.Comparison -> Ex.Assoc -> Ex.Operator String SymTypeState Identity Syn.Expr
-comp name fun assoc = Ex.Infix (reservedOp name >> (pure $ \e0 -> \e1 -> Syn.EComparison fun e0 e1)) assoc
+comp name fun = Ex.Infix (reservedOp name >> (pure $ \e0 -> \e1 -> Syn.EComparison fun e0 e1))
 
 unOp :: String -> Syn.UnOp -> Ex.Operator String SymTypeState Identity Syn.Expr
-unOp name fun = Ex.Prefix (reservedOp name >> (pure $ \e -> Syn.EUnOp fun e))
+unOp name fun = Ex.Prefix (reservedOp name >> pure (Syn.EUnOp fun))
 
 opTable :: Ex.OperatorTable String SymTypeState Identity Syn.Expr
-opTable = [ [ binOp "*" Syn.Mul Ex.AssocLeft
-            , binOp "/" Syn.Div Ex.AssocLeft ]
-          , [ binOp "+" Syn.Add Ex.AssocLeft
-            , binOp "-" Syn.Sub Ex.AssocLeft ]
-          , [ comp "==" Syn.Eq Ex.AssocNone
-            , comp "<" Syn.LT Ex.AssocNone
-            , comp ">" Syn.GT Ex.AssocNone 
-            , comp "subs" Syn.SetSubS Ex.AssocNone
-            , comp "elem" Syn.SetMem Ex.AssocRight ]
-          , [unOp "~" Syn.Neg]
-          , [ binOp "&" Syn.Conj Ex.AssocLeft
-            , binOp "|" Syn.Disj Ex.AssocLeft ]
-          , [binOp "=>" Syn.Impl Ex.AssocRight]
-          , [unOp "compl" Syn.SetCompl]
-          , [ binOp "union" Syn.SetUnion Ex.AssocRight
-            , binOp "inter" Syn.SetInter Ex.AssocRight
-            , binOp "diff" Syn.SetDiff Ex.AssocRight ]
-          ]
+opTable =
+  [ [ binOp "*" Syn.Mul Ex.AssocLeft,
+      binOp "/" Syn.Div Ex.AssocLeft
+    ],
+    [ binOp "+" Syn.Add Ex.AssocLeft,
+      binOp "-" Syn.Sub Ex.AssocLeft
+    ],
+    [ comp "==" Syn.Eq Ex.AssocNone,
+      comp "<" Syn.LT Ex.AssocNone,
+      comp ">" Syn.GT Ex.AssocNone,
+      comp "subs" Syn.SetSubS Ex.AssocNone,
+      comp "elem" Syn.SetMem Ex.AssocRight
+    ],
+    [unOp "~" Syn.Neg],
+    [ binOp "&" Syn.Conj Ex.AssocLeft,
+      binOp "|" Syn.Disj Ex.AssocLeft
+    ],
+    [binOp "=>" Syn.Impl Ex.AssocRight],
+    [unOp "compl" Syn.SetCompl],
+    [ binOp "union" Syn.SetUnion Ex.AssocRight,
+      binOp "inter" Syn.SetInter Ex.AssocRight,
+      binOp "diff" Syn.SetDiff Ex.AssocRight
+    ]
+  ]
 
 parseTerm :: Parser Syn.Expr
-parseTerm = Ex.buildExpressionParser opTable factor
+parseTerm =
+  Ex.buildExpressionParser
+    opTable
+    ( parens parseExpr'
+        <|> parseBool
+        <|> parseNumber
+        <|> try parseConst
+        <|> try parseUnivQ
+        <|> try parseExisQ
+        <|> parseVar
+        <|> try parseLambda
+        <|> parseEBinder
+    )
 
-parseExpr' :: Parser Syn.Expr          -- fixme
+parseExpr' :: Parser Syn.Expr -- fixme
 parseExpr' = debugParse "app" parseApp -- >>= pure . Syn.resolvePredicates
 
 parseFrag' :: Parser [Syn.Decl]
@@ -205,21 +221,23 @@ parseFrag' = parseDecl' `sepBy` (spaces >> char ';' >> spaces)
 -------------------------------------------------------------------------------
 
 type ExprParse = Either ParseError Syn.Expr
+
 type FragParse = Either ParseError [Syn.Decl]
 
 parseFromFile :: Parser a -> FilePath -> IO (Either ParseError a)
-parseFromFile p fname
-    = do input <- readFile fname
-         return (runP p Map.empty fname input)
+parseFromFile p fname =
+  do
+    input <- readFile fname
+    return (runP p Map.empty fname input)
 
 parseDecl :: String -> Either ParseError Syn.Decl
-parseDecl input = runP (contents parseDecl') Map.empty "<stdin>" input
+parseDecl = runP (contents parseDecl') Map.empty "<stdin>"
 
 parseExpr :: String -> ExprParse
-parseExpr input = runP (contents parseExpr') Map.empty "<stdin>" input
+parseExpr = runP (contents parseExpr') Map.empty "<stdin>"
 
 parseFrag :: FilePath -> IO FragParse
-parseFrag fp = parseFromFile (contents parseFrag') fp
+parseFrag = parseFromFile (contents parseFrag')
 
 parseFragS :: String -> FragParse
-parseFragS input = runP (contents parseFrag') Map.empty "<stdin>" input
+parseFragS = runP (contents parseFrag') Map.empty "<stdin>"
