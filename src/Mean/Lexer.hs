@@ -3,6 +3,7 @@
 module Mean.Lexer where
 
 import Compiler.Tree.Syntax
+import Control.Monad.Combinators.Expr (Operator (..))
 import Control.Monad.State
 import Data.Text (Text)
 import Data.Void (Void)
@@ -25,11 +26,16 @@ lexeme = L.lexeme space
 symbol :: Text -> Parser Text
 symbol = L.symbol space
 
+btw sym0 sym1 = P.between (symbol sym0) (symbol sym1)
+
 brackets :: Parser a -> Parser a
-brackets = P.between (symbol "[") (symbol "]")
+brackets = btw "[" "]"
 
 parens :: Parser a -> Parser a
-parens = P.between (symbol "(") (symbol ")")
+parens = btw "(" ")"
+
+angles :: Parser a -> Parser a
+angles = btw "<" ">"
 
 identifier :: Parser String
 identifier = lexeme $ P.try p
@@ -45,3 +51,11 @@ reserved w = (lexeme . P.try) (C.string w *> P.notFollowedBy C.alphaNumChar)
 
 integer :: Parser Integer
 integer = lexeme L.decimal
+
+infixOpL, infixOpR :: Text -> (a -> a -> a) -> Operator Parser a
+infixOpL name f = InfixL (f <$ symbol name)
+infixOpR name f = InfixR (f <$ symbol name)
+
+prefixOp, postfixOp :: Text -> (a -> a) -> Operator Parser a
+prefixOp name f = Prefix (f <$ symbol name)
+postfixOp name f = Postfix (f <$ symbol name)

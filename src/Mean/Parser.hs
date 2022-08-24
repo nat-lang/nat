@@ -1,11 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Parser
-  ( parseTree,
-  )
-where
+module Mean.Parser where
 
+import Control.Applicative (some)
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
+import Data.Functor ((<&>))
 import Data.Text (Text)
 import Mean.Lexer as L
 import Mean.Syntax as S
@@ -17,37 +16,33 @@ import qualified Text.Megaparsec as P
 -- Types
 -------------------------------------------------------------------------------
 
-tylit :: Parser S.Type
-tylit =
-  (reservedOp "t" >> pure S.tyBool)
-    <|> (reservedOp "n" >> pure S.tyInt)
-    <|> (titularIdentifier <&> (S.TyVar . S.TV))
-    <|> (identifier <&> S.TyCon)
+type TyParser = Parser T.Type
 
-tyatom :: Parser S.Type
-tyatom = tylit <|> angles parseType
+pTyTerm :: TyParser
+pTyTerm =
+  P.choice
+    [ reserved "t" >> pure T.tyBool,
+      reserved "n" >> pure T.tyInt,
+      L.titularIdentifier <&> (T.TyVar . T.TV),
+      L.identifier <&> T.TyCon,
+      L.angles pType
+    ]
 
-isTyVar ty = case ty of
-  S.TyVar _ -> True
-  _ -> False
+tyNil :: TyParser
+tyNil = pure T.TyNil
 
-tyNil :: Parser S.Type
-tyNil = do
-  pure S.TyNil
-
-parseType :: Parser S.Type
-parseType = Ex.buildExpressionParser tyops tyatom
+pType :: TyParser
+pType = makeExprParser pTyTerm tyOps
   where
-    infixOp x f = Ex.Infix (reservedOp x >> pure f)
-    tyops =
-      [ [infixOp "," S.TyFun Ex.AssocRight]
+    tyOps =
+      [ [infixOpR "," T.TyFun]
       ]
 
-parseTypeAssignment :: Parser S.Type
-parseTypeAssignment = (reservedOp ":" >> parseType) <|> tyNil
+pTypeAssignment :: TyParser
+pTypeAssignment = (reserved ":" >> pType) <|> tyNil
 
-parseOptionalTypeAssignment :: Parser S.Type
-parseOptionalTypeAssignment = parseTypeAssignment <|> tyNil
+pOptionalTypeAssignment :: TyParser
+pOptionalTypeAssignment = pTypeAssignment <|> tyNil
 
 -------------------------------------------------------------------------------
 -- Terms
@@ -68,19 +63,19 @@ pVar = S.Var <$> L.identifier
 
 pBinder :: Parser S.Binder
 pBinder = do
-  n <- identifier
-  S.Binder n <$> parseOptionalTypeAssignment
+  n <- L.identifier
+  S.Binder n <$> pOptionalTypeAssignment
 
 pLam :: ExprParser
 pLam = do
-  reserved "\\"
-  b <- parseBinder
-  reserved "."
-  S.Lam b <$> parseExpr'
+  L.symbol "\\"
+  b <- pBinder
+  L.symbol "."
+  S.Lam b <$> pExpr
 
 pApp :: ExprParser
 pApp = do
-  exprs <- many1 pExpr
+  exprs <- some pExpr
   pure (foldl1 S.App exprs)
 
 pTerm :: ExprParser
@@ -90,7 +85,8 @@ pTerm =
       pBool,
       pVar,
       pLam,
-      pApp
+      pApp,
+      L.parens pExpr
     ]
 
 operatorTable :: [[Operator Parser Expr]]
@@ -100,21 +96,14 @@ operatorTable =
     -- prefix "+" id
 
     [],
-    -- binary "*" Product,
-    -- binary "/" Division
+    -- infix "*" Product,
+    -- infix "/" Division
 
     []
   ]
 
--- binary "+" Sum,
--- binary "-" Subtr
-
-binary :: Text -> (Expr -> Expr -> Expr) -> Operator Parser Expr
-binary name f = InfixL (f <$ L.symbol name)
-
-prefix, postfix :: Text -> (Expr -> Expr) -> Operator Parser Expr
-prefix name f = Prefix (f <$ L.symbol name)
-postfix name f = Postfix (f <$ L.symbol name)
+-- infix "+" Sum,
+-- infix "-" Subtr
 
 pExpr :: ExprParser
 pExpr = makeExprParser pTerm operatorTable
@@ -147,4 +136,8 @@ pTree = P.try (brackets unaryCatNode) <|> brackets binaryCatNode
       c <- node
       S.Node l c <$> node
 
-parseTree = P.runParser pTree "<input>"
+-------------------------------------------------------------------------------
+-- Entrypoints
+-------------------------------------------------------------------------------
+
+parse parser = P.runParser parser "<input"

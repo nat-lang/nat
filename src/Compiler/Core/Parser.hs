@@ -48,10 +48,6 @@ tylit =
 tyatom :: Parser Syn.Type
 tyatom = tylit <|> angles parseType
 
-isTyVar ty = case ty of
-  Syn.TyVar _ -> True
-  _ -> False
-
 tyNil :: Parser Syn.Type
 tyNil = do
   pure Syn.TyNil

@@ -19,7 +19,7 @@ type ExprTree = T.Tree Expr
 data Lit
   = LInt Int
   | LBool Bool
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data Binder = Binder Name Type deriving (Eq, Ord)
 
