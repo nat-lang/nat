@@ -6,9 +6,8 @@ import Control.Applicative (some)
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import Mean.Lexer as L
-import Mean.Syntax as S
-import Mean.Typing as T
+import qualified Mean.Lexer as L
+import qualified Mean.Syntax as S
 import Text.Megaparsec ((<|>))
 import qualified Text.Megaparsec as P
 
@@ -16,30 +15,30 @@ import qualified Text.Megaparsec as P
 -- Types
 -------------------------------------------------------------------------------
 
-type TyParser = Parser T.Type
+type TyParser = L.Parser S.Type
 
 pTyTerm :: TyParser
 pTyTerm =
   P.choice
     [ L.angles pType,
-      reserved "t" >> pure T.tyBool,
-      reserved "n" >> pure T.tyInt,
-      L.titularIdentifier <&> (T.TyVar . T.TV),
-      L.identifier <&> T.TyCon
+      L.reserved "t" >> pure S.tyBool,
+      L.reserved "n" >> pure S.tyInt,
+      L.titularIdentifier <&> (S.TyVar . S.TV),
+      L.identifier <&> S.TyCon
     ]
 
 tyNil :: TyParser
-tyNil = pure T.TyNil
+tyNil = pure S.TyNil
 
 pType :: TyParser
 pType = makeExprParser pTyTerm tyOps
   where
     tyOps =
-      [ [infixOpR "," T.TyFun]
+      [ [L.infixOpR "," S.TyFun]
       ]
 
 pTypeAssignment :: TyParser
-pTypeAssignment = (reserved ":" >> pType) <|> tyNil
+pTypeAssignment = (L.reserved ":" >> pType) <|> tyNil
 
 pOptionalTypeAssignment :: TyParser
 pOptionalTypeAssignment = pTypeAssignment <|> tyNil
@@ -56,12 +55,12 @@ pBool =
     <|> (L.reserved "False" >> pure (S.ELit (S.LBool False)))
 
 pInt :: ExprParser
-pInt = S.ELit . S.LInt . fromIntegral <$> integer
+pInt = S.ELit . S.LInt . fromIntegral <$> L.integer
 
 pVar :: ExprParser
 pVar = S.Var <$> L.identifier
 
-pBinder :: Parser S.Binder
+pBinder :: L.Parser S.Binder
 pBinder = do
   n <- L.identifier
   S.Binder n <$> pOptionalTypeAssignment
@@ -83,7 +82,7 @@ pTerm =
       pLam
     ]
 
-operatorTable :: [[Operator Parser Expr]]
+operatorTable :: [[Operator L.Parser S.Expr]]
 operatorTable =
   [ [],
     -- prefix "-" Negation,
@@ -114,12 +113,12 @@ pExpr = do
 type ExprTreeParser = L.Parser S.ExprTree
 
 pTree :: ExprTreeParser
-pTree = P.try (brackets unaryCatNode) <|> brackets binaryCatNode
+pTree = P.try (L.brackets unaryCatNode) <|> L.brackets binaryCatNode
   where
     mkLeafNode l = S.Node l S.Leaf S.Leaf
     mkUnaryNode l c = S.Node l c S.Leaf
 
-    node = P.try leafNode <|> P.try (brackets leafNode) <|> pTree
+    node = P.try leafNode <|> P.try (L.brackets leafNode) <|> pTree
 
     leafNode :: ExprTreeParser
     leafNode = do mkLeafNode <$> pExpr

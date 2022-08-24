@@ -1,16 +1,37 @@
 module Mean.Syntax
-  ( Expr (..),
+  ( Name,
+    ExprTree,
+    TyVar (..),
+    Type (..),
+    TyScheme (..),
     Binder (..),
+    Expr (..),
     Lit (..),
     T.Tree (..),
-    T.printTree,
-    ExprTree,
+    tyInt,
+    tyBool,
   )
 where
 
 import qualified Data.Tree.Binary.Preorder as T
 import GHC.Generics
-import Mean.Typing (Type)
+
+newtype TyVar = TV String
+  deriving (Show, Eq, Ord)
+
+data Type
+  = TyVar TyVar
+  | TyCon String
+  | TyFun Type Type
+  | TyNil
+  deriving (Eq, Ord)
+
+data TyScheme = Forall [TyVar] Type
+  deriving (Eq, Ord)
+
+tyInt, tyBool :: Type
+tyInt = TyCon "n"
+tyBool = TyCon "t"
 
 type Name = String
 

@@ -45,6 +45,7 @@ library
       Mean.Lexer
       Mean.Parser
       Mean.Syntax
+      Mean.TypeEnv
       Mean.Typing
       Mean.Viz
       Service.API.ConstituencyTrees
@@ -150,6 +151,7 @@ test-suite spec
   main-is: Spec.hs
   other-modules:
       Mean.ParserSpec
+      Mean.TypingSpec
       Paths_interpreter
   hs-source-dirs:
       test

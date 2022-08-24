@@ -3,7 +3,6 @@
 module Mean.Viz where
 
 import Mean.Syntax
-import Mean.Typing
 import Text.PrettyPrint
 import Prelude hiding ((<>))
 
@@ -21,15 +20,6 @@ fnIf fn b = if b then fn else id
 anglesIf = fnIf angles
 
 parensIf = fnIf parens
-
-{-
-    Syn.EBinder b -> (char 'λ') <> ppr 0 b
-    Syn.App a b -> parensIf (p > 0) ((ppr (p + 1) a) <+> (ppr p b))
-    Syn.Lam b e -> pClosure (char 'λ') b e
-
-    instance Pretty Syn.Binder where
-      ppr _ (Syn.Binder n t) = text n <+> text "→"
--}
 
 instance Pretty TyVar where
   ppr _ (TV t) = text t
@@ -52,9 +42,15 @@ instance Pretty Expr where
     App e0 e1 -> ppr p e0 <> parens (ppr p e1)
     Tree t -> text $ show t
 
+instance Pretty TyScheme where
+  ppr p (Forall tvs ty) = (ppr p ty)
+
 instance Show Expr where
   show (Tree et) = show et
   show e = (show . ppr 0) e
 
 instance Show Type where
+  show = show . ppr 0
+
+instance Show TyScheme where
   show = show . ppr 0

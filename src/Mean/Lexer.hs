@@ -2,7 +2,6 @@
 
 module Mean.Lexer where
 
-import Compiler.Tree.Syntax
 import Control.Monad.Combinators.Expr (Operator (..))
 import Control.Monad.State
 import Data.Text (Text)
