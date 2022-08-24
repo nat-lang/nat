@@ -20,6 +20,8 @@ fnIf fn b = if b then fn else id
 
 anglesIf = fnIf angles
 
+parensIf = fnIf parens
+
 {-
     Syn.EBinder b -> (char 'λ') <> ppr 0 b
     Syn.App a b -> parensIf (p > 0) ((ppr (p + 1) a) <+> (ppr p b))
@@ -40,9 +42,15 @@ instance Pretty Type where
 
 instance Pretty Expr where
   ppr p e = case e of
+    ELit lit -> case lit of
+      LInt n -> text (show n)
+      LBool b -> text (show b)
     Var s -> text s
-    Lam (Binder n t) e -> text n <> char ':' <> ppr 0 t <> char '.' <> ppr (p + 1) e
+    Lam (Binder n t) e ->
+      parensIf (p > 0) $
+        char 'λ' <> text n <> char '.' <> ppr (p + 1) e
     App e0 e1 -> ppr p e0 <> parens (ppr p e1)
+    Tree t -> text $ show t
 
 instance Show Expr where
   show (Tree et) = show et

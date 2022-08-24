@@ -21,11 +21,11 @@ type TyParser = Parser T.Type
 pTyTerm :: TyParser
 pTyTerm =
   P.choice
-    [ reserved "t" >> pure T.tyBool,
+    [ L.angles pType,
+      reserved "t" >> pure T.tyBool,
       reserved "n" >> pure T.tyInt,
       L.titularIdentifier <&> (T.TyVar . T.TV),
-      L.identifier <&> T.TyCon,
-      L.angles pType
+      L.identifier <&> T.TyCon
     ]
 
 tyNil :: TyParser
@@ -73,20 +73,14 @@ pLam = do
   L.symbol "."
   S.Lam b <$> pExpr
 
-pApp :: ExprParser
-pApp = do
-  exprs <- some pExpr
-  pure (foldl1 S.App exprs)
-
 pTerm :: ExprParser
 pTerm =
   P.choice
-    [ pInt,
+    [ L.parens pExpr,
+      pInt,
       pBool,
       pVar,
-      pLam,
-      pApp,
-      L.parens pExpr
+      pLam
     ]
 
 operatorTable :: [[Operator Parser Expr]]
@@ -105,8 +99,13 @@ operatorTable =
 -- infix "+" Sum,
 -- infix "-" Subtr
 
+pExpr' :: ExprParser
+pExpr' = makeExprParser pTerm operatorTable
+
 pExpr :: ExprParser
-pExpr = makeExprParser pTerm operatorTable
+pExpr = do
+  exprs <- some pExpr'
+  pure (foldl1 S.App exprs)
 
 -------------------------------------------------------------------------------
 -- Trees
