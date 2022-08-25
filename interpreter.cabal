@@ -45,7 +45,6 @@ library
       Mean.Lexer
       Mean.Module
       Mean.Parser
-      Mean.StdLib
       Mean.Syntax
       Mean.Type
       Mean.TypeEnv
@@ -152,6 +151,7 @@ test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Mean.EvaluationSpec
       Mean.ParserSpec
       Mean.TypeSpec
       Paths_interpreter

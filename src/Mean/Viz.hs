@@ -3,6 +3,7 @@
 module Mean.Viz where
 
 import Mean.Syntax
+import Mean.Evaluation
 import Text.PrettyPrint
 import Prelude hiding ((<>))
 
@@ -45,6 +46,10 @@ instance Pretty Expr where
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = ppr p ty
+
+instance Show EvalError where
+  show (UnboundVariable n) = "Unbound variable: " ++ show n
+  show (NotAFn e0 e1) = "Can't apply " ++ show e0 ++ " to " ++ show e1
 
 instance Show Expr where
   show (Tree et) = show et
