@@ -43,10 +43,12 @@ library
       Lib.Std
       Mean.Evaluation
       Mean.Lexer
+      Mean.Module
       Mean.Parser
+      Mean.StdLib
       Mean.Syntax
+      Mean.Type
       Mean.TypeEnv
-      Mean.Typing
       Mean.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments
@@ -151,7 +153,7 @@ test-suite spec
   main-is: Spec.hs
   other-modules:
       Mean.ParserSpec
-      Mean.TypingSpec
+      Mean.TypeSpec
       Paths_interpreter
   hs-source-dirs:
       test

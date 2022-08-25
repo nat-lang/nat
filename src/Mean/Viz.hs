@@ -41,9 +41,10 @@ instance Pretty Expr where
         char 'λ' <> text n <> char '.' <> ppr (p + 1) e
     App e0 e1 -> ppr p e0 <> parens (ppr p e1)
     Tree t -> text $ show t
+    Let n e -> text n <+> char '=' <+> ppr 0 e
 
 instance Pretty TyScheme where
-  ppr p (Forall tvs ty) = (ppr p ty)
+  ppr p (Forall tvs ty) = ppr p ty
 
 instance Show Expr where
   show (Tree et) = show et

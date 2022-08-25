@@ -4,7 +4,7 @@ module Mean.ParserSpec where
 
 import Mean.Parser
 import Mean.Syntax
-import Mean.Typing
+import Mean.Type
 import Mean.Viz
 import Test.Hspec
 
@@ -79,3 +79,11 @@ spec = do
       parse pTree "[\\x.x [\\x.x] [\\x.x]]" `shouldBe` Right (Node (idFn "x") (Node (idFn "x") Leaf Leaf) (Node (idFn "x") Leaf Leaf))
     it "parses trees of function applications" $ do
       parse pTree "[(f x) [f x] [f(x)]]" `shouldBe` Right (Node fOfX (Node fOfX Leaf Leaf) (Node fOfX Leaf Leaf))
+
+  describe "pLet" $ do
+    it "parses let declarations" $ do
+      parse pLet "let foo = bar" `shouldBe` Right (Let "foo" (Var "bar"))
+
+  describe "pModule" $ do
+    it "parses modules" $ do
+      parse pModule "let foo = bar \n let bar = foo" `shouldBe` Right [Let "foo" (Var "bar"), Let "bar" (Var "foo")]

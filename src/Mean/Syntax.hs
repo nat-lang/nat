@@ -50,4 +50,5 @@ data Expr
   | Lam Binder Expr
   | App Expr Expr
   | Tree ExprTree
+  | Let Name Expr
   deriving (Eq, Ord)

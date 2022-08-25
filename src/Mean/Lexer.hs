@@ -14,10 +14,12 @@ import qualified Text.Megaparsec.Char.Lexer as L
 type Parser = P.Parsec Void Text
 
 space :: Parser ()
-space = L.space C.space1 lineComment blockComment
+space = L.space C.hspace1 lineComment blockComment
   where
     lineComment = L.skipLineComment "//"
     blockComment = L.skipBlockComment "/*" "*/"
+
+delimiter = P.some (space >> P.some C.newline >> space)
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme space
@@ -46,7 +48,7 @@ titularIdentifier = P.lookAhead C.upperChar >> identifier
 lIdentifier = P.lookAhead C.lowerChar >> identifier
 
 reserved :: Text -> Parser ()
-reserved w = (lexeme . P.try) (C.string w *> P.notFollowedBy C.alphaNumChar)
+reserved w = (lexeme . P.try) (C.string w  *> P.notFollowedBy C.alphaNumChar)
 
 integer :: Parser Integer
 integer = lexeme L.decimal

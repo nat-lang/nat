@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Mean.Typing where
+module Mean.Type where
 
 import Control.Monad (replicateM)
 import Control.Monad.Except
@@ -90,6 +90,7 @@ data TypeError
   | InfiniteType S.TyVar S.Type
   | UnboundVariable String
   | UnificationMismatch [S.Type] [S.Type]
+  deriving (Eq)
 
 instance Show TypeError where
   show (UnificationFail a b) =

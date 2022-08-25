@@ -1,15 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Parser where
+module Mean.Parser (
+  P.ParseError (..),
+  pLet,
+  pExpr,
+  pVar,
+  pInt,
+  pBool,
+  pTree,
+  pLam,
+  pType,
+  pModule,
+  pFModule,
+  parse
+) where
 
 import Control.Applicative (some)
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import Data.Functor ((<&>))
 import Data.Text (Text)
+import qualified Data.Text.IO as TiO
+import qualified Data.Map as Map
 import qualified Mean.Lexer as L
 import qualified Mean.Syntax as S
 import Text.Megaparsec ((<|>))
 import qualified Text.Megaparsec as P
+import qualified Text.Megaparsec.Char as C
 
 -------------------------------------------------------------------------------
 -- Types
@@ -107,6 +123,22 @@ pExpr = do
   pure (foldl1 S.App exprs)
 
 -------------------------------------------------------------------------------
+-- Modules
+-------------------------------------------------------------------------------
+
+pLet :: ExprParser
+pLet = do
+  L.reserved "let"
+  name <- L.identifier
+  L.space
+  L.symbol "="
+  L.space
+  S.Let name <$> pExpr
+
+pModule :: L.Parser [S.Expr]
+pModule = pLet `P.sepBy` L.delimiter
+
+-------------------------------------------------------------------------------
 -- Trees
 -------------------------------------------------------------------------------
 
@@ -138,4 +170,13 @@ pTree = P.try (L.brackets unaryCatNode) <|> L.brackets binaryCatNode
 -- Entrypoints
 -------------------------------------------------------------------------------
 
+-- type ModuleParse = Either P.ParseError [S.Expr]
+
 parse parser = P.runParser parser "<input"
+
+-- pFromFile :: L.Parser a -> FilePath -> IO (Either P.ParseError a)
+
+parseFile parser file = P.runParser parser file <$> TiO.readFile file
+
+-- pFModule :: FilePath -> IO ModuleParse
+pFModule = parseFile pModule
