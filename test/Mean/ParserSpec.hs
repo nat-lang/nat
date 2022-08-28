@@ -10,9 +10,9 @@ import Test.Hspec
 
 spec :: Spec
 spec = do
-  let fn x b = Lam (Binder x TyNil) b
-  let idFn x = fn x (Var x)
-  let fOfX = App (Var "f") (Var "x")
+  let fn x b = Lam (Binder (mkVar x) TyNil) b
+  let idFn x = fn x (mkEVar x)
+  let fOfX = App (mkEVar "f") (mkEVar "x")
 
   describe "pType" $ do
     it "parses the primitive types" $ do
@@ -37,23 +37,23 @@ spec = do
 
   describe "pVar" $ do
     it "parses alphanumeric variables" $ do
-      parse pExpr "a" `shouldBe` Right (Var "a")
-      parse pExpr "z1" `shouldBe` Right (Var "z1")
+      parse pExpr "a" `shouldBe` Right (mkEVar "a")
+      parse pExpr "z1" `shouldBe` Right (mkEVar "z1")
 
   describe "pLam" $ do
     it "parses untyped lambdas" $ do
       parse pLam "\\a.a" `shouldBe` Right (idFn "a")
     it "parses typed lambdas" $ do
-      parse pLam "\\a:<A>.a" `shouldBe` Right (Lam (Binder "a" (TyVar $ TV "A")) (Var "a"))
-      parse pLam "\\a:<n,t>.a" `shouldBe` Right (Lam (Binder "a" (TyFun tyInt tyBool)) (Var "a"))
+      parse pLam "\\a:<A>.a" `shouldBe` Right (Lam (Binder (mkVar "a") (TyVar $ TV "A")) (mkEVar "a"))
+      parse pLam "\\a:<n,t>.a" `shouldBe` Right (Lam (Binder (mkVar "a") (TyFun tyInt tyBool)) (mkEVar "a"))
     it "parses lambdas with complex bodies" $ do
       parse pLam "\\f.(\\x.f(x x))(\\x.f(x x))"
         `shouldBe` Right
           ( fn
               "f"
               ( App
-                  (fn "x" (App (Var "f") (App (Var "x") (Var "x"))))
-                  (fn "x" (App (Var "f") (App (Var "x") (Var "x"))))
+                  (fn "x" (App (mkEVar "f") (App (mkEVar "x") (mkEVar "x"))))
+                  (fn "x" (App (mkEVar "f") (App (mkEVar "x") (mkEVar "x"))))
               )
           )
 
@@ -74,7 +74,7 @@ spec = do
     it "parses trees of booleans" $ do
       parse pTree "[True [True] [False]]" `shouldBe` Right (Node (ELit $ LBool True) (Node (ELit $ LBool True) Leaf Leaf) (Node (ELit $ LBool False) Leaf Leaf))
     it "parses trees of variables" $ do
-      parse pTree "[v0 [v1] [v2]]" `shouldBe` Right (Node (Var "v0") (Node (Var "v1") Leaf Leaf) (Node (Var "v2") Leaf Leaf))
+      parse pTree "[v0 [v1] [v2]]" `shouldBe` Right (Node (mkEVar "v0") (Node (mkEVar "v1") Leaf Leaf) (Node (mkEVar "v2") Leaf Leaf))
     it "parses trees of lambdas" $ do
       parse pTree "[\\x.x [\\x.x] [\\x.x]]" `shouldBe` Right (Node (idFn "x") (Node (idFn "x") Leaf Leaf) (Node (idFn "x") Leaf Leaf))
     it "parses trees of function applications" $ do
@@ -82,8 +82,8 @@ spec = do
 
   describe "pLet" $ do
     it "parses let declarations" $ do
-      parse pLet "let foo = bar" `shouldBe` Right (Let "foo" (Var "bar"))
+      parse pLet "let foo = bar" `shouldBe` Right (Let "foo" (mkEVar "bar"))
 
   describe "pModule" $ do
     it "parses modules" $ do
-      parse pModule "let foo = bar \n let bar = foo" `shouldBe` Right [Let "foo" (Var "bar"), Let "bar" (Var "foo")]
+      parse pModule "let foo = bar \n let bar = foo" `shouldBe` Right [Let "foo" (mkEVar "bar"), Let "bar" (mkEVar "foo")]

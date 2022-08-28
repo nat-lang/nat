@@ -159,12 +159,12 @@ infer :: S.Expr -> Infer (S.Type, [Constraint])
 infer expr = case expr of
   S.ELit (S.LInt _) -> return (S.tyInt, [])
   S.ELit (S.LBool _) -> return (S.tyBool, [])
-  S.Var x -> do
-    t <- lookupTyEnv x
+  S.EVar (S.Var _ v) -> do
+    t <- lookupTyEnv v
     return (t, [])
-  S.Lam (S.Binder n t) e -> do
+  S.Lam (S.Binder (S.Var _ v) t) e -> do
     t' <- freshIfNil t
-    (t'', cs) <- inTyEnv (n, S.Forall [] t') (infer e)
+    (t'', cs) <- inTyEnv (v, S.Forall [] t') (infer e)
     return (t' `S.TyFun` t'', cs)
   S.App e0 e1 -> do
     (t1, c1) <- infer e0

@@ -1,26 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Parser (
-  P.ParseError (..),
-  pLet,
-  pExpr,
-  pVar,
-  pInt,
-  pBool,
-  pTree,
-  pLam,
-  pType,
-  pModule,
-  pFModule,
-  parse
-) where
+module Mean.Parser
+  ( P.ParseError (..),
+    pLet,
+    pExpr,
+    pVar,
+    pInt,
+    pBool,
+    pTree,
+    pLam,
+    pType,
+    pModule,
+    pFModule,
+    parse,
+  )
+where
 
 import Control.Applicative (some)
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import Data.Functor ((<&>))
+import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text.IO as TiO
-import qualified Data.Map as Map
+import Data.Void
 import qualified Mean.Lexer as L
 import qualified Mean.Syntax as S
 import Text.Megaparsec ((<|>))
@@ -74,12 +76,13 @@ pInt :: ExprParser
 pInt = S.ELit . S.LInt . fromIntegral <$> L.integer
 
 pVar :: ExprParser
-pVar = S.Var <$> L.identifier
+pVar = do
+  S.mkEVar <$> L.identifier
 
 pBinder :: L.Parser S.Binder
 pBinder = do
   n <- L.identifier
-  S.Binder n <$> pOptionalTypeAssignment
+  S.Binder (S.mkVar n) <$> pOptionalTypeAssignment
 
 pLam :: ExprParser
 pLam = do
@@ -170,13 +173,13 @@ pTree = P.try (L.brackets unaryCatNode) <|> L.brackets binaryCatNode
 -- Entrypoints
 -------------------------------------------------------------------------------
 
--- type ModuleParse = Either P.ParseError [S.Expr]
+type ModuleParse = Either (P.ParseErrorBundle Text Data.Void.Void) [S.Expr]
 
-parse parser = P.runParser parser "<input"
+parse :: P.Parsec e s a -> s -> Either (P.ParseErrorBundle s e) a
+parse parser = P.runParser parser "<input>"
 
--- pFromFile :: L.Parser a -> FilePath -> IO (Either P.ParseError a)
-
+parseFile :: P.Parsec e Text a -> String -> IO (Either (P.ParseErrorBundle Text e) a)
 parseFile parser file = P.runParser parser file <$> TiO.readFile file
 
--- pFModule :: FilePath -> IO ModuleParse
+pFModule :: String -> IO ModuleParse
 pFModule = parseFile pModule

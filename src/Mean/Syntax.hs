@@ -1,5 +1,6 @@
 module Mean.Syntax
   ( Name,
+    Var (..),
     ExprTree,
     TyVar (..),
     Type (..),
@@ -10,6 +11,8 @@ module Mean.Syntax
     T.Tree (..),
     tyInt,
     tyBool,
+    mkVar,
+    mkEVar,
   )
 where
 
@@ -42,13 +45,27 @@ data Lit
   | LBool Bool
   deriving (Eq, Ord, Show)
 
-data Binder = Binder Name Type deriving (Eq, Ord)
+data Var = Var Name Name
+
+instance Eq Var where
+  (Var _ v) == (Var _ v') = v == v'
+
+instance Ord Var where
+  compare (Var _ v0) (Var _ v1) = compare v0 v1
+
+instance Show Var where
+  show (Var vPub vPri) = vPri
+
+data Binder = Binder Var Type deriving (Eq, Ord)
 
 data Expr
   = ELit Lit
-  | Var Name
+  | EVar Var
   | Lam Binder Expr
   | App Expr Expr
   | Tree ExprTree
   | Let Name Expr
-  deriving (Eq, Ord)
+
+mkVar v = Var v (v ++ "0")
+
+mkEVar v = EVar $ mkVar v

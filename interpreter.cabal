@@ -41,6 +41,7 @@ library
       Interpreter.Evaluation
       Interpreter.Fragment
       Lib.Std
+      Mean.Err
       Mean.Evaluation
       Mean.Lexer
       Mean.Module

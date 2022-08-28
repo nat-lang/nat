@@ -1,0 +1,115 @@
+λm.λn.m(λn.λf.λx.f(n(f)(x)))(n)(λf.λx.f(x))(λf.λx.f(x))
+λm.λn.m(λn.λf.λx.f(n(f)(x)))(n)(λf.λx.f(x))               - lhs
+λn.λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))(n)                     - beta
+λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))(n)                        - body simp
+λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))
+λx.λn.λf.λx.f(n(f)(x))(x)
+λn.λf.λx.f(n(f)(x))(x)
+λf.λx.f(x(f)(x))
+λx.f(x(f)(x))
+f(x(f)(x))
+λx.λf.λx.f(x(f)(x))(n)                                    - ?
+λf.λx.f(x(f)(x))
+λx.f(x(f)(x))
+f(x(f)(x))
+λn.λf.λx.f(x(f)(x))(λf.λx.f(x))                           - finish body simp
+λf.λx.f(x(f)(x))                                          - beta
+λx.f(x(f)(x))
+f(x(f)(x))
+
+
+
+λm.λn.m(λn.λf.λx.f(n(f)(x)))(n)(λf.λx.f(x))(λf.λx.f(x))  
+λm.λn.m(λn.λf.λx.f(n(f)(x)))(n)(λf.λx.f(x))                ... lhs         (0)
+λn.λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))(n)                      ... beta        (1) 
+
+λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))(n)                        ... simplify    (2) 
+λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))                           ... lhs         (3) 
+
+λx.λn.λf.λx.f(n(f)(x))(x)                                 ... beta        (4) 
+λn.λf.λx.f(n(f)(x))(x)                                    ... simplify    (5) 
+λf.λx.f(x(f)(x))                                          ... beta        (6) 
+λx.f(x(f)(x))                                             ... simplify    (7) 
+f(x(f)(x))                                                ... simplify    (8) 
+λx.λf.λx.f(x(f)(x))(n)                                    ... fallthru 0  (9)
+
+λf.λx.f(x(f)(x))                                          ... beta        (4) 
+λx.f(x(f)(x))                                             ... simplify    (5) 
+f(x(f)(x))                                                ... simplify    (6) 
+λn.λf.λx.f(x(f)(x))(λf.λx.f(x))                           ... fallthru 0  (7)
+
+λf.λx.f(x(f)(x))                                          ... beta        (1) 
+λx.f(x(f)(x))                                             ... simplify    (2) 
+f(x(f)(x))                                                ... simplify    (3)
+                                                          ... fallthru 0  (4)
+
+
+
+
+
+
+λm.λn.m(λn.λf.λx.f(n(f)(x)))(n)(λf.λx.f(x))(λf.λx.f(x))    ... lhs (0)
+λm.λn.m(λn.λf.λx.f(n(f)(x)))(n)(λf.λx.f(x))                 ... beta (1)
+λn.λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))(n)                       ... simplify (2)
+
+   λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))(n)                       ... lhs (3)
+   λf.λx.f(x)(λn.λf.λx.f(n(f)(x)))                            ... beta (4)
+      λx.λn.λf.λx.f(n(f)(x))(x)                               ... simplify (5)
+         λn.λf.λx.f(n(f)(x))(x)                               ... beta (6)
+            λf.λx.f(x(f)(x))                                  ... simplify (7)
+               λx.f(x(f)(x))                                  ... simplify (8)
+                  f(x(f)(x))                                  ... fallthru 0 (9)
+
+         λx.λf.λx.f(x(f)(x))(n)                            ... beta (4)
+
+            λf.λx.f(x(f)(x))                               ... simplify (5)
+               λx.f(x(f)(x))                               ... simplify (6)
+                  f(x(f)(x))                               ... fallthru 0 (7)
+         λn.λf.λx.f(x(f)(x))(λf.λx.f(x))                   ... beta (1)
+            λf.λx.f(x(f)(x))                               ... simplify (2)
+               λx.f(x(f)(x))                               ... simplify (3)
+                  f(x(f)(x))                               ... fallthru 0 (4)
+
+
+
+
+
+λm.λn.λf.λx.m(f)(n(f)(x))(λb.λv.b(v))(λb.λv.b(v))         ... lhs (0)
+λm.λn.λf.λx.m(f)(n(f)(x))(λb.λv.b(v))                     ... beta (1)
+
+   λn.λf.λx.λb.λv.b(v)(f)(n(f)(x))                           ... simplify (2)
+
+      λf.λx.λb.λv.b(v)(f)(n(f)(x))                           ... simplify (3)
+         λx.λb.λv.b(v)(f)(n(f)(x))                           ... simplify (4)
+            λb.λv.b(v)(f)(n(f)(x))                           ... lhs (5)
+            λb.λv.b(v)(f)                                    ... beta (6)
+               λv.f(v)                                       ... simplify (7)
+                  f(v)                                       ... fallthru 0 (8)
+
+               λv.f(v)(n(f)(x))                              ... beta (6)
+                  f(n(f)(x))                                 ... fallthru 0 (7)
+
+   λn.λf.λx.f(n(f)(x))(λb.λv.b(v))                           ... beta (1)
+      λf.λx.f(λb.λv.b(v)(f)(x))                              ... simplify (2)
+         λx.f(λb.λv.b(v)(f)(x))                              ... simplify (3)
+            f(λb.λv.b(v)(f)(x))                              ... fallthru 0 (4)
+
+expected: Right λf.λx.f(f(x))
+but got:  Right λf.λx.f(λb.λv.b(v)(f)(x))
+
+
+λm.[λn.[λf.[λx.m(f)(n(f)(x))]]](λb.[λv.b(v)])(λb.[λv.b(v)])           ... lhs (0)
+λm.[λn.[λf.[λx.m(f)(n(f)(x))]]](λb.[λv.b(v)])                         ... beta (1)
+λn.[λf.[λx.[λb.[λv.b(v)]](f)(n(f)(x))]]                               ... simplify (2)
+λf.[λx.[λb.[λv.b(v)]](f)(n(f)(x))]                                    ... simplify (3)
+λx.[λb.[λv.b(v)]](f)(n(f)(x))                                         ... simplify (4)
+λb.[λv.b(v)](f)(n(f)(x))                                              ... lhs (5)
+λb.[λv.b(v)](f)                                                       ... beta (6)
+λv.f(v)                                                               ... simplify (7)
+f(v)                                                                  ... fallthru 0 (8)
+λv.f(v)(n(f)(x))                                                      ... beta (6)
+f(n(f)(x))                                                            ... fallthru 0 (7)
+λn.[λf.[λx.f(n(f)(x))]](λb.[λv.b(v)])                                 ... beta (1)
+λf.[λx.f([λb.[λv.b(v)]](f)(x))]                                       ... simplify (2)
+λx.f([λb.[λv.b(v)]](f)(x))                                            ... simplify (3)
+f(λb.[λv.b(v)](f)(x))                                                 ... fallthru 0 (4)

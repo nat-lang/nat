@@ -2,8 +2,9 @@
 
 module Mean.Viz where
 
-import Mean.Syntax
+import Mean.Err
 import Mean.Evaluation
+import Mean.Syntax
 import Text.PrettyPrint
 import Prelude hiding ((<>))
 
@@ -16,11 +17,16 @@ class Pretty p where
 angles :: Doc -> Doc
 angles p = char '<' <> p <> char '>'
 
+brackets' :: Doc -> Doc
+brackets' p = char '[' <> p <> char ']'
+
 fnIf fn b = if b then fn else id
 
 anglesIf = fnIf angles
 
 parensIf = fnIf parens
+
+bracketsIf = fnIf brackets'
 
 instance Pretty TyVar where
   ppr _ (TV t) = text t
@@ -36,10 +42,11 @@ instance Pretty Expr where
     ELit lit -> case lit of
       LInt n -> text (show n)
       LBool b -> text (show b)
-    Var s -> text s
+    EVar s -> text (show s)
     Lam (Binder n t) e ->
-      parensIf (p > 0) $
-        char 'λ' <> text n <> char '.' <> ppr (p + 1) e
+      char 'λ' <> text (show n) <> case e of
+        Lam {} -> ppr (p + 1) e
+        _ -> brackets (ppr (p + 1) e)
     App e0 e1 -> ppr p e0 <> parens (ppr p e1)
     Tree t -> text $ show t
     Let n e -> text n <+> char '=' <+> ppr 0 e

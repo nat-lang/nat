@@ -1,37 +1,90 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Mean.EvaluationSpec where
 
+import Debug.Trace (traceM)
+import Mean.Evaluation
 import Mean.Parser
 import Mean.Syntax
-import Mean.Evaluation
 import Mean.Viz
 import Test.Hspec
 
 spec :: Spec
-spec = do
-  describe "eval" $ do
-    let p = parse pExpr
+spec =
+  let fn x y = Lam (Binder (mkVar x) TyNil) y
+      f = mkEVar "f"
+      x = mkEVar "x"
+      y = mkEVar "y"
+      m = mkEVar "m"
+      n = mkEVar "n"
+      -- λfλx . x
+      zero = fn "f" (fn "x" x)
+      -- λfλx . f x
+      one = fn "f" (fn "x" (App f x))
+      -- λfλx . f(f x)
+      two = fn "f" (fn "x" (App f (App f x)))
+      -- λfλx . f(f(f x))
+      three = fn "f" (fn "x" (App f (App f (App f x))))
+      -- λnλfλx . f(f x)
+      succ = fn "n" (fn "f" (fn "x" (App f (App (App n f) x))))
+      -- λmλn . m succ n
+      add = fn "m" (fn "n" (App (App m succ) n))
+      -- λmλnλfλx . m f (n f x)
+      add' = fn "m" (fn "n" (fn "f" (fn "x" (App (App m f) (App (App n f) x)))))
+      -- λmλn . m(add' n)0
+      mul = fn "m" (fn "n" (App (App m (App add' n)) zero))
+      -- λmλn . m(mul n)1
+      exp = fn "m" (fn "n" (App (App m (App mul n)) one))
+      -- λxλy . x
+      true = fn "x" (fn "y" x)
+      -- λxλy . y
+      false = fn "x" (fn "y" y)
+      -- λfλxλy . f(x)(y)
+      if' = fn "f" (fn "x" (fn "y" (App (App f x) y)))
+      -- λxλy . if(x)(y)(false)
+      and' = fn "x" (fn "y" (App (App (App if' x) y) false))
+      -- λxλy . if(x)(true)(y)
+      or' = fn "x" (fn "y" (App (App (App if' x) true) y))
+      -- λxλy . if(x)(true)(false)
+      not' = fn "x" (fn "y" (App (App (App if' x) true) false))
+      -- λx.x
+      id' = fn "x" x
+   in do
+        describe "alphaEq (@=)" $ do
+          it "recognizes alpha equivalence" $ do
+            fn "x" x @= fn "y" y `shouldBe` True
 
-    it "reduces arithmetic expressions" $ do
-      let zero = p "\\f\\x . x"
-      let one = p "\\f\\x . f x"
-      let two = p "\\f\\x . f(f x)"
-      let three = p "\\f\\x . f(f(f x))"
+        describe "eval" $ do
+          it "performs beta reduction" $ do
+            runEval (App id' zero) `shouldBe` Right zero
+            runEval (App id' id') `shouldBe` Right id'
 
-      let succ = p "\\n\\f\\x . f(n f x)"
+            runEval (App succ one) `shouldBe` Right two
+            runEval (App succ (App succ one)) `shouldBe` Right three
 
-      let add = p "\\m\\n . m succ n"
-      let add' = p "\\m\\n\\f\\x . m f (n f x)"
+            runEval (App (App mul zero) one) `shouldBe` Right zero
+            runEval (App (App mul one) three) `shouldBe` Right three
 
-      let mul = p "\\m\\n . m(add n)0"
-      let exp = p "\\m\\n . m(mul n)1"
-    
-    it "reduces boolean expressions" $ do
-      let true = \x\y . x
-      let false = \x\y . y
+            runEval (App (App add' two) zero) `shouldBe` Right two
+            runEval (App (App add' zero) three) `shouldBe` Right three
+            runEval (App (App add' two) one) `shouldBe` Right three
+            runEval (App (App add' one) two) `shouldBe` Right three
 
-      let if = \b\t\f . b(t)(f)
+            runEval (App (App add two) zero) `shouldBe` Right two
+            runEval (App (App add zero) three) `shouldBe` Right three
+            runEval (App (App add two) one) `shouldBe` Right three
+            runEval (App (App add one) two) `shouldBe` Right three
 
-      let and = \x\y . if(x)(y)(false)
-      let or = \x\y . if(x)(true)(y)
+            runEval (App (App or' true) false) `shouldBe` Right true
+            runEval (App (App and' true) false) `shouldBe` Right false
 
-      let not = \x\y . if(x)(true)(false)
+{-
+
+need to test:
+
+(1) safe sub when nested binder conflicts with higher binder
+(2) safe sub when nested binder conflicts with free vars of contractum
+(3) alpha equivalence, more cases
+(4) confluence
+
+-}
