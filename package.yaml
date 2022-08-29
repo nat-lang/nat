@@ -94,6 +94,7 @@ tests:
       - base
       - interpreter
       - hspec
+      - HUnit
       - hspec-wai
       - hspec-wai-json
       - aeson

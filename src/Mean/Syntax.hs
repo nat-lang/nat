@@ -65,6 +65,7 @@ data Expr
   | App Expr Expr
   | Tree ExprTree
   | Let Name Expr
+  deriving (Eq)
 
 mkVar v = Var v (v ++ "0")
 

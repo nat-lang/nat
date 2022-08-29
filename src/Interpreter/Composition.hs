@@ -151,9 +151,9 @@ composeExprTree :: (TypeCheckedExprTree, TyEnv.Env) -> TypeCheckedExprTree
 composeExprTree (leaf@T.Leaf, _) = leaf
 composeExprTree (node@(T.Node te c0 c1), env) = foldl' tryOp node' ops
   where
-    node' = T.Node te c0' c1'
     c0' = composeExprTree (c0, env)
     c1' = composeExprTree (c1, env)
+    node' = T.Node te c0' c1'
     ops = [functionApplication, predicateAbstraction, predicateModification]
     tryOp node@(T.Node (_, cl) c0 c1) op =
       let mkNode expr = T.Node (Just expr, cl) c0 c1

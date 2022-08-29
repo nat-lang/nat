@@ -160,7 +160,8 @@ test-suite spec
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
+      HUnit
+    , aeson
     , base
     , base-compat
     , binary-tree >=0.0.9.0 && <0.1.1.0
