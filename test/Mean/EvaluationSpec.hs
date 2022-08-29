@@ -154,9 +154,11 @@ let (Right yOrNotX) = eval (App (App or (App not x)) y)
 
 ifXThenY `shouldBe` notXAndNotY
 ifXThenY `shouldBe` yOrNotX
+
 let (Right notXAndY) = eval (App not (App (App and x) y))
 let (Right notXOrNotY) = eval (App (App or (App not x)) (App not y))
 notXAndY `shouldBe` notXOrNotY
+
 eval (not' (x && y)) `shouldBe` eval (or' (not' x) (not' y))
 eval (or' (not' x) (not' y)) `shouldBe` eval (not' (x && y))
 -}

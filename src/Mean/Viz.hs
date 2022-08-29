@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Viz where
@@ -31,6 +32,10 @@ bracketsIf = fnIf brackets'
 instance Pretty TyVar where
   ppr _ (TV t) = text t
 
+instance Pretty [TyVar] where
+  ppr p (t : ts) = ppr p t <> char ',' <> ppr p ts
+  ppr p [] = ""
+
 instance Pretty Type where
   ppr p (TyCon t) = anglesIf (p == 0) $ text t
   ppr p (TyVar t) = anglesIf (p == 0) $ ppr p t
@@ -52,7 +57,7 @@ instance Pretty Expr where
     Let n e -> text n <+> char '=' <+> ppr 0 e
 
 instance Pretty TyScheme where
-  ppr p (Forall tvs ty) = ppr p ty
+  ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
 
 instance Show EvalError where
   show (UnboundVariable n) = "Unbound variable: " ++ show n

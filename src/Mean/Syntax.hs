@@ -13,6 +13,8 @@ module Mean.Syntax
     tyBool,
     mkVar,
     mkEVar,
+    mkUnqScheme,
+    mkTv,
   )
 where
 
@@ -31,6 +33,10 @@ data Type
 
 data TyScheme = Forall [TyVar] Type
   deriving (Eq, Ord)
+
+mkUnqScheme = Forall []
+
+mkTv = TyVar . TV
 
 tyInt, tyBool :: Type
 tyInt = TyCon "n"

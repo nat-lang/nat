@@ -52,7 +52,7 @@ type Unifier = (Subst, [Constraint])
 type Solve a = ExceptT TypeError Identity a
 
 newtype Subst = Subst (Map.Map S.TyVar S.Type)
-  deriving (Eq, Ord, Semigroup, Monoid)
+  deriving (Eq, Ord, Semigroup, Monoid, Show)
 
 class Substitutable a where
   apply :: Subst -> a -> a
@@ -133,7 +133,7 @@ fresh = do
   where
     freshTyVar :: InferState -> Int -> Infer S.Type
     freshTyVar s cnt = do
-      let tyVar = S.TyVar $ S.TV $ letters !! (count s + cnt)
+      let tyVar = S.mkTv $ letters !! (count s + cnt)
       isStale <- isInTyEnv $ S.Forall [] tyVar
       if isStale
         then freshTyVar s (cnt + 1)
@@ -167,10 +167,10 @@ infer expr = case expr of
     (t'', cs) <- inTyEnv (v, S.Forall [] t') (infer e)
     return (t' `S.TyFun` t'', cs)
   S.App e0 e1 -> do
-    (t1, c1) <- infer e0
-    (t2, c2) <- infer e1
+    (t0, c0) <- infer e0
+    (t1, c1) <- infer e1
     tv <- fresh
-    return (tv, c1 ++ c2 ++ [(t1, t2 `S.TyFun` tv)])
+    return (tv, c0 ++ c1 ++ [(t0, t1 `S.TyFun` tv)])
 
 normalize :: S.TyScheme -> S.TyScheme
 normalize (S.Forall _ body) = S.Forall (map snd ord) (normtype body)
