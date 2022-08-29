@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Mean.Type where
+module Mean.Core.Type where
 
 import Control.Monad (replicateM)
 import Control.Monad.Except
@@ -13,9 +13,9 @@ import Data.List (nub)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
-import qualified Mean.Syntax as S
-import Mean.TypeEnv
-import Mean.Viz
+import qualified Mean.Core.Syntax as S
+import Mean.Core.TypeEnv
+import Mean.Core.Viz
 
 letters :: [String]
 letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
@@ -291,3 +291,5 @@ unifiable t0 t1 = case unify of
   Right {} -> True
   where
     unify = runIdentity $ runExceptT $ unifies t0 t1
+
+t0 <=> t1 = unifiable t0 t1

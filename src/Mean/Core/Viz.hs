@@ -1,11 +1,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Viz where
+module Mean.Core.Viz where
 
-import Mean.Err
-import Mean.Evaluation
-import Mean.Syntax
+import Mean.Core.Evaluation
+import Mean.Core.Syntax
 import Text.PrettyPrint
 import Prelude hiding ((<>))
 
@@ -53,8 +52,6 @@ instance Pretty Expr where
         Lam {} -> ppr (p + 1) e
         _ -> brackets (ppr (p + 1) e)
     App e0 e1 -> ppr p e0 <> parens (ppr p e1)
-    Tree t -> text $ show t
-    Let n e -> text n <+> char '=' <+> ppr 0 e
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
@@ -64,7 +61,6 @@ instance Show EvalError where
   show (NotAFn e0 e1) = "Can't apply " ++ show e0 ++ " to " ++ show e1
 
 instance Show Expr where
-  show (Tree et) = show et
   show e = (show . ppr 0) e
 
 instance Show Type where

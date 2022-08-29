@@ -1,14 +1,12 @@
-module Mean.Syntax
+module Mean.Core.Syntax
   ( Name,
     Var (..),
-    ExprTree,
+    Lit (..),
     TyVar (..),
     Type (..),
     TyScheme (..),
     Binder (..),
     Expr (..),
-    Lit (..),
-    T.Tree (..),
     tyInt,
     tyBool,
     mkVar,
@@ -18,7 +16,6 @@ module Mean.Syntax
   )
 where
 
-import qualified Data.Tree.Binary.Preorder as T
 import GHC.Generics
 
 newtype TyVar = TV String
@@ -34,8 +31,10 @@ data Type
 data TyScheme = Forall [TyVar] Type
   deriving (Eq, Ord)
 
+mkUnqScheme :: Type -> TyScheme
 mkUnqScheme = Forall []
 
+mkTv :: String -> Type
 mkTv = TyVar . TV
 
 tyInt, tyBool :: Type
@@ -43,8 +42,6 @@ tyInt = TyCon "n"
 tyBool = TyCon "t"
 
 type Name = String
-
-type ExprTree = T.Tree Expr
 
 data Lit
   = LInt Int
@@ -69,10 +66,10 @@ data Expr
   | EVar Var
   | Lam Binder Expr
   | App Expr Expr
-  | Tree ExprTree
-  | Let Name Expr
   deriving (Eq)
 
+mkVar :: Name -> Var
 mkVar v = Var v (v ++ "0")
 
+mkEVar :: Name -> Expr
 mkEVar v = EVar $ mkVar v

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Lexer where
+module Mean.Common.Lexer where
 
 import Control.Monad.Combinators.Expr (Operator (..))
 import Control.Monad.State
@@ -48,7 +48,7 @@ titularIdentifier = P.lookAhead C.upperChar >> identifier
 lIdentifier = P.lookAhead C.lowerChar >> identifier
 
 reserved :: Text -> Parser ()
-reserved w = (lexeme . P.try) (C.string w  *> P.notFollowedBy C.alphaNumChar)
+reserved w = (lexeme . P.try) (C.string w *> P.notFollowedBy C.alphaNumChar)
 
 integer :: Parser Integer
 integer = lexeme L.decimal

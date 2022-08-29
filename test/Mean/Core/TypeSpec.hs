@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.TypeSpec where
+module Mean.Core.TypeSpec where
 
-import Mean.Parser
-import Mean.Syntax
-import Mean.Type
-import Mean.TypeEnv
-import Mean.Viz
+import Mean.Core.Parser
+import Mean.Core.Syntax
+import Mean.Core.Type
+import Mean.Core.TypeEnv
+import Mean.Core.Viz
 import Test.Hspec
 
 spec :: Spec

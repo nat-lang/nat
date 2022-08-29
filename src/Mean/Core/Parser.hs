@@ -1,18 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Parser
+module Mean.Core.Parser
   ( P.ParseError (..),
-    pLet,
     pExpr,
     pVar,
     pInt,
     pBool,
-    pTree,
     pLam,
     pType,
-    pModule,
-    pFModule,
-    parse,
   )
 where
 
@@ -21,11 +16,10 @@ import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import Data.Text (Text)
-import qualified Data.Text.IO as TiO
-import Data.Void
-import qualified Mean.Lexer as L
-import qualified Mean.Syntax as S
+import qualified Mean.Common.Lexer as L
+import qualified Mean.Core.Syntax as S
 import Text.Megaparsec ((<|>))
+import Mean.Common.Parser (parseFile)
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as C
 
@@ -124,62 +118,3 @@ pExpr :: ExprParser
 pExpr = do
   exprs <- some pExpr'
   pure (foldl1 S.App exprs)
-
--------------------------------------------------------------------------------
--- Modules
--------------------------------------------------------------------------------
-
-pLet :: ExprParser
-pLet = do
-  L.reserved "let"
-  name <- L.identifier
-  L.space
-  L.symbol "="
-  L.space
-  S.Let name <$> pExpr
-
-pModule :: L.Parser [S.Expr]
-pModule = pLet `P.sepBy` L.delimiter
-
--------------------------------------------------------------------------------
--- Trees
--------------------------------------------------------------------------------
-
-type ExprTreeParser = L.Parser S.ExprTree
-
-pTree :: ExprTreeParser
-pTree = P.try (L.brackets unaryCatNode) <|> L.brackets binaryCatNode
-  where
-    mkLeafNode l = S.Node l S.Leaf S.Leaf
-    mkUnaryNode l c = S.Node l c S.Leaf
-
-    node = P.try leafNode <|> P.try (L.brackets leafNode) <|> pTree
-
-    leafNode :: ExprTreeParser
-    leafNode = do mkLeafNode <$> pExpr
-
-    unaryCatNode :: ExprTreeParser
-    unaryCatNode = do
-      l <- pExpr
-      mkUnaryNode l <$> node
-
-    binaryCatNode :: ExprTreeParser
-    binaryCatNode = do
-      l <- pExpr
-      c <- node
-      S.Node l c <$> node
-
--------------------------------------------------------------------------------
--- Entrypoints
--------------------------------------------------------------------------------
-
-type ModuleParse = Either (P.ParseErrorBundle Text Data.Void.Void) [S.Expr]
-
-parse :: P.Parsec e s a -> s -> Either (P.ParseErrorBundle s e) a
-parse parser = P.runParser parser "<input>"
-
-parseFile :: P.Parsec e Text a -> String -> IO (Either (P.ParseErrorBundle Text e) a)
-parseFile parser file = P.runParser parser file <$> TiO.readFile file
-
-pFModule :: String -> IO ModuleParse
-pFModule = parseFile pModule

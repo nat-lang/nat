@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.ParserSpec where
+module Mean.Core.ParserSpec where
 
-import Mean.Parser
-import Mean.Syntax
-import Mean.Type
-import Mean.Viz
+import Mean.Core.Parser
+import Mean.Core.Syntax
+import Mean.Core.Type
+import Mean.Core.Viz
+import Mean.Common.Parser (parse)
 import Test.Hspec
 
 spec :: Spec
@@ -67,23 +68,3 @@ spec = do
     it "parses functional application of function applications" $ do
       parse pExpr "f x (f x)" `shouldBe` Right (App fOfX fOfX)
       parse pExpr "f(x)(f x)" `shouldBe` Right (App fOfX fOfX)
-
-  describe "pTree" $ do
-    it "parses trees of integers" $ do
-      parse pTree "[0 [1] [2]]" `shouldBe` Right (Node (ELit $ LInt 0) (Node (ELit $ LInt 1) Leaf Leaf) (Node (ELit $ LInt 2) Leaf Leaf))
-    it "parses trees of booleans" $ do
-      parse pTree "[True [True] [False]]" `shouldBe` Right (Node (ELit $ LBool True) (Node (ELit $ LBool True) Leaf Leaf) (Node (ELit $ LBool False) Leaf Leaf))
-    it "parses trees of variables" $ do
-      parse pTree "[v0 [v1] [v2]]" `shouldBe` Right (Node (mkEVar "v0") (Node (mkEVar "v1") Leaf Leaf) (Node (mkEVar "v2") Leaf Leaf))
-    it "parses trees of lambdas" $ do
-      parse pTree "[\\x.x [\\x.x] [\\x.x]]" `shouldBe` Right (Node (idFn "x") (Node (idFn "x") Leaf Leaf) (Node (idFn "x") Leaf Leaf))
-    it "parses trees of function applications" $ do
-      parse pTree "[(f x) [f x] [f(x)]]" `shouldBe` Right (Node fOfX (Node fOfX Leaf Leaf) (Node fOfX Leaf Leaf))
-
-  describe "pLet" $ do
-    it "parses let declarations" $ do
-      parse pLet "let foo = bar" `shouldBe` Right (Let "foo" (mkEVar "bar"))
-
-  describe "pModule" $ do
-    it "parses modules" $ do
-      parse pModule "let foo = bar \n let bar = foo" `shouldBe` Right [Let "foo" (mkEVar "bar"), Let "bar" (mkEVar "foo")]

@@ -37,19 +37,24 @@ library
       FOL.KB
       Interpreter.Compose
       Interpreter.Composition
-      Interpreter.CompositionTFoo
+      Interpreter.CompositionTest
       Interpreter.Evaluation
       Interpreter.Fragment
       Lib.Std
-      Mean.Err
-      Mean.Evaluation
-      Mean.Lexer
-      Mean.Module
-      Mean.Parser
-      Mean.Syntax
-      Mean.Type
-      Mean.TypeEnv
-      Mean.Viz
+      Mean.Common.Lexer
+      Mean.Common.Parser
+      Mean.Core.Evaluation
+      Mean.Core.Parser
+      Mean.Core.Syntax
+      Mean.Core.Type
+      Mean.Core.TypeEnv
+      Mean.Core.Viz
+      Mean.Module.Parser
+      Mean.Module.Syntax
+      Mean.Sugar.Evaluation
+      Mean.Sugar.Parser
+      Mean.Sugar.Syntax
+      Mean.Sugar.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments
       Service.App
@@ -152,9 +157,11 @@ test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Mean.EvaluationSpec
-      Mean.ParserSpec
-      Mean.TypeSpec
+      Mean.Core.EvaluationSpec
+      Mean.Core.ParserSpec
+      Mean.Core.TypeSpec
+      Mean.Module.ParserSpec
+      Mean.Sugar.ParserSpec
       Paths_interpreter
   hs-source-dirs:
       test

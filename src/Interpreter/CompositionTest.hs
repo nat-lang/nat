@@ -1,6 +1,4 @@
-module Interpreter.CompositionTFoo where
-
--- import Test.Hspec
+module Interpreter.CompositionTest where
 
 import Compiler.Core.Inference
 import Compiler.Core.Parser

@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.EvaluationSpec where
+module Mean.Core.EvaluationSpec where
 
 import Debug.Trace (traceM)
-import Mean.Evaluation hiding ((*=), (@=))
-import qualified Mean.Evaluation as E
-import Mean.Parser
-import Mean.Syntax
-import Mean.Viz
+import Mean.Core.Evaluation hiding ((*=), (@=))
+import qualified Mean.Core.Evaluation as E
+import Mean.Core.Parser
+import Mean.Core.Syntax
+import Mean.Core.Viz
 import Test.HUnit ((@?=))
 import Test.Hspec
 import Prelude hiding (and, id, not, or, (&&), (+), (-), (||))

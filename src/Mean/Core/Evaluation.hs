@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Mean.Evaluation where
+module Mean.Core.Evaluation where
 
 import Control.Monad.Except
 import Control.Monad.Identity
@@ -10,8 +10,7 @@ import qualified Data.Map as Map
 import Data.Set ((\\))
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Err
-import qualified Mean.Syntax as S
+import qualified Mean.Core.Syntax as S
 
 data EvalError = UnboundVariable S.Name | NotAFn S.Expr S.Expr deriving (Eq)
 
@@ -93,17 +92,18 @@ alphaEq e0 e1 = case (e0, e1) of
   (S.App e0a e0b, S.App e1a e1b) -> e0a @= e1a && e0b @= e1b
   (S.EVar v0, S.EVar v1) -> v0 == v1
   (S.ELit l0, S.ELit l1) -> l0 == l1
-  -- to be reconsidered
-  (S.Let v0 e0, S.Let v1 e1) -> v0 == v1 && e0 @= e1
   _ -> False
 
+(@=) :: S.Expr -> S.Expr -> Bool
 e0 @= e1 = alphaEq e0 e1
 
 eval :: S.Expr -> Either EvalError S.Expr
 eval e = runIdentity $ runExceptT $ reduce e
 
+confluent :: S.Expr -> S.Expr -> Bool
 confluent e0 e1 = case (eval e0, eval e1) of
   (Right e1', Right e0') -> e0' @= e1'
   _ -> False
 
+(*=) :: S.Expr -> S.Expr -> Bool
 e0 *= e1 = confluent e0 e1

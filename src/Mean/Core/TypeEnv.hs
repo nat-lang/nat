@@ -1,8 +1,8 @@
-module Mean.TypeEnv where
+module Mean.Core.TypeEnv where
 
 import qualified Data.Map as Map
 import Data.Monoid
-import qualified Mean.Syntax as S
+import qualified Mean.Core.Syntax as S
 
 newtype TyEnv = TyEnv {types :: Map.Map S.Name S.TyScheme}
   deriving (Eq)
