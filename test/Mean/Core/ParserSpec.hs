@@ -3,18 +3,23 @@
 module Mean.Core.ParserSpec where
 
 import Mean.Common.Parser (parse)
+import Mean.Core.Factory (fOfX, fn, idFn)
 import Mean.Core.Parser
 import Mean.Core.Syntax
 import Mean.Core.Type
 import Mean.Core.Viz
 import Test.Hspec
-import Mean.Core.Factory
 
 a = mkVar "a"
+
 z1 = mkVar "z1"
+
 one = LInt 1
+
 zero = LInt 0
+
 true = LBool True
+
 false = LBool False
 
 spec :: Spec

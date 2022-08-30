@@ -8,12 +8,10 @@ module Mean.Core.Parser
     pVar,
     pBinder,
     pLam,
-
     pCVar,
     pCLit,
     pCLam,
     pCExpr,
-
     pType,
   )
 where
@@ -92,12 +90,12 @@ pCVar = S.CVar <$> pVar
 
 pBinder :: L.Parser S.Binder
 pBinder = do
+  L.symbol "\\"
   n <- L.identifier
   S.Binder (S.mkVar n) <$> pOptionalTypeAssignment
 
 pLam :: L.Parser (a -> S.Lambda a)
 pLam = do
-  L.symbol "\\"
   b <- pBinder
   L.symbol "."
   pure $ S.Lam b
@@ -108,12 +106,13 @@ pCLam = do
   S.CLam . lam <$> pCExpr
 
 pCTerm :: ExprParser
-pCTerm = P.choice
-  [ L.parens pCExpr,
-    pCLit,
-    pCVar,
-    pCLam
-  ]
+pCTerm =
+  P.choice
+    [ L.parens pCExpr,
+      pCLit,
+      pCVar,
+      pCLam
+    ]
 
 operatorTable :: [[Operator L.Parser S.CoreExpr]]
 operatorTable =

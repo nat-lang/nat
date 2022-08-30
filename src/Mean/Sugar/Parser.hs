@@ -3,8 +3,9 @@
 module Mean.Sugar.Parser where
 
 import Control.Applicative (some)
-import Data.Functor ((<&>))
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
+import Data.Functor ((<&>))
+import Debug.Trace (traceM)
 import qualified Mean.Common.Lexer as L
 import qualified Mean.Core.Parser as Core
 import qualified Mean.Core.Syntax as SCore
@@ -16,33 +17,35 @@ type ExprParser = L.Parser S.SugarExpr
 
 type ExprTreeParser = L.Parser S.ExprTree
 
+pENode = Core.pCExpr <&> S.ENode
+
+pBNode = Core.pBinder <&> S.BNode
+
 pExprNode :: L.Parser S.ExprNode
-pExprNode = P.choice
-  [ Core.pCExpr <&> S.ENode,
-    Core.pBinder <&> S.BNode
-  ]
+pExprNode = P.try pENode <|> pBNode
+
+mkLeafNode e = S.Node e S.Leaf S.Leaf
+
+mkUnNode e l = S.Node e l S.Leaf
+
+pLeafNode :: ExprTreeParser
+pLeafNode = L.brackets $ mkLeafNode <$> pExprNode
+
+pUnNode :: ExprTreeParser
+pUnNode = L.brackets $ do
+  e <- pExprNode
+  mkUnNode e <$> pTree
+
+pBiNode :: ExprTreeParser
+pBiNode = L.brackets $ do
+  e <- pExprNode
+  l <- pTree
+  S.Node e l <$> pTree
 
 pTree :: ExprTreeParser
-pTree = P.try (L.brackets unNode) <|> L.brackets biNode
-  where
-    mkLeafNode e = S.Node e S.Leaf S.Leaf
-    mkUnNode e l = S.Node e l S.Leaf
-
-    node = P.try leafNode <|> P.try (L.brackets leafNode) <|> pTree
-
-    leafNode :: ExprTreeParser
-    leafNode = mkLeafNode <$> pExprNode
-
-    unNode :: ExprTreeParser
-    unNode = do
-      e <- pExprNode
-      mkUnNode e <$> node
-
-    biNode :: ExprTreeParser
-    biNode = do
-      e <- pExprNode
-      l <- node
-      S.Node e l <$> node
+pTree =
+  P.choice
+    [P.try pLeafNode, P.try pUnNode, pBiNode]
 
 pSLit :: ExprParser
 pSLit = S.SLit <$> Core.pLit
@@ -58,16 +61,15 @@ pSLam = do
   lam <- Core.pLam
   S.SLam . lam <$> pSExpr
 
-sTerms =
-  [ L.parens pSExpr,
-    pSLit,
-    pSVar,
-    pSTree,
-    pSLam
-  ]
-
 pSTerm :: ExprParser
-pSTerm = P.choice sTerms
+pSTerm =
+  P.choice
+    [ L.parens pSExpr,
+      pSLit,
+      pSVar,
+      pSTree,
+      pSLam
+    ]
 
 operatorTable :: [[Operator L.Parser S.SugarExpr]]
 operatorTable =

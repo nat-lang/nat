@@ -162,10 +162,11 @@ test-suite spec
   main-is: Spec.hs
   other-modules:
       Mean.Core.EvaluationSpec
-      Mean.Core.Factories
+      Mean.Core.Factory
       Mean.Core.ParserSpec
       Mean.Core.TypeSpec
       Mean.Module.ParserSpec
+      Mean.Sugar.Factory
       Mean.Sugar.ParserSpec
       Paths_interpreter
   hs-source-dirs:
