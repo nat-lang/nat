@@ -5,7 +5,7 @@ module Mean.Sugar.Syntax
     ExprTree,
     mkSVar,
     mkSLam,
-    mkSApp
+    mkSApp,
   )
 where
 

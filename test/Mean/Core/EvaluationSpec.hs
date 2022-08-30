@@ -5,13 +5,13 @@ module Mean.Core.EvaluationSpec where
 import Debug.Trace (traceM)
 import Mean.Core.Evaluation hiding ((*=), (@=))
 import qualified Mean.Core.Evaluation as E
+import Mean.Core.Factory
 import Mean.Core.Parser
 import Mean.Core.Syntax
 import Mean.Core.Viz
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Mean.Core.Factory
-import Prelude hiding (succ, exp, and, id, not, or, (&&), (+), (++), (-), (||), (*), (**))
+import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (||))
 
 e0 @= e1 = (e0 E.@= e1) @?= True
 
@@ -70,6 +70,10 @@ spec = do
     it "does elementary beta reduction" $ do
       app id id *= id
 
+    it "reduces peano numerals" $ do
+      app succ one *= two
+      app succ (app succ one) *= three
+
     it "reduces church numerals" $ do
       (one + zero) *= one
       (zero + two) *= two
@@ -87,7 +91,7 @@ spec = do
       (two ** two) *= (two * two)
       (two ** three) *= (two * (two * two))
 
-    it "reduces booleans" $ do
+    it "reduces church booleans" $ do
       (true || false) *= true
       (false || true) *= true
       (true || true) *= true
@@ -99,7 +103,7 @@ spec = do
       (true && true) *= true
 
 {-
-can we get something like these to work?
+can we get these to work with the church encodings?
 
 (x ~> y) *= -(x && -y)
 (x ~> y) *= (-x || y)

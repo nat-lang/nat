@@ -6,7 +6,12 @@ import qualified Mean.Core.Evaluation as CEval
 import qualified Mean.Core.Syntax as CSyn
 import Mean.Core.Type
 import Mean.Sugar.Syntax
+
 {-
+data EvalError = NotAFn SugarExpr SugarExpr deriving (Eq)
+
+type Evaluation = ExceptT EvalError Identity
+
 type EvaluationM = CEval.Evaluation Expr
 
 type ENode = (CSyn.Type, CSyn.Expr)
@@ -21,14 +26,14 @@ unify (t0, e0) (t1, e1) = case (t0 <=> t1) of
     True -> Just (e0, e1)
     False -> Nothing
 
--- λlλr . 
+-- λlλr .
 functionApplication :: ENode -> ENode -> EvaluationM
 functionApplication n0 n1 = case unify n0 n1 of
   Just (e0, e1) -> S.App fn arg
   Nothing -> if t0 <=> t1
-    then 
-    else if 
-  
+    then
+    else if
+
   case ((t0, e0), (t1, e1)) of
 
   <=>
@@ -37,7 +42,7 @@ functionApplication n0 n1 = case unify n0 n1 of
   (TypedExpr arg t, FnNode fn tDom) | Inf.unifiable tDom t -> doFA fn arg
   _ -> Nothing
   where
-    doFA fn arg = Just $ 
+    doFA fn arg = Just $
 
 pattern BinderNode b <- TypedExpr (S.EBinder b) _
 
@@ -58,24 +63,24 @@ predicateModification e0 e1 = case (e0, e1) of
 
 reduce :: Expr -> EvaluationM
 reduce expr = case expr of
-  ECore e -> pure $ ECore (CEval.eval e)
-  Tree t -> case t of
+  SCore e -> pure $ SCore (CEval.eval e)
+  STree t -> case t of
     Node e l f -> pure $ Node e' l' f' where
       l' = reduce l
       r' = reduce r
-      e' = 
+      e' =
     Leaf -> ETree Leaf
+-}
 
 reduce' :: Expr -> EvaluationM
 reduce' expr = case expr of
-  ECore e -> case e of
-    S.App e0 e1 -> case e1 of
-    
-    pure $ ECore (CEval.eval e)
-  Tree t -> case t of
+  SApp e0 e1 -> case e0 of
+    STree {} -> throwError $ NotAFn e0 e1
+    SLam {} -> case e1 of
+
+  STree t -> case t of
     Node e l f -> pure $ Node e' l' f' where
       l' = reduce l
       r' = reduce r
-      e' = 
+      e' =
     Leaf -> ETree Leaf
--}
