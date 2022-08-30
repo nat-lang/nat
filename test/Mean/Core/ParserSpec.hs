@@ -2,19 +2,23 @@
 
 module Mean.Core.ParserSpec where
 
+import Mean.Common.Parser (parse)
 import Mean.Core.Parser
 import Mean.Core.Syntax
 import Mean.Core.Type
 import Mean.Core.Viz
-import Mean.Common.Parser (parse)
 import Test.Hspec
+import Mean.Core.Factory
+
+a = mkVar "a"
+z1 = mkVar "z1"
+one = LInt 1
+zero = LInt 0
+true = LBool True
+false = LBool False
 
 spec :: Spec
 spec = do
-  let fn x b = Lam (Binder (mkVar x) TyNil) b
-  let idFn x = fn x (mkEVar x)
-  let fOfX = App (mkEVar "f") (mkEVar "x")
-
   describe "pType" $ do
     it "parses the primitive types" $ do
       parse pType "<n>" `shouldBe` Right tyInt
@@ -28,43 +32,55 @@ spec = do
 
   describe "pInt" $ do
     it "parses literal integers" $ do
-      parse pExpr "1" `shouldBe` Right (ELit $ LInt 1)
-      parse pExpr "0" `shouldBe` Right (ELit $ LInt 0)
+      parse pInt "1" `shouldBe` Right one
+      parse pInt "0" `shouldBe` Right zero
 
   describe "pBool" $ do
     it "parses literal booleans" $ do
-      parse pExpr "True" `shouldBe` Right (ELit $ LBool True)
-      parse pExpr "False" `shouldBe` Right (ELit $ LBool False)
+      parse pBool "True" `shouldBe` Right true
+      parse pBool "False" `shouldBe` Right false
 
   describe "pVar" $ do
     it "parses alphanumeric variables" $ do
-      parse pExpr "a" `shouldBe` Right (mkEVar "a")
-      parse pExpr "z1" `shouldBe` Right (mkEVar "z1")
+      parse pVar "a" `shouldBe` Right a
+      parse pVar "z1" `shouldBe` Right z1
 
-  describe "pLam" $ do
+  describe "pCLit" $ do
+    it "parses literals" $ do
+      parse pCLit "1" `shouldBe` Right (CLit one)
+      parse pCLit "0" `shouldBe` Right (CLit zero)
+      parse pCLit "True" `shouldBe` Right (CLit true)
+      parse pCLit "False" `shouldBe` Right (CLit false)
+
+  describe "pCVar" $ do
+    it "parses alphanumeric variables" $ do
+      parse pCVar "a" `shouldBe` Right (CVar a)
+      parse pCVar "z1" `shouldBe` Right (CVar z1)
+
+  describe "pCLam" $ do
     it "parses untyped lambdas" $ do
-      parse pLam "\\a.a" `shouldBe` Right (idFn "a")
+      parse pCLam "\\a.a" `shouldBe` Right (idFn "a")
     it "parses typed lambdas" $ do
-      parse pLam "\\a:<A>.a" `shouldBe` Right (Lam (Binder (mkVar "a") (TyVar $ TV "A")) (mkEVar "a"))
-      parse pLam "\\a:<n,t>.a" `shouldBe` Right (Lam (Binder (mkVar "a") (TyFun tyInt tyBool)) (mkEVar "a"))
+      parse pCLam "\\a:<A>.a" `shouldBe` Right (mkCLam (Binder (mkVar "a") (TyVar $ TV "A")) (mkCVar "a"))
+      parse pCLam "\\a:<n,t>.a" `shouldBe` Right (mkCLam (Binder (mkVar "a") (TyFun tyInt tyBool)) (mkCVar "a"))
     it "parses lambdas with complex bodies" $ do
-      parse pLam "\\f.(\\x.f(x x))(\\x.f(x x))"
+      parse pCLam "\\f.(\\x.f(x x))(\\x.f(x x))"
         `shouldBe` Right
           ( fn
               "f"
-              ( App
-                  (fn "x" (App (mkEVar "f") (App (mkEVar "x") (mkEVar "x"))))
-                  (fn "x" (App (mkEVar "f") (App (mkEVar "x") (mkEVar "x"))))
+              ( mkCApp
+                  (fn "x" (mkCApp (mkCVar "f") (mkCApp (mkCVar "x") (mkCVar "x"))))
+                  (fn "x" (mkCApp (mkCVar "f") (mkCApp (mkCVar "x") (mkCVar "x"))))
               )
           )
 
-  describe "pExpr" $ do
+  describe "pCExpr" $ do
     it "parses functional application of variables" $ do
-      parse pExpr "f x" `shouldBe` Right fOfX
-      parse pExpr "f(x)" `shouldBe` Right fOfX
+      parse pCExpr "f x" `shouldBe` Right fOfX
+      parse pCExpr "f(x)" `shouldBe` Right fOfX
     it "parses functional application of lambdas" $ do
-      parse pExpr "(\\f.f)\\f.f" `shouldBe` Right (App (idFn "f") (idFn "f"))
-      parse pExpr "(\\f.f)(\\f.f)" `shouldBe` Right (App (idFn "f") (idFn "f"))
+      parse pCExpr "(\\f.f)\\f.f" `shouldBe` Right (mkCApp (idFn "f") (idFn "f"))
+      parse pCExpr "(\\f.f)(\\f.f)" `shouldBe` Right (mkCApp (idFn "f") (idFn "f"))
     it "parses functional application of function applications" $ do
-      parse pExpr "f x (f x)" `shouldBe` Right (App fOfX fOfX)
-      parse pExpr "f(x)(f x)" `shouldBe` Right (App fOfX fOfX)
+      parse pCExpr "f x (f x)" `shouldBe` Right (mkCApp fOfX fOfX)
+      parse pCExpr "f(x)(f x)" `shouldBe` Right (mkCApp fOfX fOfX)

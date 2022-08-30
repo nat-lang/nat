@@ -3,7 +3,7 @@ module Mean.Sugar.Type where
 import Mean.Core.TypeEnv
 import Mean.Core.Type as Core
 import Mean.Sugar.Syntax
-
+{-
 -- | Type an expression tree, passing down binder assignments.
 infer :: ExprTree -> (TypeCheckedExprTree, TyEnv)
 infer eTree = runState (mapM typeCheck eTree) empty
@@ -23,3 +23,4 @@ infer eTree = runState (mapM typeCheck eTree) empty
             gTy@(S.Forall _ iTy) -> do
               modify (updateTypeEnv expr gTy)
               pure $ (Just $ TypedExpr expr iTy, cLabel)
+-}

@@ -6,9 +6,8 @@ import qualified Mean.Core.Evaluation as CEval
 import qualified Mean.Core.Syntax as CSyn
 import Mean.Core.Type
 import Mean.Sugar.Syntax
-
+{-
 type EvaluationM = CEval.Evaluation Expr
-type CEvaluationM = CEval.Evaluation CSyn.Expr
 
 type ENode = (CSyn.Type, CSyn.Expr)
 
@@ -23,13 +22,12 @@ unify (t0, e0) (t1, e1) = case (t0 <=> t1) of
     False -> Nothing
 
 -- λlλr . 
-functionApplication :: ENode -> ENode -> CEvaluationM
+functionApplication :: ENode -> ENode -> EvaluationM
 functionApplication n0 n1 = case unify n0 n1 of
   Just (e0, e1) -> S.App fn arg
-  Nothing -> 
-  if t0 <=> t1
+  Nothing -> if t0 <=> t1
     then 
-    else if <
+    else if 
   
   case ((t0, e0), (t1, e1)) of
 
@@ -60,12 +58,24 @@ predicateModification e0 e1 = case (e0, e1) of
 
 reduce :: Expr -> EvaluationM
 reduce expr = case expr of
-  ECore e -> ECore (CEval.eval e)
+  ECore e -> pure $ ECore (CEval.eval e)
   Tree t -> case t of
-    Node e l f -> Node e' l' f' where
+    Node e l f -> pure $ Node e' l' f' where
       l' = reduce l
       r' = reduce r
       e' = 
     Leaf -> ETree Leaf
 
-
+reduce' :: Expr -> EvaluationM
+reduce' expr = case expr of
+  ECore e -> case e of
+    S.App e0 e1 -> case e1 of
+    
+    pure $ ECore (CEval.eval e)
+  Tree t -> case t of
+    Node e l f -> pure $ Node e' l' f' where
+      l' = reduce l
+      r' = reduce r
+      e' = 
+    Leaf -> ETree Leaf
+-}

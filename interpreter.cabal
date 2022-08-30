@@ -43,17 +43,21 @@ library
       Lib.Std
       Mean.Common.Lexer
       Mean.Common.Parser
+      Mean.Common.Viz
       Mean.Core.Evaluation
       Mean.Core.Parser
+      Mean.Core.Patterns
       Mean.Core.Syntax
       Mean.Core.Type
       Mean.Core.TypeEnv
       Mean.Core.Viz
       Mean.Module.Parser
       Mean.Module.Syntax
+      Mean.Module.Viz
       Mean.Sugar.Evaluation
       Mean.Sugar.Parser
       Mean.Sugar.Syntax
+      Mean.Sugar.Type
       Mean.Sugar.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments
@@ -158,6 +162,7 @@ test-suite spec
   main-is: Spec.hs
   other-modules:
       Mean.Core.EvaluationSpec
+      Mean.Core.Factories
       Mean.Core.ParserSpec
       Mean.Core.TypeSpec
       Mean.Module.ParserSpec

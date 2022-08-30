@@ -1,13 +1,22 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Mean.Core.Type where
 
 import Control.Monad (replicateM)
 import Control.Monad.Except
-import Control.Monad.Identity
+    ( replicateM,
+      MonadError(throwError),
+      ExceptT,
+      runExcept,
+      runExceptT,
+      Except )
+import Control.Monad.Identity ( Identity(runIdentity) )
 import Control.Monad.Reader
+    ( MonadReader(ask, local), ReaderT(runReaderT), asks )
 import Control.Monad.State
+    ( MonadState(put, get), StateT, evalStateT )
 import Data.Either (partitionEithers)
 import Data.List (nub)
 import qualified Data.Map as Map
@@ -15,6 +24,8 @@ import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import qualified Mean.Core.Syntax as S
 import Mean.Core.TypeEnv
+    ( empty, extend, isIn, remove, TyEnv(TyEnv) )
+import Mean.Core.Patterns (pattern App, pattern Lam)
 import Mean.Core.Viz
 
 letters :: [String]
@@ -155,18 +166,18 @@ generalize env t = S.Forall as t
   where
     as = Set.toList $ ftv t `Set.difference` ftv env
 
-infer :: S.Expr -> Infer (S.Type, [Constraint])
+infer :: S.CoreExpr -> Infer (S.Type, [Constraint])
 infer expr = case expr of
-  S.ELit (S.LInt _) -> return (S.tyInt, [])
-  S.ELit (S.LBool _) -> return (S.tyBool, [])
-  S.EVar (S.Var _ v) -> do
+  S.CLit (S.LInt _) -> return (S.tyInt, [])
+  S.CLit (S.LBool _) -> return (S.tyBool, [])
+  S.CVar (S.Var _ v) -> do
     t <- lookupTyEnv v
     return (t, [])
-  S.Lam (S.Binder (S.Var _ v) t) e -> do
+  Lam (S.Binder (S.Var _ v) t) e -> do
     t' <- freshIfNil t
     (t'', cs) <- inTyEnv (v, S.Forall [] t') (infer e)
     return (t' `S.TyFun` t'', cs)
-  S.App e0 e1 -> do
+  App e0 e1 -> do
     (t0, c0) <- infer e0
     (t1, c1) <- infer e1
     tv <- fresh
@@ -180,6 +191,7 @@ normalize (S.Forall _ body) = S.Forall (map snd ord) (normtype body)
     fv (S.TyVar a) = [a]
     fv (S.TyFun a b) = fv a ++ fv b
     fv (S.TyCon _) = []
+    fv S.TyNil = error "missing type annotation"
 
     normtype (S.TyFun a b) = S.TyFun (normtype a) (normtype b)
     normtype (S.TyCon a) = S.TyCon a
@@ -187,6 +199,7 @@ normalize (S.Forall _ body) = S.Forall (map snd ord) (normtype body)
       case Prelude.lookup a ord of
         Just x -> S.TyVar x
         Nothing -> error "type variable not in signature"
+    normtype S.TyNil = error "missing type annotation"
 
 -------------------------------------------------------------------------------
 -- Constraint Solver
@@ -250,16 +263,16 @@ runInfer env m = runExcept $ evalStateT (runReaderT m env) initInfer
 
 type TCList = [Either TypeError (S.Type, [Constraint])]
 
-inferMany :: TyEnv -> [S.Expr] -> Either TypeError [(S.Type, [Constraint])]
+inferMany :: TyEnv -> [S.CoreExpr] -> Either TypeError [(S.Type, [Constraint])]
 inferMany env exprs = case partitionEithers $ foldl go [] exprs of
   (err : _, _) -> Left err
   (_, tcs) -> Right tcs
   where
-    go :: TCList -> S.Expr -> TCList
+    go :: TCList -> S.CoreExpr -> TCList
     go tcs expr = runInfer env (infer expr) : tcs
 
 -- | Solve for the toplevel type of an expression in a given environment
-inferExpr :: TyEnv -> S.Expr -> Either TypeError S.TyScheme
+inferExpr :: TyEnv -> S.CoreExpr -> Either TypeError S.TyScheme
 inferExpr env ex = do
   --  ("inferring " ++ show ex ++ " with ... " ++ "[" ++ show env ++ "]")
   case runInfer env (infer ex) of
@@ -269,14 +282,14 @@ inferExpr env ex = do
       Right subst -> Right $ closeOver $ apply subst ty
 
 -- | Infer declaration types, accumulating a type env.
-inferModule :: TyEnv -> [(String, S.Expr)] -> Either TypeError TyEnv
+inferModule :: TyEnv -> [(String, S.CoreExpr)] -> Either TypeError TyEnv
 inferModule env [] = Right env
 inferModule env ((name, ex) : xs) = case inferExpr env ex of
   Left err -> Left err
   Right ty -> inferModule (extend env (name, ty)) xs
 
 -- | Return the internal constraints used in solving for the type of an expression
-constraintsOnExpr :: TyEnv -> S.Expr -> Either TypeError ([Constraint], Subst, S.Type, S.TyScheme)
+constraintsOnExpr :: TyEnv -> S.CoreExpr -> Either TypeError ([Constraint], Subst, S.Type, S.TyScheme)
 constraintsOnExpr env ex = case runInfer env (infer ex) of
   Left err -> Left err
   Right (ty, cs) -> case runSolve cs of

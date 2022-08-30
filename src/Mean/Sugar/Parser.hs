@@ -2,45 +2,93 @@
 
 module Mean.Sugar.Parser where
 
-import qualified Mean.Sugar.Syntax as S
-import qualified Text.Megaparsec as P
-import Text.Megaparsec ((<|>))
+import Control.Applicative (some)
 import Data.Functor ((<&>))
+import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import qualified Mean.Common.Lexer as L
 import qualified Mean.Core.Parser as Core
+import qualified Mean.Core.Syntax as SCore
+import qualified Mean.Sugar.Syntax as S
+import Text.Megaparsec ((<|>))
+import qualified Text.Megaparsec as P
 
-type ExprParser = L.Parser S.Expr
+type ExprParser = L.Parser S.SugarExpr
+
 type ExprTreeParser = L.Parser S.ExprTree
 
+pExprNode :: L.Parser S.ExprNode
+pExprNode = P.choice
+  [ Core.pCExpr <&> S.ENode,
+    Core.pBinder <&> S.BNode
+  ]
+
 pTree :: ExprTreeParser
-pTree = P.try (L.brackets unaryCatNode) <|> L.brackets binaryCatNode
+pTree = P.try (L.brackets unNode) <|> L.brackets biNode
   where
-    mkLeafNode l = S.Node l S.Leaf S.Leaf
-    mkUnaryNode l c = S.Node l c S.Leaf
+    mkLeafNode e = S.Node e S.Leaf S.Leaf
+    mkUnNode e l = S.Node e l S.Leaf
 
     node = P.try leafNode <|> P.try (L.brackets leafNode) <|> pTree
 
     leafNode :: ExprTreeParser
-    leafNode = do mkLeafNode <$> Core.pExpr
+    leafNode = mkLeafNode <$> pExprNode
 
-    unaryCatNode :: ExprTreeParser
-    unaryCatNode = do
-      l <- Core.pExpr
-      mkUnaryNode l <$> node
+    unNode :: ExprTreeParser
+    unNode = do
+      e <- pExprNode
+      mkUnNode e <$> node
 
-    binaryCatNode :: ExprTreeParser
-    binaryCatNode = do
-      l <- Core.pExpr
-      c <- node
-      S.Node l c <$> node
+    biNode :: ExprTreeParser
+    biNode = do
+      e <- pExprNode
+      l <- node
+      S.Node e l <$> node
 
-pInterpretation :: ExprParser
-pInterpretation = do
-  L.reserved "interpret"
-  S.ETree <$> pTree
+pSLit :: ExprParser
+pSLit = S.SLit <$> Core.pLit
 
-pExpr :: ExprParser
-pExpr = P.choice
-  [ Core.pExpr <&> S.ECore,
-    pTree <&> S.ETree
+pSVar :: ExprParser
+pSVar = S.SVar <$> Core.pVar
+
+pSTree :: ExprParser
+pSTree = S.STree <$> pTree
+
+pSLam :: ExprParser
+pSLam = do
+  lam <- Core.pLam
+  S.SLam . lam <$> pSExpr
+
+sTerms =
+  [ L.parens pSExpr,
+    pSLit,
+    pSVar,
+    pSTree,
+    pSLam
   ]
+
+pSTerm :: ExprParser
+pSTerm = P.choice sTerms
+
+operatorTable :: [[Operator L.Parser S.SugarExpr]]
+operatorTable =
+  [ [],
+    -- prefix "-" Negation,
+    -- prefix "+" id
+
+    [],
+    -- infix "*" Product,
+    -- infix "/" Division
+
+    []
+  ]
+
+-- infix "+" Sum,
+-- infix "-" Subtr
+
+pSExpr' :: ExprParser
+pSExpr' = makeExprParser pSTerm operatorTable
+
+pSExpr :: ExprParser
+pSExpr = do
+  exprs <- some pSExpr'
+  pure (foldl1 (\e0 e1 -> S.SApp $ SCore.App e0 e1) exprs)

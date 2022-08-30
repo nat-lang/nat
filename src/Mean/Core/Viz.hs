@@ -3,30 +3,20 @@
 
 module Mean.Core.Viz where
 
-import Mean.Core.Evaluation
+import Mean.Common.Viz ( Pretty(ppr), angles, anglesIf )
+import Mean.Core.Evaluation ( EvalError(..))
 import Mean.Core.Syntax
+    ( CoreExpr(..),
+      TyScheme(..),
+      Type(..),
+      TyVar(..),
+      Binder(Binder),
+      Lambda(..),
+      App(..),
+      Lit(LBool, LInt) )
 import Text.PrettyPrint
+    ( (<+>), (<>), brackets, char, parens, text )
 import Prelude hiding ((<>))
-
-class Pretty p where
-  ppr :: Int -> p -> Doc
-
-  pp :: p -> Doc
-  pp = ppr 0
-
-angles :: Doc -> Doc
-angles p = char '<' <> p <> char '>'
-
-brackets' :: Doc -> Doc
-brackets' p = char '[' <> p <> char ']'
-
-fnIf fn b = if b then fn else id
-
-anglesIf = fnIf angles
-
-parensIf = fnIf parens
-
-bracketsIf = fnIf brackets'
 
 instance Pretty TyVar where
   ppr _ (TV t) = text t
@@ -41,17 +31,28 @@ instance Pretty Type where
   ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
   ppr p TyNil = text "TyNil"
 
-instance Pretty Expr where
+instance Pretty Binder where
+  ppr p (Binder n t) = char 'λ' <> text (show n)
+
+instance Pretty (Lambda CoreExpr) where
+  ppr p (Lam b e) = ppr p b <> case e of
+    CLam Lam {} -> ppr (p + 1) e
+    _ -> brackets (ppr (p + 1) e)
+
+instance (Pretty a) => Pretty (App a) where
+  ppr p (App e0 e1) = ppr p e0 <> parens (ppr p e1)
+
+instance Pretty Lit where
+  ppr p l = case l of
+    LInt n -> text (show n)
+    LBool b -> text (show b)
+
+instance Pretty CoreExpr where
   ppr p e = case e of
-    ELit lit -> case lit of
-      LInt n -> text (show n)
-      LBool b -> text (show b)
-    EVar s -> text (show s)
-    Lam (Binder n t) e ->
-      char 'λ' <> text (show n) <> case e of
-        Lam {} -> ppr (p + 1) e
-        _ -> brackets (ppr (p + 1) e)
-    App e0 e1 -> ppr p e0 <> parens (ppr p e1)
+    CLit l -> ppr p l
+    CVar s -> text (show s)
+    CLam l -> ppr p l
+    CApp a -> ppr p a
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
@@ -60,7 +61,7 @@ instance Show EvalError where
   show (UnboundVariable n) = "Unbound variable: " ++ show n
   show (NotAFn e0 e1) = "Can't apply " ++ show e0 ++ " to " ++ show e1
 
-instance Show Expr where
+instance Show CoreExpr where
   show e = (show . ppr 0) e
 
 instance Show Type where

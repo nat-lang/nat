@@ -2,15 +2,19 @@ module Mean.Core.Syntax
   ( Name,
     Var (..),
     Lit (..),
+    Lambda (..),
+    App (..),
     TyVar (..),
     Type (..),
     TyScheme (..),
     Binder (..),
-    Expr (..),
+    CoreExpr (..),
     tyInt,
     tyBool,
     mkVar,
-    mkEVar,
+    mkCVar,
+    mkCLam,
+    mkCApp,
     mkUnqScheme,
     mkTv,
   )
@@ -61,15 +65,25 @@ instance Show Var where
 
 data Binder = Binder Var Type deriving (Eq, Ord)
 
-data Expr
-  = ELit Lit
-  | EVar Var
-  | Lam Binder Expr
-  | App Expr Expr
+data Lambda a = Lam Binder a deriving (Eq)
+
+data App a = App a a deriving (Eq)
+
+data CoreExpr
+  = CLit Lit
+  | CVar Var
+  | CLam (Lambda CoreExpr)
+  | CApp (App CoreExpr)
   deriving (Eq)
 
 mkVar :: Name -> Var
 mkVar v = Var v (v ++ "0")
 
-mkEVar :: Name -> Expr
-mkEVar v = EVar $ mkVar v
+mkCVar :: Name -> CoreExpr
+mkCVar v = CVar $ mkVar v
+
+mkCLam :: Binder -> CoreExpr -> CoreExpr
+mkCLam b = CLam . Lam b
+
+mkCApp :: CoreExpr -> CoreExpr -> CoreExpr
+mkCApp e = CApp . App e

@@ -11,20 +11,18 @@ import qualified Mean.Core.Parser as Core
 import qualified Mean.Sugar.Parser as Sugar
 import Mean.Module.Syntax
 
-type ExprParser = L.Parser Expr
+type ExprParser = L.Parser ModuleExpr
 type ModuleParse = Either (P.ParseErrorBundle Text Data.Void.Void) Module
 
-pDecl :: ExprParser
-pDecl = do
+pMDecl :: ExprParser
+pMDecl = do
   L.reserved "let"
   name <- L.identifier
-  L.space
   L.symbol "="
-  L.space
-  Decl name <$> Sugar.pExpr
+  MDecl name <$> Sugar.pSExpr
 
 pModule :: L.Parser Module
-pModule = pDecl `P.sepBy` L.delimiter
+pModule = pMDecl `P.sepBy` L.delimiter
 
 pFModule :: String -> IO ModuleParse
 pFModule = parseFile pModule

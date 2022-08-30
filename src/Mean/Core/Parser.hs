@@ -2,11 +2,18 @@
 
 module Mean.Core.Parser
   ( P.ParseError (..),
-    pExpr,
-    pVar,
     pInt,
     pBool,
+    pLit,
+    pVar,
+    pBinder,
     pLam,
+
+    pCVar,
+    pCLit,
+    pCLam,
+    pCExpr,
+
     pType,
   )
 where
@@ -17,9 +24,9 @@ import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Mean.Common.Lexer as L
+import Mean.Common.Parser (parseFile)
 import qualified Mean.Core.Syntax as S
 import Text.Megaparsec ((<|>))
-import Mean.Common.Parser (parseFile)
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as C
 
@@ -59,43 +66,56 @@ pOptionalTypeAssignment = pTypeAssignment <|> tyNil
 -- Terms
 -------------------------------------------------------------------------------
 
-type ExprParser = L.Parser S.Expr
+type ExprParser = L.Parser S.CoreExpr
 
-pBool :: ExprParser
+type LitParser = L.Parser S.Lit
+
+pBool :: LitParser
 pBool =
-  (L.reserved "True" >> pure (S.ELit (S.LBool True)))
-    <|> (L.reserved "False" >> pure (S.ELit (S.LBool False)))
+  (L.reserved "True" >> pure (S.LBool True))
+    <|> (L.reserved "False" >> pure (S.LBool False))
 
-pInt :: ExprParser
-pInt = S.ELit . S.LInt . fromIntegral <$> L.integer
+pInt :: LitParser
+pInt = S.LInt . fromIntegral <$> L.integer
 
-pVar :: ExprParser
-pVar = do
-  S.mkEVar <$> L.identifier
+pLit :: LitParser
+pLit = P.choice [pInt, pBool]
+
+pCLit :: ExprParser
+pCLit = S.CLit <$> pLit
+
+pVar :: L.Parser S.Var
+pVar = S.mkVar <$> L.identifier
+
+pCVar :: ExprParser
+pCVar = S.CVar <$> pVar
 
 pBinder :: L.Parser S.Binder
 pBinder = do
   n <- L.identifier
   S.Binder (S.mkVar n) <$> pOptionalTypeAssignment
 
-pLam :: ExprParser
+pLam :: L.Parser (a -> S.Lambda a)
 pLam = do
   L.symbol "\\"
   b <- pBinder
   L.symbol "."
-  S.Lam b <$> pExpr
+  pure $ S.Lam b
 
-pTerm :: ExprParser
-pTerm =
-  P.choice
-    [ L.parens pExpr,
-      pInt,
-      pBool,
-      pVar,
-      pLam
-    ]
+pCLam :: ExprParser
+pCLam = do
+  lam <- pLam
+  S.CLam . lam <$> pCExpr
 
-operatorTable :: [[Operator L.Parser S.Expr]]
+pCTerm :: ExprParser
+pCTerm = P.choice
+  [ L.parens pCExpr,
+    pCLit,
+    pCVar,
+    pCLam
+  ]
+
+operatorTable :: [[Operator L.Parser S.CoreExpr]]
 operatorTable =
   [ [],
     -- prefix "-" Negation,
@@ -111,10 +131,10 @@ operatorTable =
 -- infix "+" Sum,
 -- infix "-" Subtr
 
-pExpr' :: ExprParser
-pExpr' = makeExprParser pTerm operatorTable
+pCExpr' :: ExprParser
+pCExpr' = makeExprParser pCTerm operatorTable
 
-pExpr :: ExprParser
-pExpr = do
-  exprs <- some pExpr'
-  pure (foldl1 S.App exprs)
+pCExpr :: ExprParser
+pCExpr = do
+  exprs <- some pCExpr'
+  pure (foldl1 (\e0 e1 -> S.CApp $ S.App e0 e1) exprs)
