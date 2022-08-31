@@ -68,19 +68,20 @@ mkCLam b = CLam . Lam b
 mkCApp :: CoreExpr -> CoreExpr -> CoreExpr
 mkCApp e = CApp . App e
 
-mkBinder :: Name -> Binder
-mkBinder x = Binder (mkVar x) TyNil
+mkBinder :: CoreExpr -> Binder
+mkBinder (CVar v) = Binder v TyNil
+mkBinder _ = error "can't bind anything but a variable!"
 
-mkCBind :: Name -> CoreExpr
+mkCBind :: CoreExpr -> CoreExpr
 mkCBind = CBind . mkBinder
 
-mkFn :: Name -> CoreExpr -> CoreExpr
+mkFn :: CoreExpr -> CoreExpr -> CoreExpr
 mkFn = mkCLam . mkBinder
 
 (*) :: CoreExpr -> CoreExpr -> CoreExpr
 (*) = mkCApp
 
-(~>) :: Name -> CoreExpr -> CoreExpr
+(~>) :: CoreExpr -> CoreExpr -> CoreExpr
 (~>) = mkFn
 
 infixl 9 *

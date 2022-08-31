@@ -44,8 +44,8 @@ library
       Mean.Common.Lexer
       Mean.Common.Parser
       Mean.Common.Viz
+      Mean.Core.Encoding
       Mean.Core.Evaluation
-      Mean.Core.Factories
       Mean.Core.Parser
       Mean.Core.Patterns
       Mean.Core.Syntax
@@ -163,11 +163,10 @@ test-suite spec
   main-is: Spec.hs
   other-modules:
       Mean.Core.EvaluationSpec
-      Mean.Core.Factory
       Mean.Core.ParserSpec
       Mean.Core.TypeSpec
       Mean.Module.ParserSpec
-      Mean.Sugar.Factory
+      Mean.Sugar.EvaluationSpec
       Mean.Sugar.ParserSpec
       Paths_interpreter
   hs-source-dirs:

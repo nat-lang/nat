@@ -22,49 +22,47 @@ e0 *= e1 = (e0 E.*= e1) @?= True
 spec :: Spec
 spec = do
   describe "substitution" $ do
-    let z = mkVar "z"
-    let fn' x y = mkCLam (Binder x TyNil) y
-
     it "substitutes expressions for variables" $ do
-      sub y z (CVar z) `shouldBe` y
+      sub y z z `shouldBe` y
 
     it "does so discriminately" $ do
       sub y z x `shouldBe` x
 
     it "avoids variable capture" $ do
-      let f1 = Var "f0" "f1"
+      let f1 = CVar $ Var "f0" "f1"
 
       -- there are two possible conflicts for a substitution e'[e/v]:
       --  (1) a nested binder conflicts with v, as in
       --        (λf . f)[x/f]
       --     in which case we want (λf . f) rather than (λf . x)
+      sub x f (f ~> f) `shouldBe` f ~> f
+  
       --  (2) a nested binder conflicts with a free variable in e, as in
       --        (λf . f n)[f/n]
       --     in which case we want (λf1 . f1 f) rather than (λf . f f)
-
-      -- (1)
-      sub x (mkVar "f") (fn "f" f) `shouldBe` fn "f" f
-      -- (2)
-      sub f (mkVar "n") (fn "f" (app f n)) `shouldBe` fn' f1 (app (CVar f1) f)
+      sub f n (f ~> (f * n)) `shouldBe` f1 ~> (f1 * f)
 
   describe "alpha equivalence (@=)" $ do
     it "recognizes alpha equivalence" $ do
-      fn "x" x @= fn "y" y
+      (x ~> x) @= (y ~> y)
       -- λfλx . f(x) == λfλy . f(y)
-      fn "f" (fn "x" (app f x)) @= fn "f" (fn "y" (app f y))
+      (f ~> (x ~> (f * x))) @= (f ~> (y ~> (f * y)))
       -- λfλx . x(f) == λfλx . y(f)
-      fn "f" (fn "x" (app x f)) @= fn "f" (fn "y" (app y f))
+      (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
     it "recognizes syntactic equivalence" $ do
+      -- this is just a special case of alpha equivalence,
+      -- but probably @= should check for syntactic equivalence
+      -- before trying substitutions for the sake of efficiency. tbc
       x @= x
       id @= id
-      fn "x" x @= fn "x" x
+      (x ~> x) @= (x ~> x)
     it "doesn't recognize anything else" $ do
       x @!= y
       zero @!= one
       -- λfλx . f(x) != λxλf . f(x)
-      fn "f" (fn "x" (app f x)) @!= fn "x" (fn "f" (app f x))
+      (f ~> (x ~> (f * x))) @!= (x ~> (f ~> (f * x)))
       -- λfλx . f(x) != λfλx . x(f)
-      fn "f" (fn "x" (app f x)) @!= fn "f" (fn "x" (app x f))
+      (f ~> (x ~> (f * x))) @!= (f ~> (x ~> (x * f)))
 
   describe "confluence (*=)" $ do
     it "equates lambda expressions" $ do
@@ -75,7 +73,7 @@ spec = do
       succ * (succ * one) *= three
 
     it "equates church numerals" $ do
-      let m * n = app (app mul m) n
+      let m * n = mkCApp (mkCApp mul m) n
 
       (one + zero) *= one
       (zero + two) *= two
@@ -105,11 +103,11 @@ spec = do
       (true && true) *= true
 
 {-
-can we get these to work with the church encodings?
-
-  (x ~> y) *= -(x && -y)
-  (x ~> y) *= (-x || y)
+can we get de morgan to work with the church encodings?
 
   -(x && y) *= -x || -y
   -x || -y *= -(x && y)
+
+  (if x y) *= -(x && -y)
+  (if x y) *= (-x || y)
 -}

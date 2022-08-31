@@ -2,8 +2,8 @@ module Mean.Sugar.Evaluation where
 
 import qualified Mean.Core.Evaluation as CEval
 import Mean.Core.Syntax
+import Mean.Core.Encoding
 import Mean.Sugar.Syntax
-import Mean.Sugar.Encoding
 import Prelude hiding ((*))
 
 churchTree :: ExprTree -> CoreExpr
@@ -19,5 +19,8 @@ toCore expr = case expr of
   SApp (App e0 e1) -> mkCApp (toCore e0) (toCore e1)
   STree t -> churchTree t
 
-reduce :: SugarExpr -> CEval.Evaluation CoreExpr
-reduce = CEval.reduce . toCore
+eval :: SugarExpr -> Either CEval.EvalError CoreExpr
+eval = CEval.eval . toCore
+
+(*=) :: SugarExpr -> SugarExpr -> Bool
+e0 *= e1 = CEval.confluent (toCore e0) (toCore e1)

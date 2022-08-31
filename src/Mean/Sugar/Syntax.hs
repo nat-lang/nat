@@ -1,15 +1,11 @@
 module Mean.Sugar.Syntax
-  ( SugarExpr (..),
-    T.Tree (..),
-    ExprTree,
-    mkSVar,
-    mkSLam,
-    mkSApp,
+  ( T.Tree (..),
+    module Mean.Sugar.Syntax
   )
 where
 
 import qualified Data.Tree.Binary.Preorder as T
-import Mean.Core.Syntax
+import Mean.Core.Syntax hiding (mkFn)
 
 type ExprTree = T.Tree CoreExpr
 

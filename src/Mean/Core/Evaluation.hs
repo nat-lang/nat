@@ -38,12 +38,12 @@ fresh v0 fv0 v1 fv1 =
     incr (S.Var vPub vPri) = S.Var vPub $ init vPri ++ show (digitToInt (last vPri) + 1)
 
 -- e'[e/v]
-sub :: S.CoreExpr -> S.Var -> S.CoreExpr -> S.CoreExpr
-sub e v e' = case e' of
+sub :: S.CoreExpr -> S.CoreExpr -> S.CoreExpr -> S.CoreExpr
+sub e cv@(S.CVar v) e' = case e' of
   -- relevant base case
-  S.CVar v'@S.Var {} | v' == v -> e
+  S.CVar v' | v' == v -> e
   -- induction
-  App e0 e1 -> S.mkCApp (sub e v e0) (sub e v e1)
+  App e0 e1 -> S.mkCApp (sub e cv e0) (sub e cv e1)
   -- induction, but rename binder if it conflicts with fv(e)
   Lam b@(S.Binder v'@(S.Var _ v'Pri) t) body
     | v /= v' ->
@@ -52,11 +52,12 @@ sub e v e' = case e' of
        in if v'Pri `Set.member` fv0
             then
               let v'' = fresh v fv0 v' fv1
-                  body' = sub e v $ sub (S.CVar v'') v' body
+                  body' = sub e cv $ sub (S.CVar v'') (S.CVar v') body
                in S.mkCLam (S.Binder v'' t) body'
-            else S.mkCLam b (sub e v body)
+            else S.mkCLam b (sub e cv body)
   -- irrelevent base cases
   _ -> e'
+sub _ _ _ = error "can't substitute for anything but a variable!"
 
 --  Normal order reduction.
 reduce :: S.CoreExpr -> Evaluation S.CoreExpr
@@ -82,7 +83,7 @@ reduce expr = case expr of
       -- to terms, in which case they simply abstract a free variable.
       S.CBind b -> reduce (S.mkCLam b e1)
       -- (1d) function application, beta reduce
-      Lam (S.Binder v _) body -> reduce (sub e1 v body)
+      Lam (S.Binder v _) body -> reduce (sub e1 (S.CVar v) body)
       S.CLit {} -> pure expr
   -- (2) simplify lambda body
   Lam b body -> do
@@ -94,8 +95,11 @@ reduce expr = case expr of
 -- assumes e0 and e1 are in normal form
 alphaEq :: S.CoreExpr -> S.CoreExpr -> Bool
 alphaEq e0 e1 = case (e0, e1) of
-  (Lam (S.Binder v0 _) body0, Lam (S.Binder v1 _) body1) ->
-    sub (S.CVar v1) v0 body0 @= body1 || sub (S.CVar v0) v1 body1 @= body0
+  (Lam (S.Binder v0 _) body0, Lam (S.Binder v1 _) body1) -> let
+      v0' = S.CVar v0
+      v1' = S.CVar v1
+    in
+      sub v1' v0' body0 @= body1 || sub v0' v1' body1 @= body0
   (App e0a e0b, App e1a e1b) -> e0a @= e1a && e0b @= e1b
   (S.CVar v0, S.CVar v1) -> v0 == v1
   (S.CLit l0, S.CLit l1) -> l0 == l1
