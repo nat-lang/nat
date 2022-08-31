@@ -51,6 +51,7 @@ instance Pretty CoreExpr where
   ppr p e = case e of
     CLit l -> ppr p l
     CVar s -> text (show s)
+    CBind b -> ppr p b
     CLam l -> ppr p l
     CApp a -> ppr p a
 

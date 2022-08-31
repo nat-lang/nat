@@ -3,7 +3,7 @@
 module Mean.Core.ParserSpec where
 
 import Mean.Common.Parser (parse)
-import Mean.Core.Factory (fOfX, fn, idFn)
+import Mean.Core.Encoding
 import Mean.Core.Parser
 import Mean.Core.Syntax
 import Mean.Core.Type

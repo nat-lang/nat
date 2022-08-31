@@ -3,8 +3,8 @@
 
 module Mean.Core.Evaluation where
 
-import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.Identity (Identity(runIdentity))
+import Control.Monad.Except (ExceptT, runExceptT, throwError)
+import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
 import Data.Functor ((<&>))
 import qualified Data.Map as Map
@@ -13,7 +13,11 @@ import qualified Data.Set as Set
 import Mean.Core.Patterns (pattern App, pattern Lam)
 import qualified Mean.Core.Syntax as S
 
-data EvalError = UnboundVariable S.Name | NotAFn S.CoreExpr S.CoreExpr deriving (Eq)
+data EvalError
+  = UnboundVariable S.Name
+  | NotAFn S.CoreExpr S.CoreExpr
+  | NotAnArg S.CoreExpr S.CoreExpr
+  deriving (Eq)
 
 type Evaluation = ExceptT EvalError Identity
 
@@ -57,8 +61,9 @@ sub e v e' = case e' of
 --  Normal order reduction.
 reduce :: S.CoreExpr -> Evaluation S.CoreExpr
 reduce expr = case expr of
-  App e0 e1 -> do
-    case e0 of
+  App e0 e1 -> case e1 of
+    S.CBind b -> throwError $ NotAnArg e1 e0
+    _ -> case e0 of
       -- (1a) leftmost, outermost
       App {} -> do
         e0' <- reduce e0
@@ -67,13 +72,16 @@ reduce expr = case expr of
           App {} -> do
             e1' <- reduce e1
             pure (S.mkCApp e0' e1')
-          -- otherwise goto top
+          -- (1a.2) otherwise goto top
           _ -> reduce (S.mkCApp e0' e1)
       -- (1b) normal form for lhs (free var), goto rhs
       S.CVar {} -> do
         e1' <- reduce e1
         pure (S.mkCApp e0 e1')
-      -- (1c) function app, beta reduce
+      -- (1c) binders have a semantics of their own: they may be applied
+      -- to terms, in which case they simply abstract a free variable.
+      S.CBind b -> reduce (S.mkCLam b e1)
+      -- (1d) function application, beta reduce
       Lam (S.Binder v _) body -> reduce (sub e1 v body)
       S.CLit {} -> pure expr
   -- (2) simplify lambda body
@@ -87,8 +95,7 @@ reduce expr = case expr of
 alphaEq :: S.CoreExpr -> S.CoreExpr -> Bool
 alphaEq e0 e1 = case (e0, e1) of
   (Lam (S.Binder v0 _) body0, Lam (S.Binder v1 _) body1) ->
-    sub (S.CVar v1) v0 body0 @= body1
-      || sub (S.CVar v0) v1 body1 @= body0
+    sub (S.CVar v1) v0 body0 @= body1 || sub (S.CVar v0) v1 body1 @= body0
   (App e0a e0b, App e1a e1b) -> e0a @= e1a && e0b @= e1b
   (S.CVar v0, S.CVar v1) -> v0 == v1
   (S.CLit l0, S.CLit l1) -> l0 == l1

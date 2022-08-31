@@ -1,25 +1,4 @@
-module Mean.Core.Syntax
-  ( Name,
-    Var (..),
-    Lit (..),
-    Lambda (..),
-    App (..),
-    TyVar (..),
-    Type (..),
-    TyScheme (..),
-    Binder (..),
-    CoreExpr (..),
-    tyInt,
-    tyBool,
-    mkVar,
-    mkCVar,
-    mkCLam,
-    mkCApp,
-    mkUnqScheme,
-    mkTv,
-  )
-where
-
+module Mean.Core.Syntax where
 import GHC.Generics
 
 newtype TyVar = TV String
@@ -72,6 +51,7 @@ data App a = App a a deriving (Eq)
 data CoreExpr
   = CLit Lit
   | CVar Var
+  | CBind Binder
   | CLam (Lambda CoreExpr)
   | CApp (App CoreExpr)
   deriving (Eq)
@@ -87,3 +67,22 @@ mkCLam b = CLam . Lam b
 
 mkCApp :: CoreExpr -> CoreExpr -> CoreExpr
 mkCApp e = CApp . App e
+
+mkBinder :: Name -> Binder
+mkBinder x = Binder (mkVar x) TyNil
+
+mkCBind :: Name -> CoreExpr
+mkCBind = CBind . mkBinder
+
+mkFn :: Name -> CoreExpr -> CoreExpr
+mkFn = mkCLam . mkBinder
+
+(*) :: CoreExpr -> CoreExpr -> CoreExpr
+(*) = mkCApp
+
+(~>) :: Name -> CoreExpr -> CoreExpr
+(~>) = mkFn
+
+infixl 9 *
+
+infixl 8 ~>

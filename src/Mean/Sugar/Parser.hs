@@ -17,28 +17,23 @@ type ExprParser = L.Parser S.SugarExpr
 
 type ExprTreeParser = L.Parser S.ExprTree
 
-pENode = Core.pCExpr <&> S.ENode
-
-pBNode = Core.pBinder <&> S.BNode
-
-pExprNode :: L.Parser S.ExprNode
-pExprNode = P.try pENode <|> pBNode
+pCExpr = P.try Core.pCExpr <|> Core.pCBind
 
 mkLeafNode e = S.Node e S.Leaf S.Leaf
 
 mkUnNode e l = S.Node e l S.Leaf
 
 pLeafNode :: ExprTreeParser
-pLeafNode = L.brackets $ mkLeafNode <$> pExprNode
+pLeafNode = L.brackets $ mkLeafNode <$> pCExpr
 
 pUnNode :: ExprTreeParser
 pUnNode = L.brackets $ do
-  e <- pExprNode
+  e <- pCExpr
   mkUnNode e <$> pTree
 
 pBiNode :: ExprTreeParser
 pBiNode = L.brackets $ do
-  e <- pExprNode
+  e <- pCExpr
   l <- pTree
   S.Node e l <$> pTree
 

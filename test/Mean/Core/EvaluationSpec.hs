@@ -5,7 +5,7 @@ module Mean.Core.EvaluationSpec where
 import Debug.Trace (traceM)
 import Mean.Core.Evaluation hiding ((*=), (@=))
 import qualified Mean.Core.Evaluation as E
-import Mean.Core.Factory
+import Mean.Core.Encoding
 import Mean.Core.Parser
 import Mean.Core.Syntax
 import Mean.Core.Viz
@@ -21,17 +21,17 @@ e0 *= e1 = (e0 E.*= e1) @?= True
 
 spec :: Spec
 spec = do
-  describe "sub" $ do
+  describe "substitution" $ do
+    let z = mkVar "z"
+    let fn' x y = mkCLam (Binder x TyNil) y
+
     it "substitutes expressions for variables" $ do
-      let z = mkVar "z"
       sub y z (CVar z) `shouldBe` y
 
     it "does so discriminately" $ do
-      let z = mkVar "z"
       sub y z x `shouldBe` x
 
     it "avoids variable capture" $ do
-      let fn' x y = mkCLam (Binder x TyNil) y
       let f1 = Var "f0" "f1"
 
       -- there are two possible conflicts for a substitution e'[e/v]:
@@ -47,7 +47,7 @@ spec = do
       -- (2)
       sub f (mkVar "n") (fn "f" (app f n)) `shouldBe` fn' f1 (app (CVar f1) f)
 
-  describe "alphaEq (@=)" $ do
+  describe "alpha equivalence (@=)" $ do
     it "recognizes alpha equivalence" $ do
       fn "x" x @= fn "y" y
       -- λfλx . f(x) == λfλy . f(y)
@@ -66,15 +66,17 @@ spec = do
       -- λfλx . f(x) != λfλx . x(f)
       fn "f" (fn "x" (app f x)) @!= fn "f" (fn "x" (app x f))
 
-  describe "eval" $ do
-    it "does elementary beta reduction" $ do
-      app id id *= id
+  describe "confluence (*=)" $ do
+    it "equates lambda expressions" $ do
+      id * id *= id
 
-    it "reduces peano numerals" $ do
-      app succ one *= two
-      app succ (app succ one) *= three
+    it "equates peano numerals" $ do
+      succ * one *= two
+      succ * (succ * one) *= three
 
-    it "reduces church numerals" $ do
+    it "equates church numerals" $ do
+      let m * n = app (app mul m) n
+
       (one + zero) *= one
       (zero + two) *= two
       (two + one) *= three
@@ -91,7 +93,7 @@ spec = do
       (two ** two) *= (two * two)
       (two ** three) *= (two * (two * two))
 
-    it "reduces church booleans" $ do
+    it "equates church booleans" $ do
       (true || false) *= true
       (false || true) *= true
       (true || true) *= true
@@ -105,9 +107,9 @@ spec = do
 {-
 can we get these to work with the church encodings?
 
-(x ~> y) *= -(x && -y)
-(x ~> y) *= (-x || y)
+  (x ~> y) *= -(x && -y)
+  (x ~> y) *= (-x || y)
 
--(x && y) *= -x || -y
--x || -y *= -(x && y)
+  -(x && y) *= -x || -y
+  -x || -y *= -(x && y)
 -}

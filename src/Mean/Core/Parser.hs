@@ -7,6 +7,7 @@ module Mean.Core.Parser
     pLit,
     pVar,
     pBinder,
+    pCBind,
     pLam,
     pCVar,
     pCLit,
@@ -93,6 +94,9 @@ pBinder = do
   L.symbol "\\"
   n <- L.identifier
   S.Binder (S.mkVar n) <$> pOptionalTypeAssignment
+
+pCBind :: L.Parser S.CoreExpr
+pCBind = S.CBind <$> pBinder
 
 pLam :: L.Parser (a -> S.Lambda a)
 pLam = do

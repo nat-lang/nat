@@ -45,6 +45,7 @@ library
       Mean.Common.Parser
       Mean.Common.Viz
       Mean.Core.Evaluation
+      Mean.Core.Factories
       Mean.Core.Parser
       Mean.Core.Patterns
       Mean.Core.Syntax

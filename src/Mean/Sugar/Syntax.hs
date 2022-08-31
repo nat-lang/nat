@@ -1,7 +1,6 @@
 module Mean.Sugar.Syntax
   ( SugarExpr (..),
     T.Tree (..),
-    ExprNode (..),
     ExprTree,
     mkSVar,
     mkSLam,
@@ -12,9 +11,7 @@ where
 import qualified Data.Tree.Binary.Preorder as T
 import Mean.Core.Syntax
 
-data ExprNode = ENode CoreExpr | BNode Binder deriving (Eq)
-
-type ExprTree = T.Tree ExprNode
+type ExprTree = T.Tree CoreExpr
 
 -- data Relation -- n-place fn with base ty == tyBool
 -- data Set -- 1-place relation
