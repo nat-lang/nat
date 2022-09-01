@@ -3,8 +3,9 @@
 module Mean.Sugar.ParserSpec where
 
 import Mean.Common.Parser (parse)
-import Mean.Core.Encoding
-import Mean.Core.Syntax
+import Mean.Core.Encoding (lFalse, lOne, lTrue, lZero)
+import Mean.Core.Syntax hiding ((*), (~>))
+import Mean.Sugar.Encoding
 import Mean.Sugar.Parser
 import Mean.Sugar.Syntax
 import Mean.Sugar.Viz
@@ -13,30 +14,29 @@ import Prelude hiding (id, (*))
 
 spec :: Spec
 spec = do
-  describe "pTree" $ do
+  describe "pSTree" $ do
     it "parses trees of integers" $ do
-      parse pTree "[0 [1] [0]]"
-        `shouldBe` Right (Node (CLit $ LInt 0) (Node (CLit lOne) Leaf Leaf) (Node (CLit lZero) Leaf Leaf))
+      parse pSTree "[0 [1] [0]]"
+        `shouldBe` Right (STree (Node (SLit $ LInt 0) (Node (SLit lOne) Leaf Leaf) (Node (SLit lZero) Leaf Leaf)))
     it "parses trees of booleans" $ do
-      parse pTree "[True [True] [False]]"
-        `shouldBe` Right (Node (CLit $ LBool True) (Node (CLit lTrue) Leaf Leaf) (Node (CLit lFalse) Leaf Leaf))
+      parse pSTree "[True [True] [False]]"
+        `shouldBe` Right (STree (Node (SLit $ LBool True) (Node (SLit lTrue) Leaf Leaf) (Node (SLit lFalse) Leaf Leaf)))
     it "parses trees of variables" $ do
-      parse pTree "[x [y] [z]]"
-        `shouldBe` Right (Node x (Node y Leaf Leaf) (Node z Leaf Leaf))
+      parse pSTree "[x [y] [z]]"
+        `shouldBe` Right (STree (Node x (Node y Leaf Leaf) (Node z Leaf Leaf)))
     it "parses trees of binders" $ do
-      let bX = mkCBind x
-      parse pTree "[\\x [\\x] [\\x]]"
-        `shouldBe` Right (Node bX (Node bX Leaf Leaf) (Node bX Leaf Leaf))
+      let bX = mkSBind x
+      parse pSTree "[\\x [\\x] [\\x]]"
+        `shouldBe` Right (STree (Node bX (Node bX Leaf Leaf) (Node bX Leaf Leaf)))
     it "parses trees of lambdas" $ do
-      parse pTree "[\\x.x [\\x.x] [\\x.x]]"
-        `shouldBe` Right (Node id (Node id Leaf Leaf) (Node id Leaf Leaf))
+      parse pSTree "[\\x.x [\\x.x] [\\x.x]]"
+        `shouldBe` Right (STree (Node (x ~> x) (Node (x ~> x) Leaf Leaf) (Node (x ~> x) Leaf Leaf)))
     it "parses trees of function applications" $ do
-      parse pTree "[(f x) [f x] [f(x)]]"
-        `shouldBe` Right (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf))
+      parse pSTree "[(f x) [f x] [f(x)]]"
+        `shouldBe` Right (STree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
 
   describe "pSExpr" $ do
-    let tree = STree $ Node (mkCBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
+    let tree = STree $ Node (mkSBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
 
     it "parses applications of lambdas to trees" $ do
-      let sId = mkSLam (mkBinder x) (mkSVar "x")
-      parse pSExpr "(\\x.x)([\\y [\\x.x(y)] [\\x.x]])" `shouldBe` Right (mkSApp sId tree)
+      parse pSExpr "(\\x.x)([\\y [\\x.x(y)] [\\x.x]])" `shouldBe` Right ((x ~> x) * tree)

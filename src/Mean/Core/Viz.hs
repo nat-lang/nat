@@ -4,7 +4,7 @@
 module Mean.Core.Viz where
 
 import Mean.Common.Viz ( Pretty(ppr), angles, anglesIf )
-import Mean.Core.Evaluation ( EvalError(..))
+-- import Mean.Core.Evaluation (EvalError(..))
 import Mean.Core.Syntax
     ( CoreExpr(..),
       TyScheme(..),
@@ -57,10 +57,6 @@ instance Pretty CoreExpr where
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
-
-instance Show EvalError where
-  show (UnboundVariable n) = "Unbound variable: " ++ show n
-  show (NotAFn e0 e1) = "Can't apply " ++ show e0 ++ " to " ++ show e1
 
 instance Show CoreExpr where
   show e = (show . ppr 0) e

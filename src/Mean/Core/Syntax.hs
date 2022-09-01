@@ -40,7 +40,7 @@ instance Ord Var where
   compare (Var _ v0) (Var _ v1) = compare v0 v1
 
 instance Show Var where
-  show (Var vPub vPri) = vPri
+  show (Var vPub vPri) = vPub
 
 data Binder = Binder Var Type deriving (Eq, Ord)
 

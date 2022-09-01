@@ -1,18 +1,21 @@
 module Mean.Sugar.EvaluationSpec where
 
-import Mean.Core.Syntax
-import Mean.Core.Encoding
+import qualified Mean.Core.Encoding as CEnc
 import qualified Mean.Core.Evaluation as CEval
-import Mean.Sugar.Syntax
+import Mean.Core.Viz
+import Mean.Core.Syntax hiding ((*), (~>))
+import qualified Mean.Core.Syntax as CSyn
+import Mean.Sugar.Evaluation hiding ((*=), (@=))
 import qualified Mean.Sugar.Evaluation as SEval
-import Mean.Sugar.Parser
-import Mean.Common.Parser (parse)
-import Test.Hspec
+import Mean.Sugar.Encoding
+import Mean.Sugar.Syntax
 import Test.HUnit ((@?=))
+import Test.Hspec
+import Prelude hiding ((*), id)
+import Debug.Trace (traceM)
 
 e0 @= e1 = (e0 CEval.@= e1) @?= True
-
-p = parse pSExpr
+e0 *= e1 = (e0 SEval.*= e1) @?= True
 
 {-
 functionApplication :: TypeCheckedExpr -> TypeCheckedExpr -> Maybe S.Expr
@@ -41,17 +44,24 @@ predicateModification e0 e1 = case (e0, e1) of
     doPM e e' = Just $ S.EBinOp S.Conj e e'
 -}
 
+
 spec :: Spec
 spec = do
+  let t = STree (Node (mkSVar "S") (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
+
   describe "alpha equivalence (@=)" $ do
-    it "recognizes alpha equivalent church trees with alpha equivalent expressive nodes" $ do
-      let (Right t0) = SEval.eval (STree (Node (x ~> x) Leaf Leaf))
-      let (Right t1) = SEval.eval (STree (Node (y ~> y) Leaf Leaf))
+    it "equates alpha equivalent church trees with alpha equivalent expressive nodes" $ do
+      let (Right t0) = eval (STree (Node (x ~> x) Leaf Leaf))
+      let (Right t1) = eval (STree (Node (y ~> y) Leaf Leaf))
 
       t0 @= t1
 
-  describe "confluence (*=)" $ do
-    it "equates folded trees with expressions" $ do
-      let (Right t) = p "[S [\\x.x] [x]]"
-      let (Right fn) = p "\\"
-     --  SEval.eval
+  describe "eval" $ do
+    it "reduces sugar trees to their church encodings" $ do
+      eval t `shouldBe` eval (node * mkSVar "S" * (node * (x ~> x) * leaf * leaf) * (node * y * leaf * leaf))
+
+    it "reduces folds over church trees" $ do
+      -- FA composition, l(r)
+      let foldLR = x ~> (l ~> (r ~> (z ~> ((l * x) * (r * x)))))
+
+      eval (t * leaf * fold) `shouldBe` eval (z ~> ((x ~> x) * y))

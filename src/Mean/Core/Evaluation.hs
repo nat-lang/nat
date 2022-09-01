@@ -12,12 +12,18 @@ import Data.Set ((\\))
 import qualified Data.Set as Set
 import Mean.Core.Patterns (pattern App, pattern Lam)
 import qualified Mean.Core.Syntax as S
+import Debug.Trace (traceM)
+import Mean.Core.Viz
 
 data EvalError
   = UnboundVariable S.Name
   | NotAFn S.CoreExpr S.CoreExpr
   | NotAnArg S.CoreExpr S.CoreExpr
   deriving (Eq)
+
+instance Show EvalError where
+  show (UnboundVariable n) = "Unbound variable: " ++ show n
+  show (NotAFn e0 e1) = "Can't apply " ++ show e0 ++ " to " ++ show e1
 
 type Evaluation = ExceptT EvalError Identity
 
@@ -83,7 +89,11 @@ reduce expr = case expr of
       -- to terms, in which case they simply abstract a free variable.
       S.CBind b -> reduce (S.mkCLam b e1)
       -- (1d) function application, beta reduce
-      Lam (S.Binder v _) body -> reduce (sub e1 (S.CVar v) body)
+      Lam (S.Binder v _) body -> do
+        traceM (show expr)
+        e <- reduce (sub e1 (S.CVar v) body)
+        traceM (show e)
+        pure e
       S.CLit {} -> pure expr
   -- (2) simplify lambda body
   Lam b body -> do

@@ -1,21 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Core.Parser
-  ( P.ParseError (..),
-    pInt,
-    pBool,
-    pLit,
-    pVar,
-    pBinder,
-    pCBind,
-    pLam,
-    pCVar,
-    pCLit,
-    pCLam,
-    pCExpr,
-    pType,
-  )
-where
+module Mean.Core.Parser where
 
 import Control.Applicative (some)
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
@@ -94,9 +79,6 @@ pBinder = do
   L.symbol "\\"
   n <- L.identifier
   S.Binder (S.mkVar n) <$> pOptionalTypeAssignment
-
-pCBind :: L.Parser S.CoreExpr
-pCBind = S.CBind <$> pBinder
 
 pLam :: L.Parser (a -> S.Lambda a)
 pLam = do

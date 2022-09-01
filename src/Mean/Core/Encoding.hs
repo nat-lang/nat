@@ -34,16 +34,6 @@ m = mkCVar "m"
 n :: CoreExpr
 n = mkCVar "n"
 
-e :: CoreExpr
-e = mkCVar "e"
-b :: CoreExpr
-b = mkCVar "b"
-
-l :: CoreExpr
-l = mkCVar "l"
-r :: CoreExpr
-r = mkCVar "r"
-
 -- λx.x
 id :: CoreExpr
 id = x ~> x
@@ -125,13 +115,3 @@ not = x ~> (y ~> (if' * x * true * false))
 
 (-) :: CoreExpr -> CoreExpr
 (-) = (*) not
-
--- church encoding of binary tree with data in nodes
-
--- λeλb . e
-leaf :: CoreExpr
-leaf = e ~> (b ~> e)
-
--- λxλlλrλeλb . b(x)(l e b)(r e b)
-node :: CoreExpr
-node = x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))

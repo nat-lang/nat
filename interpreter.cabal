@@ -55,6 +55,7 @@ library
       Mean.Module.Parser
       Mean.Module.Syntax
       Mean.Module.Viz
+      Mean.Sugar.Encoding
       Mean.Sugar.Evaluation
       Mean.Sugar.Parser
       Mean.Sugar.Syntax

@@ -3,6 +3,7 @@
 module Mean.Common.Lexer where
 
 import Control.Monad.Combinators.Expr (Operator (..))
+import Control.Monad.Identity (Identity)
 import Control.Monad.State
 import Data.Text (Text)
 import Data.Void (Void)
@@ -11,7 +12,9 @@ import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 
-type Parser = P.Parsec Void Text
+newtype ParseState = ParseState {inTree :: Bool}
+
+type Parser = P.ParsecT Void Text (StateT ParseState Identity)
 
 space :: Parser ()
 space = L.space C.hspace1 lineComment blockComment
