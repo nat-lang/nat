@@ -40,14 +40,14 @@ spec = do
       parse pVar "z1" `shouldBe` Right (mkVar "z1")
 
   describe "pCLit" $ do
-    it "parses literals" $ do
+    it "parses litera expressions" $ do
       parse pCLit "1" `shouldBe` Right (CLit lOne)
       parse pCLit "0" `shouldBe` Right (CLit lZero)
       parse pCLit "True" `shouldBe` Right (CLit lTrue)
       parse pCLit "False" `shouldBe` Right (CLit lFalse)
 
   describe "pCVar" $ do
-    it "parses alphanumeric variables" $ do
+    it "parses alphanumeric variable expressions" $ do
       parse pCVar "a" `shouldBe` Right (mkCVar "a")
       parse pCVar "z1" `shouldBe` Right (mkCVar "z1")
 

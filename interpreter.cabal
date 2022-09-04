@@ -33,14 +33,11 @@ library
       Compiler.Tree.Lexer
       Compiler.Tree.Parser
       Compiler.Tree.Syntax
-      FOL.AristotelianInfEngine
-      FOL.KB
       Interpreter.Compose
       Interpreter.Composition
       Interpreter.CompositionTest
       Interpreter.Evaluation
       Interpreter.Fragment
-      Lib.Std
       Mean.Common.Lexer
       Mean.Common.Parser
       Mean.Common.Viz
@@ -58,6 +55,7 @@ library
       Mean.Sugar.Encoding
       Mean.Sugar.Evaluation
       Mean.Sugar.Parser
+      Mean.Sugar.Patterns
       Mean.Sugar.Syntax
       Mean.Sugar.Type
       Mean.Sugar.Viz

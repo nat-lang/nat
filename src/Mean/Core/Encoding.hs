@@ -16,6 +16,9 @@ lTrue = LBool True
 lFalse :: Lit
 lFalse = LBool False
 
+true = CLit lTrue
+false = CLit lFalse
+
 f :: CoreExpr
 f = mkCVar "f"
 
@@ -33,6 +36,12 @@ m = mkCVar "m"
 
 n :: CoreExpr
 n = mkCVar "n"
+
+l :: CoreExpr
+l = mkCVar "l"
+
+r :: CoreExpr
+r = mkCVar "r"
 
 -- λx.x
 id :: CoreExpr
@@ -84,12 +93,12 @@ exp = m ~> (n ~> (n * (mul * m) * one))
 m ** n = exp * m * n
 
 -- λxλy . x
-true :: CoreExpr
-true = x ~> (y ~> x)
+true' :: CoreExpr
+true' = x ~> (y ~> x)
 
 -- λxλy . y
-false :: CoreExpr
-false = x ~> (y ~> y)
+false' :: CoreExpr
+false' = x ~> (y ~> y)
 
 -- λfλxλy . f(x)(y)
 if' :: CoreExpr
@@ -97,21 +106,21 @@ if' = f ~> (x ~> (y ~> (f * x * y)))
 
 -- λxλy . if(x)(y)(false)
 and :: CoreExpr
-and = x ~> (y ~> (if' * x * y * false))
+and = x ~> (y ~> (if' * x * y * false'))
 
 (&&) :: CoreExpr -> CoreExpr -> CoreExpr
 x && y = and * x * y
 
 -- λxλy . if(x)(true)(y)
 or :: CoreExpr
-or = x ~> (y ~> (if' * x * true * y))
+or = x ~> (y ~> (if' * x * true' * y))
 
 (||) :: CoreExpr -> CoreExpr -> CoreExpr
 x || y = or * x * y
 
 -- λxλy . if(x)(true)(false)
 not :: CoreExpr
-not = x ~> (y ~> (if' * x * true * false))
+not = x ~> (y ~> (if' * x * true' * false'))
 
 (-) :: CoreExpr -> CoreExpr
-(-) = (*) not
+(-) = (not *)

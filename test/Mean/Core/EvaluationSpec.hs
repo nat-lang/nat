@@ -92,18 +92,19 @@ spec = do
       (two ** three) *= (two * (two * two))
 
     it "equates church booleans" $ do
-      (true || false) *= true
-      (false || true) *= true
-      (true || true) *= true
-      (false || false) *= false
+      (true' || false') *= true'
+      (false' || true') *= true'
+      (true' || true') *= true'
+      (false' || false') *= false'
 
-      (true && false) *= false
-      (false && true) *= false
-      (false && false) *= false
-      (true && true) *= true
+      (true' && false') *= false'
+      (false' && true') *= false'
+      (false' && false') *= false'
+      (true' && true') *= true'
+    
 
 {-
-can we get de morgan to work with the church encodings?
+can we get de morgan's law to work with the church encodings?
 
   -(x && y) *= -x || -y
   -x || -y *= -(x && y)

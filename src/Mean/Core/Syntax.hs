@@ -48,13 +48,26 @@ data Lambda a = Lam Binder a deriving (Eq)
 
 data App a = App a a deriving (Eq)
 
+data Conditional a = Cond a a a deriving (Eq)
+
+data BinOp = Eq | And | Or
+  deriving (Eq)
+
+data UnOp = Neg deriving (Eq)
+
 data CoreExpr
   = CLit Lit
   | CVar Var
   | CBind Binder
   | CLam (Lambda CoreExpr)
   | CApp (App CoreExpr)
+  | CCond (Conditional CoreExpr)
+  | CBinOp BinOp CoreExpr CoreExpr
+  | CUnOp UnOp CoreExpr
   deriving (Eq)
+
+mkCBool :: Bool -> CoreExpr
+mkCBool = CLit . LBool
 
 mkVar :: Name -> Var
 mkVar v = Var v (v ++ "0")

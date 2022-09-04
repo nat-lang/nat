@@ -6,17 +6,9 @@ module Mean.Core.Viz where
 import Mean.Common.Viz ( Pretty(ppr), angles, anglesIf )
 -- import Mean.Core.Evaluation (EvalError(..))
 import Mean.Core.Syntax
-    ( CoreExpr(..),
-      TyScheme(..),
-      Type(..),
-      TyVar(..),
-      Binder(Binder),
-      Lambda(..),
-      App(..),
-      Lit(LBool, LInt) )
 import Text.PrettyPrint
     ( (<+>), (<>), brackets, char, parens, text )
-import Prelude hiding ((<>))
+import Prelude hiding ((<>), Eq)
 
 instance Pretty TyVar where
   ppr _ (TV t) = text t
@@ -54,6 +46,15 @@ instance Pretty CoreExpr where
     CBind b -> ppr p b
     CLam l -> ppr p l
     CApp a -> ppr p a
+    CBinOp op e0 e1 -> ppr p e0 <+> char ppOp <+> ppr p e1 where
+      ppOp = case op of
+        Eq -> '='
+        And -> '&'
+        Or -> '|'
+    CUnOp op e -> ppr p e <+> char ppOp where
+      ppOp = case op of
+        Neg -> '¬'
+    CCond (Cond x y z) -> text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty

@@ -7,7 +7,6 @@ import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import Control.Monad.State
   ( MonadState (get, put),
   )
-import Data.Functor ((<&>))
 import Debug.Trace (traceM)
 import qualified Mean.Common.Lexer as L
 import qualified Mean.Core.Parser as Core

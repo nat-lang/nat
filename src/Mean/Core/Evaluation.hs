@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Mean.Core.Evaluation where
@@ -6,11 +7,10 @@ module Mean.Core.Evaluation where
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
-import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import Data.Set ((\\))
 import qualified Data.Set as Set
-import Mean.Core.Patterns (pattern App, pattern Lam)
+import Mean.Core.Patterns (pattern App, pattern Lam, pattern CTrue, pattern CFalse)
 import qualified Mean.Core.Syntax as S
 import Debug.Trace (traceM)
 import Mean.Core.Viz
@@ -18,7 +18,6 @@ import Mean.Core.Viz
 data EvalError
   = UnboundVariable S.Name
   | NotAFn S.CoreExpr S.CoreExpr
-  | NotAnArg S.CoreExpr S.CoreExpr
   deriving (Eq)
 
 instance Show EvalError where
@@ -27,40 +26,55 @@ instance Show EvalError where
 
 type Evaluation = ExceptT EvalError Identity
 
-fv :: S.CoreExpr -> Set.Set S.Name
-fv e = case e of
-  Lam (S.Binder (S.Var _ v) _) body -> fv body \\ Set.singleton v
-  App e0 e1 -> fv e0 `Set.union` fv e1
-  S.CVar (S.Var _ v) -> Set.singleton v
-  _ -> Set.empty
+class FV a where
+  fv :: a -> Set.Set S.Name
 
-fresh :: S.Var -> Set.Set S.Name -> S.Var -> Set.Set S.Name -> S.Var
-fresh v0 fv0 v1 fv1 =
-  let v1'@(S.Var _ v1'Pri) = incr v1
-   in if v1' == v0 || Set.member v1'Pri fv0 || Set.member v1'Pri fv1
-        then fresh v0 fv0 v1' fv1
-        else v1'
-  where
-    incr (S.Var vPub vPri) = S.Var vPub $ init vPri ++ show (digitToInt (last vPri) + 1)
+instance FV S.CoreExpr where
+  fv e = case e of
+    Lam (S.Binder (S.Var _ v) _) body -> fv body \\ Set.singleton v
+    App e0 e1 -> fv [e0,e1]
+    S.CBinOp _ e0 e1 -> fv [e0,e1]
+    S.CUnOp _ e -> fv e
+    S.CCond (S.Cond x y z) -> fv [x,y,z]
+    S.CVar (S.Var _ v) -> Set.singleton v
+    _ -> Set.empty
+
+instance FV [S.CoreExpr] where
+  fv es = foldl1 Set.union (fv <$> es)
+
+bool (S.CLit (S.LBool b)) = b
+
+incrVId :: S.Var -> S.Var
+incrVId (S.Var vPub vPri) = S.Var vPub $ init vPri ++ show (digitToInt (last vPri) + 1)
+
+fresh :: S.Var -> S.Var -> Set.Set S.Name -> S.Var
+fresh v0 v1 fv =
+  let v0'@(S.Var _ v0'Pri) = incrVId v0
+   in if v0' == v1 || Set.member v0'Pri fv
+        then fresh v0' v1 fv
+        else v0'   
 
 -- e'[e/v]
 sub :: S.CoreExpr -> S.CoreExpr -> S.CoreExpr -> S.CoreExpr
-sub e cv@(S.CVar v) e' = case e' of
+sub e cv@(S.CVar v) e' = let sub' = sub e cv in case e' of
   -- relevant base case
   S.CVar v' | v' == v -> e
   -- induction
-  App e0 e1 -> S.mkCApp (sub e cv e0) (sub e cv e1)
+  App e0 e1 -> S.mkCApp (sub' e0) (sub' e1)
+  S.CBinOp op e0 e1 ->  S.CBinOp op (sub' e0) (sub' e1)
+  S.CUnOp op e -> S.CUnOp op (sub' e)
+  S.CCond (S.Cond x y z) -> S.CCond (S.Cond (sub' x) (sub' y) (sub' z))
   -- induction, but rename binder if it conflicts with fv(e)
   Lam b@(S.Binder v'@(S.Var _ v'Pri) t) body
     | v /= v' ->
-      let fv0 = fv e
-          fv1 = fv body
-       in if v'Pri `Set.member` fv0
+      let fvE = fv e
+          fvB = fv body
+       in if v'Pri `Set.member` fvE
             then
-              let v'' = fresh v fv0 v' fv1
-                  body' = sub e cv $ sub (S.CVar v'') (S.CVar v') body
+              let v'' = fresh v' v (fvE `Set.union` fvB) 
+                  body' = sub' $ sub (S.CVar v'') (S.CVar v') body
                in S.mkCLam (S.Binder v'' t) body'
-            else S.mkCLam b (sub e cv body)
+            else S.mkCLam b (sub' body)
   -- irrelevent base cases
   _ -> e'
 sub _ _ _ = error "can't substitute for anything but a variable!"
@@ -68,38 +82,46 @@ sub _ _ _ = error "can't substitute for anything but a variable!"
 --  Normal order reduction.
 reduce :: S.CoreExpr -> Evaluation S.CoreExpr
 reduce expr = case expr of
-  App e0 e1 -> case e1 of
-    S.CBind b -> throwError $ NotAnArg e1 e0
-    _ -> case e0 of
-      -- (1a) leftmost, outermost
-      App {} -> do
-        e0' <- reduce e0
-        case e0' of
-          -- (1a.1) normal form for lhs (app), goto rhs
-          App {} -> do
-            e1' <- reduce e1
-            pure (S.mkCApp e0' e1')
-          -- (1a.2) otherwise goto top
-          _ -> reduce (S.mkCApp e0' e1)
-      -- (1b) normal form for lhs (free var), goto rhs
-      S.CVar {} -> do
-        e1' <- reduce e1
-        pure (S.mkCApp e0 e1')
-      -- (1c) binders have a semantics of their own: they may be applied
-      -- to terms, in which case they simply abstract a free variable.
-      S.CBind b -> reduce (S.mkCLam b e1)
-      -- (1d) function application, beta reduce
-      Lam (S.Binder v _) body -> do
-        traceM (show expr)
-        e <- reduce (sub e1 (S.CVar v) body)
-        traceM (show e)
-        pure e
-      S.CLit {} -> pure expr
+  -- (1) leftmost, outermost
+  App e0 e1 -> case e0 of
+    -- (1a) function application, beta reduce
+    Lam (S.Binder v _) body -> do
+      traceM (show expr)
+      e <- reduce (sub e1 (S.CVar v) body)
+      traceM (show e)
+      pure e
+    -- (1b) binders have a semantics of their own: they may be applied
+    -- to terms, in which case they simply abstract a free variable.
+    S.CBind b -> reduce (S.mkCLam b e1)
+    -- (1c) normal form for lhs (free var), goto rhs
+    S.CVar {} -> do
+      e1' <- reduce e1
+      pure (S.mkCApp e0 e1')
+    -- (1d) lhs can be reduced
+    _ -> do
+      e0' <- reduce e0
+      case e0' of
+        -- (1d.1) normal form for lhs (app), goto rhs
+        App {} -> do
+          e1' <- reduce e1
+          pure (S.mkCApp e0' e1')
+        -- (1d.2) otherwise goto top
+        _ -> reduce (S.mkCApp e0' e1)
   -- (2) simplify lambda body
   Lam b body -> do
     body' <- reduce body
     pure $ S.mkCLam b body'
-  -- (3) var/literal
+  -- (3) operators
+  S.CUnOp op e -> pure $ S.mkCBool $ case op of
+    S.Neg -> not $ bool e
+  S.CBinOp op e0 e1 -> pure $ S.mkCBool $ case op of
+    S.Eq -> e0 *= e1
+    S.And -> bool e0 && bool e1
+    S.Or -> bool e0 || bool e1
+  S.CCond (S.Cond x y z) -> do
+    x' <- reduce x
+    reduce $ if bool x' then y else z
+  -- (4) var/literal
   _ -> pure expr
 
 -- assumes e0 and e1 are in normal form

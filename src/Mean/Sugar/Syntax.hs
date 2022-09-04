@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 module Mean.Sugar.Syntax
   ( T.Tree (..),
     T.drawTree,
@@ -13,39 +12,33 @@ import Mean.Core.Viz
 import Text.PrettyPrint
 import Prelude hiding ((<>))
 
-instance Pretty (Lambda SugarExpr) where
-  ppr p (Lam (Binder n t) e) =
-    char 'λ' <> text (show n) <> case e of
-      SLam Lam {} -> ppr (p + 1) e
-      _ -> brackets (ppr (p + 1) e)
-
-instance Pretty SugarExpr where
-  ppr p e = case e of
-    SLit l -> ppr p l
-    SVar v -> text $ show v
-    SBind b -> ppr p b
-    SLam l -> ppr p l
-    SApp a -> ppr p a
-    STree t -> text $ T.drawTree t
-
-instance Show SugarExpr where
-  show = show . ppr 0
-
 type ExprTree = T.Tree SugarExpr
 
--- data Relation -- n-place fn with base ty == tyBool
--- data Set -- 1-place relation
--- data Predicate -- 1-place relation
--- data Quant -- 2-place relation
+-- n-place fn with base ty == tyBool
+newtype Relation = Rel (Lambda SugarExpr) deriving (Eq)
 
 data SugarExpr
+  -- core exprs paramaterized for sugar
   = SLit Lit
   | SVar Var
-  | STree ExprTree
   | SBind Binder
   | SLam (Lambda SugarExpr)
   | SApp (App SugarExpr)
+  | SBinOp BinOp SugarExpr SugarExpr
+  | SUnOp UnOp SugarExpr
+  -- sugar
+  | STree ExprTree
+  | SCond (Conditional SugarExpr)
+  | SCase [(SugarExpr, SugarExpr)]
+  | SSet [SugarExpr]
+  | SSetComp (SugarExpr, SugarExpr)
+  | SRel Relation
   deriving (Eq)
+
+-- data Set -- 1-place relation
+-- data Predicate -- 1-place relation
+-- logical operators -- 2-place relations
+-- quantifiers -- 2-place relations between 1-place relations 
 
 -- SPatternMatch Core.Var
 -- SRelation Core.Lambda
@@ -66,7 +59,7 @@ mkSApp e = SApp . App e
 
 mkBinder :: SugarExpr -> Binder
 mkBinder (SVar v) = Binder v TyNil
-mkBinder e = error ("can't bind anything but a variable! " ++ show e)
+mkBinder _ = error "can't bind anything but a variable!"
 
 mkSBind :: SugarExpr -> SugarExpr
 mkSBind = SBind . mkBinder
