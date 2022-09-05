@@ -75,7 +75,8 @@ spec = do
         `shouldBe` Right (SSet [STree (Node x (Node y Leaf Leaf) (Node z Leaf Leaf)), STree (Node y (Node z Leaf Leaf) (Node x Leaf Leaf))])
 
   describe "pSExpr" $ do
-    let tree = STree $ Node (mkSBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
-
     it "parses applications of lambdas to trees" $ do
-      parse pSExpr "(\\x.x)([\\y [\\x.x(y)] [\\x.x]])" `shouldBe` Right ((x ~> x) * tree)
+      let tree = STree $ Node (mkSBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
+      parse pSExpr "(\\x.x)[\\y [\\x.x(y)] [\\x.x]]" `shouldBe` Right ((x ~> x) * tree)
+    it "parses applications of lambdas to sets" $ do
+      parse pSExpr "(\\x.x){x,y,z}" `shouldBe` Right ((x ~> x) * SSet [x, y, z])

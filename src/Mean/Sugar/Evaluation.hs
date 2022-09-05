@@ -49,8 +49,6 @@ toCore expr = case expr of
       b = SVar $ fresh (mkVar "x") (CEval.fv $ toCore <$> es)
       e = SCase b $ [(e, true) | e <- es] ++ [(b, false)]
 
--- SSetComp
-
 eval :: SugarExpr -> Either CEval.EvalError CoreExpr
 eval = CEval.eval . toCore
 

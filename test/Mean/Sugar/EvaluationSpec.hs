@@ -12,7 +12,7 @@ import qualified Mean.Sugar.Evaluation as SEval
 import Mean.Sugar.Syntax
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Prelude hiding (id, (&&), (*), (-))
+import Prelude hiding (id, (&&), (*), (-), (||))
 
 e0 @= e1 = (e0 CEval.@= e1) @?= True
 
@@ -31,7 +31,7 @@ spec = do
       t0 @= t1
 
   describe "eval" $ do
-    it "reduces sugar trees to their church encodings" $ do
+    it "reduces trees to their church encodings" $ do
       eval t `shouldBe` eval (node * s * (node * (x ~> x) * leaf * leaf) * (node * y * leaf * leaf))
 
     it "reduces folds over trees" $ do
@@ -60,9 +60,12 @@ spec = do
       let s = SSet [e, b, f, x]
 
       eval (s * e) `shouldBe` Right CEnc.true
-      eval (s * b) `shouldBe` Right CEnc.true
-      eval (s * f) `shouldBe` Right CEnc.true
-      eval (s * x) `shouldBe` Right CEnc.true
       eval (s * z) `shouldBe` Right CEnc.false
 
--- it "reduces set expressions" $ do
+      eval ((s * e) || (s * z)) `shouldBe` Right CEnc.true
+      eval ((s * e) && (s * z)) `shouldBe` Right CEnc.false
+
+      eval ((s * e) || (s * b)) `shouldBe` Right CEnc.true
+      eval ((s * e) && (s * b)) `shouldBe` Right CEnc.true
+
+-- it "reduces set comprehensions to characteristic functions" $ do
