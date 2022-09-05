@@ -3,14 +3,14 @@
 module Mean.Sugar.ParserSpec where
 
 import Mean.Common.Parser (parse)
-import Mean.Core.Encoding (lFalse, lOne, lTrue, lZero)
+import Mean.Core.Encoding (lFalse, lOne, lTrue, lZero, (?))
 import Mean.Core.Syntax hiding ((*), (~>))
 import Mean.Sugar.Encoding
 import Mean.Sugar.Parser
 import Mean.Sugar.Syntax
 import Mean.Sugar.Viz
 import Test.Hspec
-import Prelude hiding (id, (*))
+import Prelude hiding (id, (*), (>))
 
 spec :: Spec
 spec = do
@@ -31,9 +31,18 @@ spec = do
     it "parses trees of lambdas" $ do
       parse pSTree "[\\x.x [\\x.x] [\\x.x]]"
         `shouldBe` Right (STree (Node (x ~> x) (Node (x ~> x) Leaf Leaf) (Node (x ~> x) Leaf Leaf)))
+    it "parses trees of ternary conditionals" $ do
+      parse pSTree "[if z then y else x [\\x.if x then z else y] [if y then x else z]]"
+        `shouldBe` Right (STree (Node (z ? y > x) (Node (x ~> x ? z > y) Leaf Leaf) (Node (y ? x > z) Leaf Leaf)))
     it "parses trees of function applications" $ do
       parse pSTree "[(f x) [f x] [f(x)]]"
         `shouldBe` Right (STree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
+
+  describe "pSCase" $ do
+    it "parses case statements" $ do
+      parse pSCase "case x of\n\tTrue: y\n\tFalse: z" `shouldBe` Right (SCase x [(true, y), (false, z)])
+    it "parses nested case statements" $ do
+      parse pSCase "case x of\n\tTrue: y\n\tFalse: case z of\n\t\tFalse: y\n\t\tTrue: x" `shouldBe` Right (SCase x [(true, y), (false, SCase z [(false, y), (true, x)])])
 
   describe "pSExpr" $ do
     let tree = STree $ Node (mkSBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)

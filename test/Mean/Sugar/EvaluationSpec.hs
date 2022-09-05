@@ -23,7 +23,7 @@ spec = do
   let t = STree (Node s (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
 
   describe "alpha equivalence (@=)" $ do
-    it "equates alpha equivalent church trees with alpha equivalent expression nodes" $ do
+    it "equates alpha equivalent church trees containing alpha equivalent expression nodes" $ do
       let (Right t0) = eval (STree (Node (x ~> x) Leaf Leaf))
       let (Right t1) = eval (STree (Node (y ~> y) Leaf Leaf))
 
@@ -49,26 +49,17 @@ spec = do
       let paLR = faLR
       let t' = STree (Node s (Node (mkSBind y) Leaf Leaf) (Node (x ~> x) Leaf Leaf))
       eval (t' * leaf * paLR) `shouldBe` eval (z ~> (y ~> (x ~> x)))
-    
-    it "reduces ternary conditionals" $ do
-      let if' x y z = SCond (Cond x y z)
 
-      eval (if' false l r) `shouldBe` Right CEnc.r
-      eval (if' true l r) `shouldBe` Right CEnc.l
-
-      eval (if' ((x ~> x) * false) l r) `shouldBe` Right CEnc.r
-      eval (if' ((x ~> x) * true) ((x ~> x) * l) r) `shouldBe` Right CEnc.l
-  
     it "reduces case expressions" $ do
-      eval (SCase [(true, x)]) `shouldBe` Right CEnc.x
-      eval (SCase [(false, y), (true, x)]) `shouldBe` Right CEnc.x
-      eval (SCase [((x ~> x) * true, (x ~> x) * y), (false, x), (true, z)]) `shouldBe` Right CEnc.y
-    
+      eval (SCase true [(true, x)]) `shouldBe` Right CEnc.x
+      eval (SCase false [(false, y), (true, x)]) `shouldBe` Right CEnc.y
+      eval (SCase y [((x ~> x) * y, (x ~> x) * y), (false, x), (true, z)]) `shouldBe` Right CEnc.y
+
     it "reduces set expressions to characteristic functions" $ do
       let s = SSet [e,b,f,x]
 
       eval (s * e) `shouldBe` Right CEnc.true
-      eval (s * b) `shouldBe` Right CEnc.true
+      eval (s * b ) `shouldBe` Right CEnc.true
       eval (s * f) `shouldBe` Right CEnc.true
       eval (s * x) `shouldBe` Right CEnc.true
       eval (s * z) `shouldBe` Right CEnc.false

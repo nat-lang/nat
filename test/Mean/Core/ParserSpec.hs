@@ -9,7 +9,7 @@ import Mean.Core.Syntax
 import Mean.Core.Type
 import Mean.Core.Viz
 import Test.Hspec
-import Prelude hiding ((*))
+import Prelude hiding ((*), (>))
 
 spec :: Spec
 spec = do
@@ -60,6 +60,14 @@ spec = do
     it "parses lambdas with complex bodies" $ do
       parse pCLam "\\f.(\\x.f(x x))(\\x.f(x x))"
         `shouldBe` Right (f ~> (x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+  
+  describe "pCCond" $ do
+    it "parses ternary conditionals of variables" $ do
+      parse pCCond "if x then y else z" `shouldBe` Right (x ? y > z)
+    it "parses ternary conditionals of lambdas" $ do
+      parse pCCond "if \\x.x then \\y.y else \\z.z" `shouldBe` Right ((x ~> x) ? (y ~> y) > (z ~> z))
+    it "parses ternary conditionals of function applications" $ do
+      parse pCCond "if f(x) then f(y) else f(z)" `shouldBe` Right ((f * x) ? (f * y) > (f * z))
 
   describe "pCExpr" $ do
     it "parses functional application of variables" $ do

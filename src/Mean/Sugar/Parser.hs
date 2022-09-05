@@ -12,10 +12,11 @@ import qualified Mean.Common.Lexer as L
 import qualified Mean.Core.Parser as Core
 import qualified Mean.Core.Syntax as SCore
 import qualified Mean.Sugar.Syntax as S
-import Text.Megaparsec ((<|>))
-import Text.Megaparsec.Debug (dbg)
-import qualified Text.Megaparsec as P
 import Mean.Sugar.Viz
+import Text.Megaparsec ((<|>))
+import qualified Text.Megaparsec as P
+import qualified Text.Megaparsec.Char.Lexer as Lex
+import Text.Megaparsec.Debug (dbg)
 
 type ExprParser = L.Parser S.SugarExpr
 
@@ -52,6 +53,8 @@ pSLit = S.SLit <$> Core.pLit
 pSVar :: ExprParser
 pSVar = S.SVar <$> Core.pVar
 
+pSCond = S.SCond <$> Core.pCond pSExpr
+
 finally fn p = do
   mA <- P.observing p
   case mA of
@@ -73,11 +76,27 @@ pSLam = do
   lam <- Core.pLam
   S.SLam . lam <$> pSExpr
 
+pCase = do
+  c <- pSExpr
+  L.reserved ":"
+  r <- pSExpr
+  pure (c, r)
+
+pSCase = P.try $ Lex.indentBlock L.spaceN p
+  where
+    p = do
+      L.reserved "case"
+      base <- pSExpr
+      L.reserved "of"
+      pure $ Lex.IndentSome Nothing (pure . S.SCase base) pCase
+
 sTerms =
   [ L.parens pSExpr,
     pSLit,
     pSVar,
-    pSLam
+    pSLam,
+    pSCond,
+    pSCase
   ]
 
 pSTerm :: ExprParser

@@ -29,7 +29,7 @@ data SugarExpr
   -- sugar
   | STree ExprTree
   | SCond (Conditional SugarExpr)
-  | SCase [(SugarExpr, SugarExpr)]
+  | SCase SugarExpr [(SugarExpr, SugarExpr)]
   | SSet [SugarExpr]
   | SSetComp (SugarExpr, SugarExpr)
   | SRel Relation

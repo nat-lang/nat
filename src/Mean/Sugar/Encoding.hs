@@ -27,6 +27,9 @@ false = SLit $ LBool False
 eq = SBinOp Eq
 (===) = eq
 
+(>) :: (SugarExpr -> Conditional SugarExpr) -> SugarExpr -> SugarExpr
+e > e' = SCond $ e e'
+
 -- church encoding of binary tree with data in nodes
 
 -- λeλb . e

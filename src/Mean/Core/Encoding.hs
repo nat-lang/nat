@@ -2,7 +2,7 @@ module Mean.Core.Encoding where
 
 import Mean.Core.Syntax
 
-import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (||))
+import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (||), (>))
 
 lOne :: Lit
 lOne = LInt 1
@@ -124,3 +124,9 @@ not = x ~> (y ~> (if' * x * true' * false'))
 
 (-) :: CoreExpr -> CoreExpr
 (-) = (not *)
+
+(?) :: a -> a -> a -> Conditional a
+(?) = Cond
+
+(>) :: (CoreExpr -> Conditional CoreExpr) -> CoreExpr -> CoreExpr
+e > e' = CCond $ e e'

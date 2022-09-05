@@ -36,15 +36,15 @@ toCore expr = case expr of
   SCond (Cond x y z) -> CCond (Cond (toCore x) (toCore y) (toCore z))
   -- sugar
   STree t -> toCore $ churchTree t
-  SCase cs -> case cs of
+  SCase b cs -> case cs of
     [] -> error "empty case statement"
-    [(c,e)] -> case c of
-      STrue -> toCore e
-      _ -> error "case without default"
-    ((c,e):cs) -> toCore $ SCond (Cond c e (SCase cs))
-  SSet es -> toCore (x ~> e) where
-    x = SVar $ fresh (mkVar "x") (CEval.fv $ toCore <$> es)
-    e = SCase $ [(x === e, true) | e <- es] ++ [(true, false)]
+    [(c,e)] -> if c == b
+               then toCore e
+               else error "case without default"
+    ((c,e):cs) -> toCore $ SCond (Cond (b === c) e (SCase b cs))
+  SSet es -> toCore (b ~> e) where
+    b = SVar $ fresh (mkVar "x") (CEval.fv $ toCore <$> es)
+    e = SCase b $ [(e, true) | e <- es] ++ [(b, false)]
   -- SSetComp
 
 eval :: SugarExpr -> Either CEval.EvalError CoreExpr

@@ -11,11 +11,11 @@ import Mean.Core.Syntax
 import Mean.Core.Viz
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (||))
+import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (||), (>))
 
 e0 @= e1 = (e0 E.@= e1) @?= True
 
-e0 @!= e1 = (e0 E.@= e1) @?= False
+e0 !@= e1 = (e0 E.@= e1) @?= False
 
 e0 *= e1 = (e0 E.*= e1) @?= True
 
@@ -57,12 +57,24 @@ spec = do
       id @= id
       (x ~> x) @= (x ~> x)
     it "doesn't recognize anything else" $ do
-      x @!= y
-      zero @!= one
+      x !@= y
+      zero !@= one
       -- λfλx . f(x) != λxλf . f(x)
-      (f ~> (x ~> (f * x))) @!= (x ~> (f ~> (f * x)))
+      (f ~> (x ~> (f * x))) !@= (x ~> (f ~> (f * x)))
       -- λfλx . f(x) != λfλx . x(f)
-      (f ~> (x ~> (f * x))) @!= (f ~> (x ~> (x * f)))
+      (f ~> (x ~> (f * x))) !@= (f ~> (x ~> (x * f)))
+
+  describe "eval" $ do
+    it "reduces ternary conditionals of variables" $ do
+      eval (false ? l > r) `shouldBe` Right r
+      eval (true ? l > r) `shouldBe` Right l
+
+    it "reduces ternary conditionals of function applications" $ do
+      eval (((x ~> x) * false) ? l > r) `shouldBe` Right r
+      eval (((x ~> x) * true) ? ((x ~> x) * l) > r) `shouldBe` Right l
+    
+    it "fails on un truthy conditionals" $ do
+      eval (x ? l > r) `shouldBe` Left (E.NotTruthy x)
 
   describe "confluence (*=)" $ do
     it "equates lambda expressions" $ do
@@ -101,7 +113,6 @@ spec = do
       (false' && true') *= false'
       (false' && false') *= false'
       (true' && true') *= true'
-    
 
 {-
 can we get de morgan's law to work with the church encodings?

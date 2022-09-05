@@ -39,6 +39,9 @@ instance Pretty Lit where
     LInt n -> text (show n)
     LBool b -> text (show b)
 
+instance Pretty a => Pretty (Conditional a) where
+  ppr p (Cond x y z) = text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
+
 instance Pretty CoreExpr where
   ppr p e = case e of
     CLit l -> ppr p l
@@ -54,7 +57,7 @@ instance Pretty CoreExpr where
     CUnOp op e -> ppr p e <+> char ppOp where
       ppOp = case op of
         Neg -> '¬'
-    CCond (Cond x y z) -> text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
+    CCond c -> ppr p c
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty

@@ -18,11 +18,13 @@ import Mean.Core.Viz
 data EvalError
   = UnboundVariable S.Name
   | NotAFn S.CoreExpr S.CoreExpr
+  | NotTruthy S.CoreExpr
   deriving (Eq)
 
 instance Show EvalError where
   show (UnboundVariable n) = "Unbound variable: " ++ show n
   show (NotAFn e0 e1) = "Can't apply " ++ show e0 ++ " to " ++ show e1
+  show (NotTruthy e) = "Not a truthy expression: " ++ show e
 
 type Evaluation = ExceptT EvalError Identity
 
@@ -42,7 +44,10 @@ instance FV S.CoreExpr where
 instance FV [S.CoreExpr] where
   fv es = foldl1 Set.union (fv <$> es)
 
-bool (S.CLit (S.LBool b)) = b
+bool :: S.CoreExpr -> Bool
+bool e = case e of
+  (S.CLit (S.LBool b)) -> b
+  _ -> error "can only cast booleans"
 
 incrVId :: S.Var -> S.Var
 incrVId (S.Var vPub vPri) = S.Var vPub $ init vPri ++ show (digitToInt (last vPri) + 1)
@@ -86,9 +91,9 @@ reduce expr = case expr of
   App e0 e1 -> case e0 of
     -- (1a) function application, beta reduce
     Lam (S.Binder v _) body -> do
-      traceM (show expr)
+      -- traceM (show expr)
       e <- reduce (sub e1 (S.CVar v) body)
-      traceM (show e)
+      -- traceM (show e)
       pure e
     -- (1b) binders have a semantics of their own: they may be applied
     -- to terms, in which case they simply abstract a free variable.
@@ -120,7 +125,9 @@ reduce expr = case expr of
     S.Or -> bool e0 || bool e1
   S.CCond (S.Cond x y z) -> do
     x' <- reduce x
-    reduce $ if bool x' then y else z
+    case x' of
+      S.CLit S.LBool {} -> reduce $ if bool x' then y else z
+      _ -> throwError (NotTruthy x)
   -- (4) var/literal
   _ -> pure expr
 

@@ -13,7 +13,8 @@ import qualified Mean.Core.Syntax as S
 import Text.Megaparsec ((<|>))
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as C
-
+import Text.Megaparsec.Debug (dbg)
+import Mean.Core.Viz
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
@@ -91,13 +92,25 @@ pCLam = do
   lam <- pLam
   S.CLam . lam <$> pCExpr
 
+pCond :: L.Parser a -> L.Parser (S.Conditional a)
+pCond pExpr = do
+  L.reserved "if"
+  x <- pExpr
+  L.reserved "then"
+  y <- pExpr
+  L.reserved "else"
+  S.Cond x y <$> pExpr
+
+pCCond = S.CCond <$> pCond pCExpr
+
 pCTerm :: ExprParser
 pCTerm =
   P.choice
     [ L.parens pCExpr,
       pCLit,
       pCVar,
-      pCLam
+      pCLam,
+      pCCond
     ]
 
 operatorTable :: [[Operator L.Parser S.CoreExpr]]
