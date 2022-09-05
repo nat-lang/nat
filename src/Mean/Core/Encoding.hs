@@ -1,8 +1,7 @@
 module Mean.Core.Encoding where
 
 import Mean.Core.Syntax
-
-import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (||), (>))
+import Prelude hiding (and, exp, id, not, or, succ, (&&), (*), (**), (+), (++), (-), (>), (||))
 
 lOne :: Lit
 lOne = LInt 1
@@ -16,7 +15,10 @@ lTrue = LBool True
 lFalse :: Lit
 lFalse = LBool False
 
+true :: CoreExpr
 true = CLit lTrue
+
+false :: CoreExpr
 false = CLit lFalse
 
 f :: CoreExpr
@@ -43,90 +45,39 @@ l = mkCVar "l"
 r :: CoreExpr
 r = mkCVar "r"
 
+p :: CoreExpr
+p = mkCVar "p"
+
+q :: CoreExpr
+q = mkCVar "q"
+
 -- λx.x
 id :: CoreExpr
 id = x ~> x
 
--- λnλfλx . f(n f x)
-succ :: CoreExpr
-succ = n ~> (f ~> (x ~> (f * (n * f * x))))
+(?) :: CoreExpr -> CoreExpr -> CoreExpr -> CoreExpr
+(?) = CTernOp Cond
 
--- λfλx . x
-zero :: CoreExpr
-zero = f ~> (x ~> x)
-
--- λfλx . f x
-one :: CoreExpr
-one = f ~> (x ~> (f * x))
-
--- λfλx . f(f x)
-two :: CoreExpr
-two = f ~> (x ~> (f * (f * x)))
-
--- λfλx . f(f(f x))
-three :: CoreExpr
-three = f ~> (x ~> (f * (f * (f * x))))
-
--- λmλn . m succ n
-add :: CoreExpr
-add = m ~> (n ~> (m * succ * n))
-
-(+) :: CoreExpr -> CoreExpr -> CoreExpr
-m + n = add * m * n
-
--- λmλnλfλx . m f (n f x)
-add' :: CoreExpr
-add' = m ~> (n ~> (f ~> (x ~> (m * f * (n * f * x)))))
-
-(++) :: CoreExpr -> CoreExpr -> CoreExpr
-m ++ n = add' * m * n
-
--- λmλn . m(add' n)0
-mul :: CoreExpr
-mul = m ~> (n ~> (m * (add * n) * zero))
-
--- λmλn . n(mul m)1
-exp :: CoreExpr
-exp = m ~> (n ~> (n * (mul * m) * one))
-
-(**) :: CoreExpr -> CoreExpr -> CoreExpr
-m ** n = exp * m * n
-
--- λxλy . x
-true' :: CoreExpr
-true' = x ~> (y ~> x)
-
--- λxλy . y
-false' :: CoreExpr
-false' = x ~> (y ~> y)
-
--- λfλxλy . f(x)(y)
-if' :: CoreExpr
-if' = f ~> (x ~> (y ~> (f * x * y)))
-
--- λxλy . if(x)(y)(false)
-and :: CoreExpr
-and = x ~> (y ~> (if' * x * y * false'))
+(>) :: (CoreExpr -> CoreExpr) -> CoreExpr -> CoreExpr
+e > e' = e e'
 
 (&&) :: CoreExpr -> CoreExpr -> CoreExpr
-x && y = and * x * y
-
--- λxλy . if(x)(true)(y)
-or :: CoreExpr
-or = x ~> (y ~> (if' * x * true' * y))
+p && q = CBinOp And p q
 
 (||) :: CoreExpr -> CoreExpr -> CoreExpr
-x || y = or * x * y
+p || q = CBinOp Or p q
 
--- λxλy . if(x)(true)(false)
-not :: CoreExpr
-not = x ~> (y ~> (if' * x * true' * false'))
+eq :: CoreExpr -> CoreExpr -> CoreExpr
+eq = CBinOp Eq
 
-(-) :: CoreExpr -> CoreExpr
-(-) = (not *)
+(===) :: CoreExpr -> CoreExpr -> CoreExpr
+(===) = eq
 
-(?) :: a -> a -> a -> Conditional a
-(?) = Cond
+nEq :: CoreExpr -> CoreExpr -> CoreExpr
+nEq = CBinOp NEq
 
-(>) :: (CoreExpr -> Conditional CoreExpr) -> CoreExpr -> CoreExpr
-e > e' = CCond $ e e'
+(!==) :: CoreExpr -> CoreExpr -> CoreExpr
+(!==) = nEq
+
+not' :: CoreExpr -> CoreExpr
+not' = CUnOp Neg

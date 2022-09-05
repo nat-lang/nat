@@ -21,6 +21,7 @@ keywords :: [String]
 keywords = ["if", "then", "else", "let", "dom", "case", "of"]
 
 lineComment = L.skipLineComment "//"
+
 blockComment = L.skipBlockComment "/*" "*/"
 
 space :: Parser ()
@@ -48,16 +49,20 @@ parens = btw "(" ")"
 angles :: Parser a -> Parser a
 angles = btw "<" ">"
 
+curlies :: Parser a -> Parser a
+curlies = btw "{" "}"
+
 reserved :: Text -> Parser ()
 reserved w = (lexeme . P.try) (C.string w *> P.notFollowedBy C.alphaNumChar)
 
 identifier :: Parser String
 identifier = (lexeme . P.try) (p >>= check)
   where
-    p       = (:) <$> C.letterChar <*> P.many (C.alphaNumChar <|> C.char '\'')
-    check x = if x `elem` keywords
-              then fail $ "keyword " ++ show x ++ " cannot be an identifier"
-              else pure x
+    p = (:) <$> C.letterChar <*> P.many (C.alphaNumChar <|> C.char '\'')
+    check x =
+      if x `elem` keywords
+        then fail $ "keyword " ++ show x ++ " cannot be an identifier"
+        else pure x
 
 titularIdentifier = P.lookAhead C.upperChar >> identifier
 

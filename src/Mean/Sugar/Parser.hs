@@ -10,11 +10,12 @@ import Control.Monad.State
 import Debug.Trace (traceM)
 import qualified Mean.Common.Lexer as L
 import qualified Mean.Core.Parser as Core
-import qualified Mean.Core.Syntax as SCore
+import qualified Mean.Core.Syntax as CSyn
 import qualified Mean.Sugar.Syntax as S
 import Mean.Sugar.Viz
 import Text.Megaparsec ((<|>))
 import qualified Text.Megaparsec as P
+import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as Lex
 import Text.Megaparsec.Debug (dbg)
 
@@ -53,7 +54,9 @@ pSLit = S.SLit <$> Core.pLit
 pSVar :: ExprParser
 pSVar = S.SVar <$> Core.pVar
 
-pSCond = S.SCond <$> Core.pCond pSExpr
+pSCond = do
+  c <- Core.pCond pSExpr
+  pure $ c S.STernOp
 
 finally fn p = do
   mA <- P.observing p
@@ -76,6 +79,10 @@ pSLam = do
   lam <- Core.pLam
   S.SLam . lam <$> pSExpr
 
+pSet = L.curlies (pSExpr `P.sepBy` (L.space >> C.char ',' >> L.space))
+
+pSSet = S.SSet <$> pSet
+
 pCase = do
   c <- pSExpr
   L.reserved ":"
@@ -96,7 +103,8 @@ sTerms =
     pSVar,
     pSLam,
     pSCond,
-    pSCase
+    pSCase,
+    pSSet
   ]
 
 pSTerm :: ExprParser
@@ -107,19 +115,14 @@ pSTerm = do
 
 operatorTable :: [[Operator L.Parser S.SugarExpr]]
 operatorTable =
-  [ [],
-    -- prefix "-" Negation,
-    -- prefix "+" id
-
-    [],
-    -- infix "*" Product,
-    -- infix "/" Division
-
-    []
+  [ [ L.prefixOp "!" (S.SUnOp CSyn.Neg)
+    ],
+    [ L.infixOpL "==" (S.SBinOp CSyn.Eq),
+      L.infixOpL "!=" (S.SBinOp CSyn.NEq),
+      L.infixOpL "&&" (S.SBinOp CSyn.And),
+      L.infixOpL "||" (S.SBinOp CSyn.Or)
+    ]
   ]
-
--- infix "+" Sum,
--- infix "-" Subtr
 
 pSExpr' :: ExprParser
 pSExpr' = makeExprParser pSTerm operatorTable
@@ -127,4 +130,4 @@ pSExpr' = makeExprParser pSTerm operatorTable
 pSExpr :: ExprParser
 pSExpr = do
   exprs <- some pSExpr'
-  pure (foldl1 (\e0 e1 -> S.SApp $ SCore.App e0 e1) exprs)
+  pure (foldl1 (\e0 e1 -> S.SApp $ CSyn.App e0 e1) exprs)

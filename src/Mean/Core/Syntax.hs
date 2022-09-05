@@ -1,4 +1,5 @@
 module Mean.Core.Syntax where
+
 import GHC.Generics
 
 newtype TyVar = TV String
@@ -48,12 +49,11 @@ data Lambda a = Lam Binder a deriving (Eq)
 
 data App a = App a a deriving (Eq)
 
-data Conditional a = Cond a a a deriving (Eq)
-
-data BinOp = Eq | And | Or
-  deriving (Eq)
-
 data UnOp = Neg deriving (Eq)
+
+data BinOp = Eq | NEq | And | Or deriving (Eq)
+
+data TernOp = Cond deriving (Eq)
 
 data CoreExpr
   = CLit Lit
@@ -61,9 +61,9 @@ data CoreExpr
   | CBind Binder
   | CLam (Lambda CoreExpr)
   | CApp (App CoreExpr)
-  | CCond (Conditional CoreExpr)
-  | CBinOp BinOp CoreExpr CoreExpr
   | CUnOp UnOp CoreExpr
+  | CBinOp BinOp CoreExpr CoreExpr
+  | CTernOp TernOp CoreExpr CoreExpr CoreExpr
   deriving (Eq)
 
 mkCBool :: Bool -> CoreExpr

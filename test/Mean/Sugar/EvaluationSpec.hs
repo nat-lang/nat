@@ -1,20 +1,21 @@
 module Mean.Sugar.EvaluationSpec where
 
+import Debug.Trace (traceM)
 import qualified Mean.Core.Encoding as CEnc
 import qualified Mean.Core.Evaluation as CEval
-import Mean.Core.Viz
 import Mean.Core.Syntax hiding ((*), (~>))
 import qualified Mean.Core.Syntax as CSyn
+import Mean.Core.Viz
+import Mean.Sugar.Encoding
 import Mean.Sugar.Evaluation hiding ((*=), (@=))
 import qualified Mean.Sugar.Evaluation as SEval
-import Mean.Sugar.Encoding
 import Mean.Sugar.Syntax
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Prelude hiding ((*), id, (&&), (-))
-import Debug.Trace (traceM)
+import Prelude hiding (id, (&&), (*), (-))
 
 e0 @= e1 = (e0 CEval.@= e1) @?= True
+
 e0 *= e1 = (e0 SEval.*= e1) @?= True
 
 spec :: Spec
@@ -56,12 +57,12 @@ spec = do
       eval (SCase y [((x ~> x) * y, (x ~> x) * y), (false, x), (true, z)]) `shouldBe` Right CEnc.y
 
     it "reduces set expressions to characteristic functions" $ do
-      let s = SSet [e,b,f,x]
+      let s = SSet [e, b, f, x]
 
       eval (s * e) `shouldBe` Right CEnc.true
-      eval (s * b ) `shouldBe` Right CEnc.true
+      eval (s * b) `shouldBe` Right CEnc.true
       eval (s * f) `shouldBe` Right CEnc.true
       eval (s * x) `shouldBe` Right CEnc.true
       eval (s * z) `shouldBe` Right CEnc.false
-    -- it "reduces set expressions" $ do
 
+-- it "reduces set expressions" $ do

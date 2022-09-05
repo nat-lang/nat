@@ -10,11 +10,12 @@ import Data.Text (Text)
 import qualified Mean.Common.Lexer as L
 import Mean.Common.Parser (parseFile)
 import qualified Mean.Core.Syntax as S
+import Mean.Core.Viz
 import Text.Megaparsec ((<|>))
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as C
 import Text.Megaparsec.Debug (dbg)
-import Mean.Core.Viz
+
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
@@ -92,16 +93,19 @@ pCLam = do
   lam <- pLam
   S.CLam . lam <$> pCExpr
 
-pCond :: L.Parser a -> L.Parser (S.Conditional a)
+pCond :: L.Parser a -> L.Parser ((S.TernOp -> a -> a -> a -> a) -> a)
 pCond pExpr = do
   L.reserved "if"
   x <- pExpr
   L.reserved "then"
   y <- pExpr
   L.reserved "else"
-  S.Cond x y <$> pExpr
+  z <- pExpr
+  pure $ \mkC -> mkC S.Cond x y z
 
-pCCond = S.CCond <$> pCond pCExpr
+pCCond = do
+  c <- pCond pCExpr
+  pure $ c S.CTernOp
 
 pCTerm :: ExprParser
 pCTerm =
@@ -115,19 +119,14 @@ pCTerm =
 
 operatorTable :: [[Operator L.Parser S.CoreExpr]]
 operatorTable =
-  [ [],
-    -- prefix "-" Negation,
-    -- prefix "+" id
-
-    [],
-    -- infix "*" Product,
-    -- infix "/" Division
-
-    []
+  [ [ L.prefixOp "!" (S.CUnOp S.Neg)
+    ],
+    [ L.infixOpL "==" (S.CBinOp S.Eq),
+      L.infixOpL "!=" (S.CBinOp S.NEq),
+      L.infixOpL "&&" (S.CBinOp S.And),
+      L.infixOpL "||" (S.CBinOp S.Or)
+    ]
   ]
-
--- infix "+" Sum,
--- infix "-" Subtr
 
 pCExpr' :: ExprParser
 pCExpr' = makeExprParser pCTerm operatorTable

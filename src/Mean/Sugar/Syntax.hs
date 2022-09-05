@@ -6,8 +6,8 @@ module Mean.Sugar.Syntax
 where
 
 import qualified Data.Tree.Binary.Preorder as T
-import Mean.Core.Syntax hiding (mkBinder, mkFn, (*), (~>))
 import Mean.Common.Viz
+import Mean.Core.Syntax hiding (mkBinder, mkFn, (*), (~>))
 import Mean.Core.Viz
 import Text.PrettyPrint
 import Prelude hiding ((<>))
@@ -18,17 +18,17 @@ type ExprTree = T.Tree SugarExpr
 newtype Relation = Rel (Lambda SugarExpr) deriving (Eq)
 
 data SugarExpr
-  -- core exprs paramaterized for sugar
-  = SLit Lit
+  = -- core exprs paramaterized for sugar
+    SLit Lit
   | SVar Var
   | SBind Binder
   | SLam (Lambda SugarExpr)
   | SApp (App SugarExpr)
-  | SBinOp BinOp SugarExpr SugarExpr
   | SUnOp UnOp SugarExpr
-  -- sugar
-  | STree ExprTree
-  | SCond (Conditional SugarExpr)
+  | SBinOp BinOp SugarExpr SugarExpr
+  | STernOp TernOp SugarExpr SugarExpr SugarExpr
+  | -- sugar
+    STree ExprTree
   | SCase SugarExpr [(SugarExpr, SugarExpr)]
   | SSet [SugarExpr]
   | SSetComp (SugarExpr, SugarExpr)
@@ -38,7 +38,7 @@ data SugarExpr
 -- data Set -- 1-place relation
 -- data Predicate -- 1-place relation
 -- logical operators -- 2-place relations
--- quantifiers -- 2-place relations between 1-place relations 
+-- quantifiers -- 2-place relations between 1-place relations
 
 -- SPatternMatch Core.Var
 -- SRelation Core.Lambda

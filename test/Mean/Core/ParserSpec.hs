@@ -9,7 +9,7 @@ import Mean.Core.Syntax
 import Mean.Core.Type
 import Mean.Core.Viz
 import Test.Hspec
-import Prelude hiding ((*), (>))
+import Prelude hiding ((&&), (*), (>), (||))
 
 spec :: Spec
 spec = do
@@ -60,7 +60,7 @@ spec = do
     it "parses lambdas with complex bodies" $ do
       parse pCLam "\\f.(\\x.f(x x))(\\x.f(x x))"
         `shouldBe` Right (f ~> (x ~> (f * (x * x))) * (x ~> (f * (x * x))))
-  
+
   describe "pCCond" $ do
     it "parses ternary conditionals of variables" $ do
       parse pCCond "if x then y else z" `shouldBe` Right (x ? y > z)
@@ -79,3 +79,27 @@ spec = do
     it "parses functional application of function applications" $ do
       parse pCExpr "f x (f x)" `shouldBe` Right (f * x * (f * x))
       parse pCExpr "f(x)(f x)" `shouldBe` Right (f * x * (f * x))
+
+    it "parses unary operations on primitives" $ do
+      parse pCExpr "!True" `shouldBe` Right (not' true)
+      parse pCExpr "!x" `shouldBe` Right (not' x)
+    it "parses unary operations on expressions" $ do
+      parse pCExpr "!(f x)" `shouldBe` Right (not' (f * x))
+    it "parses binary operations on primitives" $ do
+      parse pCExpr "x == y" `shouldBe` Right (x === y)
+      parse pCExpr "x != y" `shouldBe` Right (x !== y)
+      parse pCExpr "x && y" `shouldBe` Right (x && y)
+      parse pCExpr "x || y" `shouldBe` Right (x || y)
+    it "parses binary operations on expressions" $ do
+      parse pCExpr "(f x) && (f y)" `shouldBe` Right ((f * x) && (f * y))
+      parse pCExpr "(f x) || (f y)" `shouldBe` Right ((f * x) || (f * y))
+    it "parses operations of different arity on primitives in concert" $ do
+      parse pCExpr "!(p == q)" `shouldBe` Right (not' (p === q))
+      parse pCExpr "!(p != q)" `shouldBe` Right (not' (p !== q))
+      parse pCExpr "!(p && q)" `shouldBe` Right (not' (p && q))
+      parse pCExpr "!(p || q)" `shouldBe` Right (not' (p || q))
+      parse pCExpr "(!p && !q)" `shouldBe` Right (not' p && not' q)
+      parse pCExpr "(!p || !q)" `shouldBe` Right (not' p || not' q)
+    it "parses operations of different arity on expressions in concert" $ do
+      parse pCExpr "!((f p) == (f q))" `shouldBe` Right (not' ((f * p) === (f * q)))
+      parse pCExpr "(!(f p) && !(f q))" `shouldBe` Right (not' (f * p) && not' (f * q))

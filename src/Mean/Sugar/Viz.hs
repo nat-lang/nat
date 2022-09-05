@@ -2,11 +2,11 @@
 
 module Mean.Sugar.Viz where
 
+import Data.List
 import Mean.Common.Viz
 import Mean.Core.Syntax
 import Mean.Core.Viz
 import Mean.Sugar.Syntax
-import Data.List
 import Text.PrettyPrint
 import Prelude hiding ((<>))
 
@@ -22,11 +22,13 @@ instance Pretty SugarExpr where
     SVar v -> text $ show v
     SBind b -> ppr p b
     SLam l -> ppr p l
-    SCond c -> ppr p c
+    STernOp Cond x y z -> ppCond p x y z
     SApp a -> ppr p a
     STree t -> text $ drawTree t
     SCase c es -> text "case" <+> ppr p c <> char ':' <+> text (intercalate ", " (show . pp <$> es))
-      where pp (e0,e1) = ppr p e0 <+> text "->" <+> ppr p e1
+      where
+        pp (e0, e1) = ppr p e0 <+> text "->" <+> ppr p e1
+    SSet es -> brackets $ text (intercalate ", " (show . ppr p <$> es))
 
 instance Show SugarExpr where
   show = show . ppr 0

@@ -10,9 +10,9 @@ import Data.Char (digitToInt)
 import qualified Data.Map as Map
 import Data.Set ((\\))
 import qualified Data.Set as Set
-import Mean.Core.Patterns (pattern App, pattern Lam, pattern CTrue, pattern CFalse)
-import qualified Mean.Core.Syntax as S
 import Debug.Trace (traceM)
+import Mean.Core.Patterns (pattern App, pattern CFalse, pattern CTrue, pattern Lam)
+import qualified Mean.Core.Syntax as S
 import Mean.Core.Viz
 
 data EvalError
@@ -33,12 +33,12 @@ class FV a where
 
 instance FV S.CoreExpr where
   fv e = case e of
-    Lam (S.Binder (S.Var _ v) _) body -> fv body \\ Set.singleton v
-    App e0 e1 -> fv [e0,e1]
-    S.CBinOp _ e0 e1 -> fv [e0,e1]
-    S.CUnOp _ e -> fv e
-    S.CCond (S.Cond x y z) -> fv [x,y,z]
     S.CVar (S.Var _ v) -> Set.singleton v
+    Lam (S.Binder (S.Var _ v) _) body -> fv body \\ Set.singleton v
+    App e0 e1 -> fv [e0, e1]
+    S.CUnOp _ e -> fv e
+    S.CBinOp _ e0 e1 -> fv [e0, e1]
+    S.CTernOp _ x y z -> fv [x, y, z]
     _ -> Set.empty
 
 instance FV [S.CoreExpr] where
@@ -57,31 +57,33 @@ fresh v0 v1 fv =
   let v0'@(S.Var _ v0'Pri) = incrVId v0
    in if v0' == v1 || Set.member v0'Pri fv
         then fresh v0' v1 fv
-        else v0'   
+        else v0'
 
 -- e'[e/v]
 sub :: S.CoreExpr -> S.CoreExpr -> S.CoreExpr -> S.CoreExpr
-sub e cv@(S.CVar v) e' = let sub' = sub e cv in case e' of
-  -- relevant base case
-  S.CVar v' | v' == v -> e
-  -- induction
-  App e0 e1 -> S.mkCApp (sub' e0) (sub' e1)
-  S.CBinOp op e0 e1 ->  S.CBinOp op (sub' e0) (sub' e1)
-  S.CUnOp op e -> S.CUnOp op (sub' e)
-  S.CCond (S.Cond x y z) -> S.CCond (S.Cond (sub' x) (sub' y) (sub' z))
-  -- induction, but rename binder if it conflicts with fv(e)
-  Lam b@(S.Binder v'@(S.Var _ v'Pri) t) body
-    | v /= v' ->
-      let fvE = fv e
-          fvB = fv body
-       in if v'Pri `Set.member` fvE
-            then
-              let v'' = fresh v' v (fvE `Set.union` fvB) 
-                  body' = sub' $ sub (S.CVar v'') (S.CVar v') body
-               in S.mkCLam (S.Binder v'' t) body'
-            else S.mkCLam b (sub' body)
-  -- irrelevent base cases
-  _ -> e'
+sub e cv@(S.CVar v) e' =
+  let sub' = sub e cv
+   in case e' of
+        -- relevant base case
+        S.CVar v' | v' == v -> e
+        -- induction
+        App e0 e1 -> S.mkCApp (sub' e0) (sub' e1)
+        S.CBinOp op e0 e1 -> S.CBinOp op (sub' e0) (sub' e1)
+        S.CUnOp op e -> S.CUnOp op (sub' e)
+        S.CTernOp op x y z -> S.CTernOp op (sub' x) (sub' y) (sub' z)
+        -- induction, but rename binder if it conflicts with fv(e)
+        Lam b@(S.Binder v'@(S.Var _ v'Pri) t) body
+          | v /= v' ->
+            let fvE = fv e
+                fvB = fv body
+             in if v'Pri `Set.member` fvE
+                  then
+                    let v'' = fresh v' v (fvE `Set.union` fvB)
+                        body' = sub' $ sub (S.CVar v'') (S.CVar v') body
+                     in S.mkCLam (S.Binder v'' t) body'
+                  else S.mkCLam b (sub' body)
+        -- irrelevent base cases
+        _ -> e'
 sub _ _ _ = error "can't substitute for anything but a variable!"
 
 --  Normal order reduction.
@@ -117,13 +119,21 @@ reduce expr = case expr of
     body' <- reduce body
     pure $ S.mkCLam b body'
   -- (3) operators
-  S.CUnOp op e -> pure $ S.mkCBool $ case op of
-    S.Neg -> not $ bool e
-  S.CBinOp op e0 e1 -> pure $ S.mkCBool $ case op of
-    S.Eq -> e0 *= e1
-    S.And -> bool e0 && bool e1
-    S.Or -> bool e0 || bool e1
-  S.CCond (S.Cond x y z) -> do
+  S.CUnOp op e -> do
+    e' <- reduce e
+    pure $
+      S.mkCBool $ case op of
+        S.Neg -> not $ bool e'
+  S.CBinOp op e0 e1 -> do
+    e0' <- reduce e0
+    e1' <- reduce e1
+    pure $
+      S.mkCBool $ case op of
+        S.Eq -> e0' @= e1'
+        S.NEq -> e0' @!= e1'
+        S.And -> bool e0' && bool e1'
+        S.Or -> bool e0' || bool e1'
+  S.CTernOp S.Cond x y z -> do
     x' <- reduce x
     case x' of
       S.CLit S.LBool {} -> reduce $ if bool x' then y else z
@@ -134,11 +144,10 @@ reduce expr = case expr of
 -- assumes e0 and e1 are in normal form
 alphaEq :: S.CoreExpr -> S.CoreExpr -> Bool
 alphaEq e0 e1 = case (e0, e1) of
-  (Lam (S.Binder v0 _) body0, Lam (S.Binder v1 _) body1) -> let
-      v0' = S.CVar v0
-      v1' = S.CVar v1
-    in
-      sub v1' v0' body0 @= body1 || sub v0' v1' body1 @= body0
+  (Lam (S.Binder v0 _) body0, Lam (S.Binder v1 _) body1) ->
+    let v0' = S.CVar v0
+        v1' = S.CVar v1
+     in sub v1' v0' body0 @= body1 || sub v0' v1' body1 @= body0
   (App e0a e0b, App e1a e1b) -> e0a @= e1a && e0b @= e1b
   (S.CVar v0, S.CVar v1) -> v0 == v1
   (S.CLit l0, S.CLit l1) -> l0 == l1
@@ -146,6 +155,9 @@ alphaEq e0 e1 = case (e0, e1) of
 
 (@=) :: S.CoreExpr -> S.CoreExpr -> Bool
 e0 @= e1 = alphaEq e0 e1
+
+(@!=) :: S.CoreExpr -> S.CoreExpr -> Bool
+e0 @!= e1 = not (e0 @= e1)
 
 eval :: S.CoreExpr -> Either EvalError S.CoreExpr
 eval e = runIdentity $ runExceptT $ reduce e
@@ -157,3 +169,6 @@ confluent e0 e1 = case (eval e0, eval e1) of
 
 (*=) :: S.CoreExpr -> S.CoreExpr -> Bool
 e0 *= e1 = confluent e0 e1
+
+(*!=) :: S.CoreExpr -> S.CoreExpr -> Bool
+e0 *!= e1 = not (e0 *= e1)
