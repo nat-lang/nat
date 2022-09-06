@@ -1,12 +1,11 @@
 module Mean.Core.Syntax where
 
-import GHC.Generics
-
 newtype TyVar = TV String
   deriving (Show, Eq, Ord)
 
 data Type
-  = TyVar TyVar
+  = -- TyDom TyVar CoreExpr
+    TyVar TyVar
   | TyCon String
   | TyFun Type Type
   | TyNil
@@ -45,15 +44,15 @@ instance Show Var where
 
 data Binder = Binder Var Type deriving (Eq, Ord)
 
-data Lambda a = Lam Binder a deriving (Eq)
+data Lambda a = Lam Binder a deriving (Eq, Ord)
 
-data App a = App a a deriving (Eq)
+data App a = App a a deriving (Eq, Ord)
 
-data UnOp = Neg deriving (Eq)
+data UnOp = Neg deriving (Eq, Ord)
 
-data BinOp = Eq | NEq | And | Or deriving (Eq)
+data BinOp = Eq | NEq | And | Or deriving (Eq, Ord)
 
-data TernOp = Cond deriving (Eq)
+data TernOp = Cond deriving (Eq, Ord)
 
 data CoreExpr
   = CLit Lit
@@ -64,7 +63,7 @@ data CoreExpr
   | CUnOp UnOp CoreExpr
   | CBinOp BinOp CoreExpr CoreExpr
   | CTernOp TernOp CoreExpr CoreExpr CoreExpr
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 mkCBool :: Bool -> CoreExpr
 mkCBool = CLit . LBool

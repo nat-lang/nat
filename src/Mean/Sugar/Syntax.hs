@@ -14,8 +14,8 @@ import Prelude hiding ((<>))
 
 type ExprTree = T.Tree SugarExpr
 
--- n-place fn with base ty == tyBool
-newtype Relation = Rel (Lambda SugarExpr) deriving (Eq)
+data UnSetOp = Comp deriving (Eq)
+data BinSetOp = Mem | Union | Inter deriving (Eq)
 
 data SugarExpr
   = -- core exprs paramaterized for sugar
@@ -32,21 +32,9 @@ data SugarExpr
   | SCase SugarExpr [(SugarExpr, SugarExpr)]
   | SSet [SugarExpr]
   | SSetComp (SugarExpr, SugarExpr)
-  | SRel Relation
+  | SUnSetOp UnSetOp SugarExpr
+  | SBinSetOp BinSetOp SugarExpr SugarExpr
   deriving (Eq)
-
--- data Set -- 1-place relation
--- data Predicate -- 1-place relation
--- logical operators -- 2-place relations
--- quantifiers -- 2-place relations between 1-place relations
-
--- SPatternMatch Core.Var
--- SRelation Core.Lambda
--- Atom Core.Var
--- Domain Core.Lambda
--- n-place fn
--- ApplicativeFunctor
--- Monad
 
 mkSVar :: Name -> SugarExpr
 mkSVar v = SVar $ mkVar v

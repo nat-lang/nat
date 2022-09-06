@@ -49,12 +49,12 @@ bool e = case e of
   (S.CLit (S.LBool b)) -> b
   _ -> error "can only cast booleans"
 
-incrVId :: S.Var -> S.Var
-incrVId (S.Var vPub vPri) = S.Var vPub $ init vPri ++ show (digitToInt (last vPri) + 1)
+incrVarId :: S.Var -> S.Var
+incrVarId (S.Var vPub vPri) = S.Var vPub $ init vPri ++ show (digitToInt (last vPri) + 1)
 
 fresh :: S.Var -> S.Var -> Set.Set S.Name -> S.Var
 fresh v0 v1 fv =
-  let v0'@(S.Var _ v0'Pri) = incrVId v0
+  let v0'@(S.Var _ v0'Pri) = incrVarId v0
    in if v0' == v1 || Set.member v0'Pri fv
         then fresh v0' v1 fv
         else v0'

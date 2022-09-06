@@ -10,19 +10,19 @@ import Mean.Sugar.Encoding
 import Mean.Sugar.Patterns (pattern SFalse, pattern STrue)
 import Mean.Sugar.Syntax
 import qualified Mean.Sugar.Syntax as SSyn
-import Prelude hiding ((*))
+import Prelude hiding ((*), (&&), (||))
 
 churchTree :: ExprTree -> SugarExpr
 churchTree t = case t of
   Leaf -> leaf
   Node e l r -> node * e * churchTree l * churchTree r
 
-fresh :: Var -> Set.Set Name -> Var
-fresh v fv =
-  let v'@(Var _ v'Pri) = CEval.incrVId v
-   in if Set.member v'Pri fv
-        then fresh v' fv
-        else v'
+fresh :: [SugarExpr] -> SugarExpr
+fresh es = go (mkVar "x") (CEval.fv $ toCore <$> es)
+  where
+    go v@(Var _ vPri) fv = if Set.member vPri fv
+                            then go (CEval.incrVarId v) fv
+                            else SVar v
 
 toCore :: SugarExpr -> CoreExpr
 toCore expr = case expr of
@@ -44,10 +44,17 @@ toCore expr = case expr of
         then toCore e
         else error "case without default"
     ((c, e) : cs) -> toCore $ STernOp Cond (b === c) e (SCase b cs)
-  SSet es -> toCore (b ~> e)
+  SSet es -> toCore (x ~> e)
     where
-      b = SVar $ fresh (mkVar "x") (CEval.fv $ toCore <$> es)
-      e = SCase b $ [(e, true) | e <- es] ++ [(b, false)]
+      x = fresh es
+      e = SCase x $ [(e, true) | e <- es] ++ [(x, false)]
+  SUnSetOp Comp s@(SSet es) -> let x = fresh es in toCore (x ~> not' (s * x))
+  SBinSetOp op s0 s1 -> toCore $ case op of
+    Mem -> s1 * s0
+    op -> let x = fresh [s0,s1]
+      in case op of
+        Union -> x ~> (s0 * x) && (s1 * x)
+        Inter -> x ~> (s0 * x) || (s1 * x)
 
 eval :: SugarExpr -> Either CEval.EvalError CoreExpr
 eval = CEval.eval . toCore

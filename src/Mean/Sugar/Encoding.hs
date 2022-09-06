@@ -32,8 +32,10 @@ true = SLit $ LBool True
 
 false = SLit $ LBool False
 
+(&&) :: SugarExpr -> SugarExpr -> SugarExpr
 p && q = SBinOp And p q
 
+(||) :: SugarExpr -> SugarExpr -> SugarExpr
 p || q = SBinOp Or p q
 
 eq = SBinOp Eq

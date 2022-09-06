@@ -30,6 +30,12 @@ spec = do
 
       t0 @= t1
 
+    it "equates sets containing alpha equivalent items" $ do
+      let (Right s0) = eval (SSet [y ~> y])
+      let (Right s1) = eval (SSet [x ~> x])
+
+      s0 @= s1
+
   describe "eval" $ do
     it "reduces trees to their church encodings" $ do
       eval t `shouldBe` eval (node * s * (node * (x ~> x) * leaf * leaf) * (node * y * leaf * leaf))
