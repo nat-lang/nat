@@ -1,8 +1,8 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving #-}
 
-module Mean.Core.Type where
+module Mean.Type where
+
+import Data.Monoid
 
 import Control.Monad (replicateM)
 import Control.Monad.Except
@@ -22,11 +22,7 @@ import Data.List (nub)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
-import qualified Mean.Core.Syntax as S
-import Mean.Core.TypeEnv
-    ( empty, extend, isIn, remove, TyEnv(TyEnv) )
-import Mean.Core.Patterns (pattern App, pattern Lam)
-import Mean.Core.Viz
+import qualified Mean.Core as S
 
 letters :: [String]
 letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
@@ -34,6 +30,33 @@ letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
 -------------------------------------------------------------------------------
 -- Classes
 -------------------------------------------------------------------------------
+
+newtype TyEnv = TyEnv {types :: Map.Map S.Name S.TyScheme}
+  deriving (Eq)
+
+empty :: TyEnv
+empty = TyEnv Map.empty
+
+extend :: TyEnv -> (S.Name, S.TyScheme) -> TyEnv
+extend env (x, s) = env {types = Map.insert x s (types env)}
+
+remove :: TyEnv -> S.Name -> TyEnv
+remove (TyEnv env) var = TyEnv (Map.delete var env)
+
+merge :: TyEnv -> TyEnv -> TyEnv
+merge (TyEnv a) (TyEnv b) = TyEnv (Map.union a b)
+
+toList :: TyEnv -> [(S.Name, S.TyScheme)]
+toList (TyEnv env) = Map.toList env
+
+isIn :: S.TyScheme -> TyEnv -> Bool
+isIn ty = elem ty . map snd . toList
+
+instance Semigroup TyEnv where
+  (<>) = merge
+
+instance Monoid TyEnv where
+  mempty = empty
 
 -- | Inference monad
 type Infer a =

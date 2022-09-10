@@ -4,20 +4,19 @@ module Mean.Core.EvaluationSpec where
 
 import Debug.Trace (traceM)
 import Mean.Core.Encoding
-import Mean.Core.Evaluation hiding ((*=), (@=))
-import qualified Mean.Core.Evaluation as E
 import Mean.Core.Parser
-import Mean.Core.Syntax
+import Mean.Core.Syntax hiding ((@=), (*=))
+import qualified Mean.Core.Syntax as S
 import Mean.Core.Viz
 import Test.HUnit ((@?=))
 import Test.Hspec
 import Prelude hiding (and, exp, id, not, or, succ, (!), (&&), (*), (**), (+), (++), (-), (>), (||))
 
-e0 @= e1 = (e0 E.@= e1) @?= True
+e0 @= e1 = (e0 S.@= e1) @?= True
 
-e0 !@= e1 = (e0 E.@= e1) @?= False
+e0 !@= e1 = (e0 S.@= e1) @?= False
 
-e0 *= e1 = (e0 E.*= e1) @?= True
+e0 *= e1 = (e0 S.*= e1) @?= True
 
 spec :: Spec
 spec = do
@@ -103,7 +102,10 @@ spec = do
       eval (((x ~> x) * false) ? l > r) `shouldBe` Right r
       eval (((x ~> x) * true) ? ((x ~> x) * l) > r) `shouldBe` Right l
     it "fails on un truthy conditionals" $ do
-      eval (x ? l > r) `shouldBe` Left (E.NotTruthy x)
+      eval (x ? l > r) `shouldBe` Left (S.NotTruthy x)
+
+    it "only evaluates operations on terms whose bound variables have already been substituted?" $ do
+      eval (x ~> (x === true ? l > r)) `shouldBe` Right (x ~> (x === true ? l > r))
 
   describe "confluence (*=)" $ do
     -- λnλfλx . f(n f x)

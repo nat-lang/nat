@@ -1,22 +1,43 @@
 module Mean.Sugar.EvaluationSpec where
 
 import Debug.Trace (traceM)
-import qualified Mean.Core.Encoding as CEnc
-import qualified Mean.Core.Evaluation as CEval
 import Mean.Core.Syntax hiding ((*), (~>))
 import qualified Mean.Core.Syntax as CSyn
 import Mean.Core.Viz
-import Mean.Sugar.Encoding
-import Mean.Sugar.Evaluation hiding ((*=), (@=))
-import qualified Mean.Sugar.Evaluation as SEval
-import Mean.Sugar.Syntax
+import qualified Mean.Sugar.Syntax as SSyn
+import Mean.Sugar.Syntax hiding ((*=), (@=))
 import Test.HUnit ((@?=))
 import Test.Hspec
 import Prelude hiding (id, (&&), (*), (-), (||))
 
-e0 @= e1 = (e0 CEval.@= e1) @?= True
+e0 @= e1 = (e0 CSyn.@= e1) @?= True
 
-e0 *= e1 = (e0 SEval.*= e1) @?= True
+e0 *= e1 = (e0 SSyn.*= e1) @?= True
+
+
+f :: SugarExpr
+f = mkSVar "f"
+
+x :: SugarExpr
+x = mkSVar "x"
+
+y :: SugarExpr
+y = mkSVar "y"
+
+z :: SugarExpr
+z = mkSVar "z"
+
+e :: SugarExpr
+e = mkSVar "e"
+
+b :: SugarExpr
+b = mkSVar "b"
+
+l :: SugarExpr
+l = mkSVar "l"
+
+r :: SugarExpr
+r = mkSVar "r"
 
 spec :: Spec
 spec = do
@@ -58,20 +79,20 @@ spec = do
       eval (t' * leaf * paLR) `shouldBe` eval (z ~> (y ~> (x ~> x)))
 
     it "reduces case expressions" $ do
-      eval (SCase true [(true, x)]) `shouldBe` Right CEnc.x
-      eval (SCase false [(false, y), (true, x)]) `shouldBe` Right CEnc.y
-      eval (SCase y [((x ~> x) * y, (x ~> x) * y), (false, x), (true, z)]) `shouldBe` Right CEnc.y
+      eval (SCase true [(true, x)]) `shouldBe` Right CSyn.x
+      eval (SCase false [(false, y), (true, x)]) `shouldBe` Right CSyn.y
+      eval (SCase y [((x ~> x) * y, (x ~> x) * y), (false, x), (true, z)]) `shouldBe` Right CSyn.y
 
     it "reduces set expressions to characteristic functions" $ do
       let s = SSet [e, b, f, x]
 
-      eval (s * e) `shouldBe` Right CEnc.true
-      eval (s * z) `shouldBe` Right CEnc.false
+      eval (s * e) `shouldBe` Right CSyn.true
+      eval (s * z) `shouldBe` Right CSyn.false
 
-      eval ((s * e) || (s * z)) `shouldBe` Right CEnc.true
-      eval ((s * e) && (s * z)) `shouldBe` Right CEnc.false
+      eval ((s * e) || (s * z)) `shouldBe` Right CSyn.true
+      eval ((s * e) && (s * z)) `shouldBe` Right CSyn.false
 
-      eval ((s * e) || (s * b)) `shouldBe` Right CEnc.true
-      eval ((s * e) && (s * b)) `shouldBe` Right CEnc.true
+      eval ((s * e) || (s * b)) `shouldBe` Right CSyn.true
+      eval ((s * e) && (s * b)) `shouldBe` Right CSyn.true
 
 -- it "reduces set comprehensions to characteristic functions" $ do

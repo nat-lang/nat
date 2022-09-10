@@ -1,13 +1,35 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
+module Mean.Viz where
 
-module Mean.Core.Viz where
-
-import Mean.Common.Viz (Pretty (ppr), angles, anglesIf)
--- import Mean.Core.Evaluation (EvalError(..))
-import Mean.Core.Syntax
-import Text.PrettyPrint
+import Mean.Core
+import Mean.Sugar
 import Prelude hiding (Eq, (<>))
+import Text.PrettyPrint
+    ( Doc, (<+>), (<>), brackets, char, parens, text )
+import Prelude hiding ((<>))
+
+class Pretty p where
+  ppr :: Int -> p -> Doc
+
+  pp :: p -> Doc
+  pp = ppr 0
+
+angles :: Doc -> Doc
+angles p = char '<' <> p <> char '>'
+
+brackets' :: Doc -> Doc
+brackets' p = char '[' <> p <> char ']'
+
+fnIf :: (a -> a) -> Bool -> a -> a
+fnIf fn b = if b then fn else id
+
+anglesIf :: Bool -> Doc -> Doc
+anglesIf = fnIf angles
+
+parensIf :: Bool -> Doc -> Doc
+parensIf = fnIf parens
+
+bracketsIf :: Bool -> Doc -> Doc
+bracketsIf = fnIf brackets'
 
 instance Pretty TyVar where
   ppr _ (TV t) = text t
@@ -72,4 +94,27 @@ instance Show Type where
   show = show . ppr 0
 
 instance Show TyScheme where
+  show = show . ppr 0
+
+instance Pretty (Lambda SugarExpr) where
+  ppr p (Lam (Binder n t) e) =
+    char 'λ' <> text (show n) <> case e of
+      SLam Lam {} -> ppr (p + 1) e
+      _ -> brackets (ppr (p + 1) e)
+
+instance Pretty SugarExpr where
+  ppr p e = case e of
+    SLit l -> ppr p l
+    SVar v -> text $ show v
+    SBind b -> ppr p b
+    SLam l -> ppr p l
+    STernOp Cond x y z -> ppCond p x y z
+    SApp a -> ppr p a
+    STree t -> text $ drawTree t
+    SCase c es -> text "case" <+> ppr p c <> char ':' <+> text (intercalate ", " (show . pp <$> es))
+      where
+        pp (e0, e1) = ppr p e0 <+> text "->" <+> ppr p e1
+    SSet es -> brackets $ text (intercalate ", " (show . ppr p <$> es))
+
+instance Show SugarExpr where
   show = show . ppr 0

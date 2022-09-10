@@ -38,27 +38,16 @@ library
       Interpreter.CompositionTest
       Interpreter.Evaluation
       Interpreter.Fragment
-      Mean.Common.Lexer
-      Mean.Common.Parser
-      Mean.Common.Viz
-      Mean.Core.Encoding
-      Mean.Core.Evaluation
-      Mean.Core.Parser
-      Mean.Core.Patterns
-      Mean.Core.Syntax
-      Mean.Core.Type
-      Mean.Core.TypeEnv
-      Mean.Core.Viz
-      Mean.Module.Parser
-      Mean.Module.Syntax
-      Mean.Module.Viz
-      Mean.Sugar.Encoding
-      Mean.Sugar.Evaluation
-      Mean.Sugar.Parser
-      Mean.Sugar.Patterns
-      Mean.Sugar.Syntax
-      Mean.Sugar.Type
-      Mean.Sugar.Viz
+      Mean.Case
+      Mean.Core
+      Mean.Module
+      Mean.Parser
+      Mean.Relations
+      Mean.Set
+      Mean.Syntax
+      Mean.Tree
+      Mean.Type
+      Mean.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments
       Service.App
