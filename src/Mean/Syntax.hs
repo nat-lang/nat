@@ -5,6 +5,9 @@ import Mean.Case
 import Mean.Relations
 import Mean.Tree
 import Mean.Set
+import qualified Mean.Parser as P
+
+import Prelude hiding (Eq)
 
 data Expr
   = ELit Lit
@@ -13,12 +16,11 @@ data Expr
   | ELam (Lambda Expr)
   | EApp (App Expr)
   | EEq (Eq Expr)
-  | ERel (RelExpr Expr)
-  | ETree (T.Tree Expr)
-  | ECase (Case Expr)
-  | ESet (Set Expr)
-  -- ESetComp (Expr, Expr)
-
+  | ERel RelExpr
+  | ETree (Tree Expr)
+  | ECase CaseExpr
+  | ESet SetExpr
+{-
 mkVar :: Name -> Expr
 mkVar v = EVar $ mkVar v
 
@@ -71,7 +73,7 @@ not' = SUnOp Neg
 (?) = STernOp Cond
 
 e > e' = e e'
-
+-}
 instance Reducible Expr where
   reduce expr = case expr of
     ELit l -> pure $ CLit l
@@ -83,12 +85,64 @@ instance Reducible Expr where
     EApp (App e0 e1) -> do
       e0' <- reduce e0
       e1' <- reduce e1
-      pure $ mkCApp (reduce e0') (reduce e1')
+      pure $ mkCApp e0' e1'
     EEq (Eq e0 e1) -> do
       e0' <- reduce e0
       e1' <- reduce e1
-      pure $ CEq $ Eq (reduce e0') (reduce e1')
+      pure $ CEq $ Eq e0' e1'
     ETree t -> reduce t
     ECase c -> reduce c
     ESet s -> reduce s
     ERel r -> reduce r
+
+-------------------------------------------------------------------------------
+-- Parsing
+-------------------------------------------------------------------------------
+
+pELam :: CExprParser
+pELam = do
+  lam <- pLam
+  ELam . lam <$> pExpr
+
+finally fn p = do
+  mA <- P.observing p
+  case mA of
+    Left e -> fn >> P.parseError e
+    Right a -> fn >> pure a
+
+pETree :: ExprParser
+pETree = do
+  s <- get
+  put (s {P.inTree = True})
+  t <- finally (put $ s {P.inTree = False}) pTree
+  pure $ ETree t
+
+terms =
+  [ P.parens pExpr,
+    ELit <$> pLit,
+    EVar <$> pVar,
+    EBind <$> pBinder,
+    pELam,
+    pETree,
+    ECase <$> pCase pExpr,
+    ESet <$> pSet pExpr,
+    ERel <$> pRel pExpr
+  ]
+
+pTerm :: ExprParser
+pTerm = do
+  s <- get
+  P.choice $
+    [pETree | not (P.inTree s)] ++ terms
+
+operatorTable :: [[P.Operator P.Parser Expr]]
+operatorTable =
+  [[ P.infixOpL "==" (\e0 e1 -> EEq (Eq e0 e1)) ]]
+
+pExpr' :: ExprParser
+pExpr' = makeExprParser pTerm operatorTable
+
+pExpr :: ExprParser
+pExpr = do
+  exprs <- some pExpr'
+  pure (foldl1 (\e0 e1 -> EApp $ App e0 e1) exprs)

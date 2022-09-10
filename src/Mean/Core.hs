@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances #-}
+{-# LANGUAGE GADTs, ConstraintKinds, FlexibleContexts, FlexibleInstances, OverloadedStrings #-}
 
 module Mean.Core where
 
@@ -7,17 +7,22 @@ import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
 import qualified Data.Map as Map
 import Data.Set ((\\))
+import Data.Functor ((<&>))
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
-import Prelude hiding ((&&), (||), Eq)
+import qualified Mean.Parser as P
+import Mean.Viz ( Pretty(ppr), angles, anglesIf )
+import Text.PrettyPrint
+    ( Doc, (<+>), (<>), brackets, char, parens, text )
+import Prelude hiding ((&&), (||), Eq, (<>))
 import qualified Prelude as Prel
 
 type Evaluation = ExceptT EvalError Identity
 
 class Reducible a where
   reduce :: a -> Evaluation CoreExpr
-  -- e''[e/']
-  -- substitute :: a -> a -> a -> a
+
+type Expressible a = (Reducible a, Pretty a)
 
 data EvalError
   = UnboundVariable Name
@@ -30,17 +35,17 @@ class FV a where
   fv :: a -> Set.Set Name
 
 newtype TyVar = TV String
-  deriving (Show, Eq, Ord)
+  deriving (Show, Prel.Eq, Ord)
 
 data Type
   = TyVar TyVar
   | TyCon String
   | TyFun Type Type
   | TyNil
-  deriving (Eq, Ord)
+  deriving (Prel.Eq, Ord)
 
 data TyScheme = Forall [TyVar] Type
-  deriving (Eq, Ord)
+  deriving (Prel.Eq, Ord)
 
 mkUnqScheme :: Type -> TyScheme
 mkUnqScheme = Forall []
@@ -57,11 +62,11 @@ type Name = String
 data Lit
   = LInt Int
   | LBool Bool
-  deriving (Eq, Ord, Show)
+  deriving (Prel.Eq, Ord, Show)
 
 data Var = Var Name Name
 
-instance Eq Var where
+instance Prel.Eq Var where
   (Var _ v) == (Var _ v') = v == v'
 
 instance Ord Var where
@@ -70,7 +75,7 @@ instance Ord Var where
 instance Show Var where
   show (Var vPub vPri) = vPub
 
-data Binder = Binder Var Type deriving (Eq, Ord)
+data Binder = Binder Var Type deriving (Prel.Eq, Ord)
 
 data Lambda a where Lam :: Reducible a => Binder -> a -> Lambda a
 
@@ -90,6 +95,57 @@ instance Prel.Eq CoreExpr where
   e == e' = case (e, e') of
     (CLit {}, CLit {}) -> e == e'
     _ -> False
+
+instance Pretty TyVar where
+  ppr _ (TV t) = text t
+
+instance Pretty [TyVar] where
+  ppr p (t : ts) = ppr p t <> char ',' <> ppr p ts
+  ppr p [] = ""
+
+instance Pretty Type where
+  ppr p (TyCon t) = anglesIf (p == 0) $ text t
+  ppr p (TyVar t) = anglesIf (p == 0) $ ppr p t
+  ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
+  ppr p TyNil = text "TyNil"
+
+instance Pretty Binder where
+  ppr p (Binder n t) = char 'λ' <> text (show n)
+
+instance Pretty (Lambda CoreExpr) where
+  ppr p (Lam b e) =
+    ppr p b <> case e of
+      CLam Lam {} -> ppr (p + 1) e
+      _ -> brackets (ppr (p + 1) e)
+
+instance (Pretty a) => Pretty (App a) where
+  ppr p (App e0 e1) = ppr p e0 <> parens (ppr p e1)
+
+instance Pretty Lit where
+  ppr p l = case l of
+    LInt n -> text (show n)
+    LBool b -> text (show b)
+
+instance Pretty CoreExpr where
+  ppr p e = case e of
+    CLit l -> ppr p l
+    CVar s -> text (show s)
+    CBind b -> ppr p b
+    CLam l -> ppr p l
+    CApp a -> ppr p a
+    CEq (Eq e0 e1) -> ppr p e0 <+> "==" <+> ppr p e1
+
+instance Pretty TyScheme where
+  ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
+
+instance Show CoreExpr where
+  show e = (show . ppr 0) e
+
+instance Show Type where
+  show = show . ppr 0
+
+instance Show TyScheme where
+  show = show . ppr 0
 
 mkCBool :: Bool -> CoreExpr
 mkCBool = CLit . LBool
@@ -174,12 +230,14 @@ p = mkCVar "p"
 q :: CoreExpr
 q = mkCVar "q"
 
--- λx.x
-id :: CoreExpr
-id = x ~> x
+e :: CoreExpr
+e = mkCVar "e"
+
+b :: CoreExpr
+b = mkCVar "b"
 
 eq :: CoreExpr -> CoreExpr -> CoreExpr
-eq = CEq
+eq e0 e1 = CEq (Eq e0 e1)
 
 (===) :: CoreExpr -> CoreExpr -> CoreExpr
 (===) = eq
@@ -205,6 +263,7 @@ fresh v0 v1 fv =
         then fresh v0' v1 fv
         else v0'
 
+-- e'[e/v]
 substitute e cv@(CVar v) e' =
   let sub' = substitute e cv
   in case e' of
@@ -212,7 +271,7 @@ substitute e cv@(CVar v) e' =
         CVar v' | v' == v -> e
         -- induction
         CApp (App e0 e1) -> mkCApp (sub' e0) (sub' e1)
-        CEq (Eq e0 e1) -> CEq (sub' e0) (sub' e1)
+        CEq (Eq e0 e1) -> sub' e0 === sub' e1
         -- induction, but rename binder if it conflicts with fv(e)
         CLam (Lam b@(Binder v'@(Var _ v'Pri) t) body)
           | v /= v' ->
@@ -266,7 +325,7 @@ instance Reducible CoreExpr where
       e1' <- reduce e1
       case (e0', e1') of
         (CLit {}, CLit {}) -> pure $ mkCBool $ e0' == e1'
-        _ -> pure $ CEq e0' e1'
+        _ -> pure $ e0' === e1'
     -- (4) var/literal
     _ -> pure expr
 
@@ -301,3 +360,101 @@ e0 *= e1 = confluent e0 e1
 
 (*!=) :: Reducible a => a -> a -> Bool
 e0 *!= e1 = not (e0 *= e1)
+
+-------------------------------------------------------------------------------
+-- Parsing (Types)
+-------------------------------------------------------------------------------
+
+type TyParser = P.Parser Type
+
+pTyTerm :: TyParser
+pTyTerm =
+  P.choice
+    [ P.angles pType,
+      P.reserved "t" >> pure tyBool,
+      P.reserved "n" >> pure tyInt,
+      P.titularIdentifier <&> TyVar . TV,
+      P.identifier <&> TyCon
+    ]
+
+tyNil :: TyParser
+tyNil = pure TyNil
+
+pType :: TyParser
+pType = P.makeExprParser pTyTerm tyOps
+  where
+    tyOps =
+      [ [P.infixOpR "," TyFun]
+      ]
+
+pTypeAssignment :: TyParser
+pTypeAssignment = (P.reserved ":" >> pType) P.<|> tyNil
+
+pOptionalTypeAssignment :: TyParser
+pOptionalTypeAssignment = pTypeAssignment P.<|> tyNil
+
+-------------------------------------------------------------------------------
+-- Parsing (Terms)
+-------------------------------------------------------------------------------
+
+type CExprParser = P.Parser CoreExpr
+
+type LitParser = P.Parser Lit
+
+pBool :: LitParser
+pBool =
+  (P.reserved "True" >> pure lTrue)
+    P.<|> (P.reserved "False" >> pure lFalse)
+
+pInt :: LitParser
+pInt = LInt . fromIntegral <$> P.integer
+
+pLit :: LitParser
+pLit = P.choice [pInt, pBool]
+
+pCLit :: CExprParser
+pCLit = CLit <$> pLit
+
+pVar :: P.Parser Var
+pVar = mkVar <$> P.identifier
+
+pCVar :: CExprParser
+pCVar = CVar <$> pVar
+
+pBinder :: P.Parser Binder
+pBinder = do
+  P.symbol "\\"
+  n <- P.identifier
+  Binder (mkVar n) <$> pOptionalTypeAssignment
+
+pLam :: Reducible a => P.Parser (a -> Lambda a)
+pLam = do
+  b <- pBinder
+  P.symbol "."
+  pure $ Lam b
+
+pCLam :: CExprParser
+pCLam = do
+  lam <- pLam
+  CLam . lam <$> pCExpr
+
+pCTerm :: CExprParser
+pCTerm =
+  P.choice
+    [ P.parens pCExpr,
+      pCLit,
+      pCVar,
+      pCLam
+    ]
+
+cOperatorTable :: [[P.Operator P.Parser CoreExpr]]
+cOperatorTable =
+  [[ P.infixOpL "==" (\e0 e1 -> CEq (Eq e0 e1)) ]]
+
+pCExpr' :: CExprParser
+pCExpr' = P.makeExprParser pCTerm cOperatorTable
+
+pCExpr :: CExprParser
+pCExpr = do
+  exprs <- P.some pCExpr'
+  pure (foldl1 (\e0 e1 -> CApp $ App e0 e1) exprs)

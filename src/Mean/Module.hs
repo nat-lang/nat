@@ -1,8 +1,32 @@
 module Mean.Module where
 
-import qualified Mean.Core as Core
-import qualified Mean.Sugar as Sugar
+import Data.Text
+import Data.Void
+import Mean.Core
+import qualified Mean.Syntax as S
+import qualified Mean.Parser as P
 
-data ModuleExpr = MDecl Core.Name Sugar.SugarExpr deriving (Eq)
+data ModuleExpr = MDecl Name S.Expr
 
 type Module = [ModuleExpr]
+
+-------------------------------------------------------------------------------
+-- Parsing
+-------------------------------------------------------------------------------
+
+type MExprParser = P.Parser ModuleExpr
+
+type ModuleParse = Either (P.ParseErrorBundle Text Data.Void.Void) Module
+
+pMDecl :: MExprParser
+pMDecl = do
+  P.reserved "let"
+  name <- P.identifier
+  P.symbol "="
+  MDecl name <$> S.pExpr
+
+pModule :: P.Parser Module
+pModule = pMDecl `P.sepBy` P.delimiter
+
+-- pFModule :: String -> IO ModuleParse
+pFModule = parseFile pModule

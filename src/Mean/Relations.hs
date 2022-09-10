@@ -1,22 +1,43 @@
-{-# LANGUAGE GADTs, FlexibleContexts, FlexibleInstances #-}
+{-# LANGUAGE GADTs, OverloadedStrings #-}
 
 module Mean.Relations where
 
 import Mean.Core
+import Mean.Viz
+import qualified Mean.Parser as P
+import Text.PrettyPrint
+    ( Doc, (<+>), char, text )
 import Prelude hiding ((&&), (||))
 import qualified Prelude as Prel
 import Control.Monad.Except ( MonadError(throwError) )
 
-data UnOp = Neg deriving (Eq, Ord)
+data UnOp = Neg
 
-data BinOp = NEq | And | Or deriving (Eq, Ord)
+data BinOp = NEq | And | Or
 
-data TernOp = Cond deriving (Eq, Ord)
+data TernOp = Cond
 
 data RelExpr where
-  RUnOp :: Reducible a => UnOp -> a -> RelExpr
-  RBinOp :: Reducible a => BinOp -> a -> a -> RelExpr
-  RTernOp :: Reducible a => TernOp -> a -> a -> a -> RelExpr
+  RUnOp :: Expressible a => UnOp -> a -> RelExpr
+  RBinOp :: Expressible a => BinOp -> a -> a -> RelExpr
+  RTernOp :: Expressible a => TernOp -> a -> a -> a -> RelExpr
+
+instance Pretty RelExpr where
+  ppr p e = case e of
+    RBinOp op e0 e1 -> ppr p e0 <+> text ppOp <+> ppr p e1
+      where
+        ppOp = case op of
+          NEq -> "!="
+          And -> "&"
+          Or -> "|"
+    RUnOp op e -> ppr p e <+> char ppOp
+      where
+        ppOp = case op of
+          Neg -> '¬'
+    RTernOp Cond x y z -> text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
+
+instance Show RelExpr where
+  show = show . ppr 0
 
 bool :: CoreExpr -> Bool
 bool e = case e of
@@ -44,23 +65,59 @@ instance Reducible RelExpr where
         CLit LBool {} -> reduce $ if bool x' then y else z
         _ -> throwError (NotTruthy x')
 
-(?) :: Reducible a => a -> a -> (a -> RelExpr)
+(?) :: Expressible a => a -> a -> (a -> RelExpr)
 (?) = RTernOp Cond
 
 (>) :: (a -> RelExpr) -> a -> RelExpr
 e > e' = e e'
 
-(&&) :: Reducible a => a -> a -> RelExpr
+(&&) :: Expressible a => a -> a -> RelExpr
 p && q = RBinOp And p q
 
-(||) :: Reducible a => a -> a -> RelExpr
+(||) :: Expressible a => a -> a -> RelExpr
 p || q = RBinOp Or p q
 
-nEq :: Reducible a => a -> a -> RelExpr
+nEq :: Expressible a => a -> a -> RelExpr
 nEq = RBinOp NEq
 
-(!==) :: Reducible a => a -> a -> RelExpr
+(!==) :: Expressible a => a -> a -> RelExpr
 (!==) = nEq
 
-not' :: Reducible a => a -> RelExpr
+not' :: Expressible a => a -> RelExpr
 not' = RUnOp Neg
+
+-------------------------------------------------------------------------------
+-- Parsing
+-------------------------------------------------------------------------------
+
+type RelExprParser = P.Parser RelExpr
+
+relOperatorTable :: [[P.Operator P.Parser RelExpr]]
+relOperatorTable =
+  [ [ P.prefixOp "!" (RUnOp Neg)
+    ],
+    [ P.infixOpL "!=" (RBinOp NEq),
+      P.infixOpL "&&" (RBinOp And),
+      P.infixOpL "||" (RBinOp Or)
+    ]
+  ]
+
+pRelExpr :: Reducible a => P.Parser a -> RelExprParser
+pRelExpr pExpr = P.makeExprParser pRelTerm relOperatorTable
+  where
+    -- pRelTerm :: RelExprParser
+    pRelTerm = P.choice [pExpr, pRTernOp]
+
+    pCond :: P.Parser ((TernOp -> a -> a -> a -> RelExpr) -> RelExpr)
+    pCond = do
+      P.reserved "if"
+      x <- pExpr
+      P.reserved "then"
+      y <- pExpr
+      P.reserved "else"
+      z <- pExpr
+      pure $ \mkC -> mkC Cond x y z
+
+    pRTernOp = do
+      c <- pCond
+      pure $ c RTernOp

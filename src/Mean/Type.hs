@@ -23,6 +23,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import qualified Mean.Core as S
+import Mean.Viz
 
 letters :: [String]
 letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
@@ -196,11 +197,11 @@ infer expr = case expr of
   S.CVar (S.Var _ v) -> do
     t <- lookupTyEnv v
     return (t, [])
-  Lam (S.Binder (S.Var _ v) t) e -> do
+  S.CLam (S.Lam (S.Binder (S.Var _ v) t) e) -> do
     t' <- freshIfNil t
     (t'', cs) <- inTyEnv (v, S.Forall [] t') (infer e)
     return (t' `S.TyFun` t'', cs)
-  App e0 e1 -> do
+  S.CApp (S.App e0 e1) -> do
     (t0, c0) <- infer e0
     (t1, c1) <- infer e1
     tv <- fresh
