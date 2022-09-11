@@ -77,11 +77,11 @@ instance Show Var where
 
 data Binder = Binder Var Type deriving (Prel.Eq, Ord)
 
-data Lambda a where Lam :: Reducible a => Binder -> a -> Lambda a
+data Lambda a where Lam :: Expressible a => Binder -> a -> Lambda a
 
-data App a where App :: Reducible a => a -> a -> App a
+data App a where App :: Expressible a => a -> a -> App a
 
-data Eq a where Eq :: Reducible a => a -> a -> Eq a
+data Eq a where Eq :: Expressible a => a -> a -> Eq a
 
 data CoreExpr
   = CLit Lit
@@ -126,6 +126,9 @@ instance Pretty Lit where
     LInt n -> text (show n)
     LBool b -> text (show b)
 
+instance Pretty (Eq a) where
+  ppr p (Eq e0 e1) = ppr p e0 <+> "==" <+> ppr p e1
+
 instance Pretty CoreExpr where
   ppr p e = case e of
     CLit l -> ppr p l
@@ -133,7 +136,7 @@ instance Pretty CoreExpr where
     CBind b -> ppr p b
     CLam l -> ppr p l
     CApp a -> ppr p a
-    CEq (Eq e0 e1) -> ppr p e0 <+> "==" <+> ppr p e1
+    CEq e -> ppr p e
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
@@ -427,7 +430,7 @@ pBinder = do
   n <- P.identifier
   Binder (mkVar n) <$> pOptionalTypeAssignment
 
-pLam :: Reducible a => P.Parser (a -> Lambda a)
+pLam :: Expressible a => P.Parser (a -> Lambda a)
 pLam = do
   b <- pBinder
   P.symbol "."

@@ -1,15 +1,17 @@
 module Mean.Tree
   ( T.Tree (..),
-    T.drawTree
+    T.drawTree,
+    module Mean.Tree
   )
 where
 
 import qualified Data.Tree.Binary.Preorder as T
 import Mean.Core
+import Mean.Viz
 import qualified Mean.Parser as P
 import Prelude hiding ((*), (~>))
 
-mkChurchTree :: Reducible a => T.Tree a -> Evaluation CoreExpr
+mkChurchTree :: Expressible a => T.Tree a -> Evaluation CoreExpr
 mkChurchTree t = case t of
   T.Leaf -> pure leaf
   T.Node e l r -> do
@@ -23,14 +25,16 @@ mkChurchTree t = case t of
     -- λxλlλrλeλb . b(x)(l e b)(r e b)
     node = x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
 
-instance Reducible a => Reducible (T.Tree a) where
+instance Expressible a => Reducible (T.Tree a) where
   reduce = mkChurchTree
 
+instance Show a => Pretty (T.Tree a) where
+  ppr p e = text $ show e
 -------------------------------------------------------------------------------
 -- Parsing
 -------------------------------------------------------------------------------
 
-pTree :: Reducible a => P.Parser a -> P.Parser (T.Tree a)
+pTree :: Expressible a => P.Parser a -> P.Parser (T.Tree a)
 pTree pExpr =
   P.choice
     [P.try pLeafNode, P.try pUnNode, pBiNode]

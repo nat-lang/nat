@@ -44,7 +44,8 @@ instance Reducible CaseExpr where
 -- Parsing
 -------------------------------------------------------------------------------
 
-pCaseExpr pExpr = P.try $ P.indentBlock P.spaceN p
+pCase :: Expressible a => P.Parser a -> P.Parser CaseExpr
+pCase pExpr = P.try $ P.indentBlock P.spaceN p
   where
     pCase = do
       c <- pExpr

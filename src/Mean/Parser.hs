@@ -13,7 +13,7 @@ where
 import Control.Monad.Combinators.Expr
     ( Operator(..), makeExprParser )
 import Debug.Trace (traceM)
-import Text.Megaparsec ((<|>), try, some, many, sepBy, choice, between, notFollowedBy, lookAhead, runParserT, ParseErrorBundle, ParsecT)
+import Text.Megaparsec ((<|>), try, some, many, sepBy, choice, between, notFollowedBy, lookAhead, observing, runParserT, parseError, ParseErrorBundle, ParsecT)
 import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as Lex
 import Text.Megaparsec.Debug (dbg)

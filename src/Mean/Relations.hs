@@ -92,23 +92,11 @@ not' = RUnOp Neg
 
 type RelExprParser = P.Parser RelExpr
 
-relOperatorTable :: [[P.Operator P.Parser RelExpr]]
-relOperatorTable =
-  [ [ P.prefixOp "!" (RUnOp Neg)
-    ],
-    [ P.infixOpL "!=" (RBinOp NEq),
-      P.infixOpL "&&" (RBinOp And),
-      P.infixOpL "||" (RBinOp Or)
-    ]
-  ]
-
-pRelExpr :: Reducible a => P.Parser a -> RelExprParser
-pRelExpr pExpr = P.makeExprParser pRelTerm relOperatorTable
+-- pRel :: Expressible a => P.Parser a -> (RelExpr -> a) -> P.Parser a
+pRel pExpr exprCon = P.makeExprParser pRelTerm relOperatorTable
   where
-    -- pRelTerm :: RelExprParser
-    pRelTerm = P.choice [pExpr, pRTernOp]
+    pRelTerm = P.choice [pRTernOp, pExpr]
 
-    pCond :: P.Parser ((TernOp -> a -> a -> a -> RelExpr) -> RelExpr)
     pCond = do
       P.reserved "if"
       x <- pExpr
@@ -120,4 +108,15 @@ pRelExpr pExpr = P.makeExprParser pRelTerm relOperatorTable
 
     pRTernOp = do
       c <- pCond
-      pure $ c RTernOp
+      pure $ exprCon $ c RTernOp
+
+    relOperatorTable =
+      [ [ P.prefixOp "!" (exprCon . RUnOp Neg)
+        ],
+        [ P.infixOpL "!=" (bin NEq),
+          P.infixOpL "&&" (bin And),
+          P.infixOpL "||" (bin Or)
+        ]
+      ]
+      where
+        bin = \op e0 e1 -> exprCon (RBinOp op e0 e1)

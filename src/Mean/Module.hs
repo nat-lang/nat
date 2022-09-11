@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Mean.Module where
 
 import Data.Text
@@ -28,5 +30,4 @@ pMDecl = do
 pModule :: P.Parser Module
 pModule = pMDecl `P.sepBy` P.delimiter
 
--- pFModule :: String -> IO ModuleParse
-pFModule = parseFile pModule
+pFModule = P.parseFile pModule

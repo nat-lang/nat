@@ -4,13 +4,19 @@ module Mean.Set where
 
 import Mean.Core hiding (fresh)
 import Mean.Case
+import Mean.Viz
+import Data.List
 import qualified Mean.Parser as P
 import qualified Data.Set as Set
 
 data SetExpr where
-  Set :: Reducible a => [a] -> SetExpr
+  Set :: Expressible a => [a] -> SetExpr
   -- SSetComp :: Reducible a => (a, a) -> SetExpr
 
+instance Pretty SetExpr where
+  ppr p e = case e of
+    Set es -> brackets $ text (intercalate ", " (show . ppr p <$> es))
+  
 fresh :: [CoreExpr] -> CoreExpr
 fresh es = go (mkVar "x") (fv es)
   where
@@ -32,6 +38,6 @@ instance Reducible SetExpr where
 -- Parsing
 -------------------------------------------------------------------------------
 
-pSetExpr pExpr = Set <$> pSet
+pSet pExpr = Set <$> pSet
   where
     pSet = P.curlies (pExpr `P.sepBy` (P.space >> P.char ',' >> P.space))
