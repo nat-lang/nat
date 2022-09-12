@@ -33,14 +33,9 @@ fresh es = go (mkVar "x") (fv es)
 instance Reducible (SetExpr a) where
   reduce expr = case expr of
     Set es -> do
-      traceM "->"
       es' <- mapM reduce es
-      traceM "-->"
       let x = fresh es'
-      traceM "--->"
       e <- reduce $ Case x $ [(c, true) | c <- es'] ++ [(x, false)]
-      traceM "---->"
-      traceM (show e)
       pure (x ~> e)
 
 -------------------------------------------------------------------------------

@@ -21,6 +21,7 @@ data Expr
   | ELam (Lambda Expr)
   | EApp (App Expr)
   | EEq (Eq Expr)
+  | ECond (Cond Expr)
   | ERel (RelExpr Expr)
   | ETree (Tree Expr)
   | ECase (CaseExpr Expr)
@@ -113,7 +114,7 @@ nEq e0 e1 = ERel (RBinOp NEq e0 e1)
 not' :: Expr -> Expr
 not' = ERel . RUnOp Neg
 
-(?) x y z = ERel (RTernOp Cond x y z)
+(?) x y z = ECond (Cond x y z)
 
 e > e' = e e'
 
@@ -133,6 +134,11 @@ instance Reducible Expr where
       e0' <- reduce e0
       e1' <- reduce e1
       reduce $ CEq $ Eq e0' e1'
+    ECond (Cond x y z) -> do
+      x' <- reduce x
+      y' <- reduce y
+      z' <- reduce z
+      reduce $ CCond $ Cond x' y' z'
     ETree t -> reduce t
     ECase c -> reduce c
     ESet s -> reduce s
@@ -172,7 +178,7 @@ terms =
   [ P.parens pExpr,
     ELit <$> pLit,
     EVar <$> pVar,
-    ERel <$> pRTernOp pExpr,
+    ECond <$> pCond pExpr,
     pELam,
     pECase,
     pESet

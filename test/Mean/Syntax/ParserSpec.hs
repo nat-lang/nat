@@ -105,13 +105,6 @@ spec = do
       parse pExpr "!((f p) == (f q))" `shouldBe` Right (not' ((f * p) === (f * q)))
       parse pExpr "(!(f p) && !(f q))" `shouldBe` Right (not' (f * p) && not' (f * q))
 
-    it "parses ternary conditionals of variables" $ do
-      parse pExpr "if x then y else z" `shouldBe` Right (x ? y > z)
-    it "parses ternary conditionals of lambdas" $ do
-      parse pExpr "if \\x.x then \\y.y else \\z.z" `shouldBe` Right ((x ~> x) ? (y ~> y) > (z ~> z))
-    it "parses ternary conditionals of function applications" $ do
-      parse pExpr "if f(x) then f(y) else f(z)" `shouldBe` Right ((f * x) ? (f * y) > (f * z))
-
     it "parses applications of lambdas to trees" $ do
       let tree = ETree $ Node (mkEBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
       parse pExpr "(\\x.x)[\\y [\\x.x(y)] [\\x.x]]" `shouldBe` Right ((x ~> x) * tree)

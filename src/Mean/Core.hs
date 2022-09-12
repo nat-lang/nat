@@ -14,7 +14,7 @@ import qualified Mean.Parser as P
 import Mean.Viz ( Pretty(ppr), angles, anglesIf )
 import Text.PrettyPrint
     ( Doc, (<+>), (<>), brackets, char, parens, text )
-import Prelude hiding (Eq, (<>))
+import Prelude hiding (Eq, (<>), (>))
 import qualified Prelude as Prel
 
 type Evaluation = ExceptT EvalError Identity
@@ -83,6 +83,8 @@ data Lambda a where Lam :: Expressible a => Binder -> a -> Lambda a
 
 data App a where App :: Expressible a => a -> a -> App a
 
+data Cond a where Cond :: Expressible a => a -> a -> a -> Cond a
+
 data Eq a where Eq :: Expressible a => a -> a -> Eq a
 
 instance Prel.Eq (Lambda a) where
@@ -94,6 +96,9 @@ instance Prel.Eq (App a) where
 instance Prel.Eq (Eq a) where
   (Eq e0 e1) == (Eq e0' e1') = e0 == e0' && e1 == e1'
 
+instance Prel.Eq (Cond a) where
+  (Cond a0 a1 a2) == (Cond a0' a1' a2') = [a0, a1, a2] == [a0', a1', a2']
+
 data CoreExpr
   = CLit Lit
   | CVar Var
@@ -101,6 +106,7 @@ data CoreExpr
   | CLam (Lambda CoreExpr)
   | CApp (App CoreExpr)
   | CEq (Eq CoreExpr)
+  | CCond (Cond CoreExpr)
   deriving (Prel.Eq)
 
 instance Pretty TyVar where
@@ -136,6 +142,9 @@ instance Pretty Lit where
 instance Pretty (Eq a) where
   ppr p (Eq e0 e1) = ppr p e0 <+> "==" <+> ppr p e1
 
+instance Pretty (Cond a) where
+  ppr p (Cond x y z) = text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
+
 instance Pretty CoreExpr where
   ppr p e = case e of
     CLit l -> ppr p l
@@ -144,6 +153,7 @@ instance Pretty CoreExpr where
     CLam l -> ppr p l
     CApp a -> ppr p a
     CEq e -> ppr p e
+    CCond c -> ppr p c
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
@@ -255,12 +265,17 @@ eq e0 e1 = CEq (Eq e0 e1)
 (===) :: CoreExpr -> CoreExpr -> CoreExpr
 (===) = eq
 
+(?) x y z = CCond (Cond x y z)
+
+e > e' = e e'
+
 instance FV CoreExpr where
   fv e = case e of
     CVar (Var _ v) -> Set.singleton v
     CLam (Lam (Binder (Var _ v) _) body) -> fv body \\ Set.singleton v
     CApp (App e0 e1) -> fv [e0, e1]
     CEq (Eq e0 e1) -> fv [e0, e1]
+    CCond (Cond x y z) -> fv [x, y, z]
     _ -> Set.empty
 
 instance FV [CoreExpr] where
@@ -276,6 +291,11 @@ fresh v0 v1 fv =
         then fresh v0' v1 fv
         else v0'
 
+bool :: CoreExpr -> Bool
+bool e = case e of
+  (CLit (LBool b)) -> b
+  _ -> error "can only extract bool from literal bool"
+
 -- e'[e/v]
 substitute e cv@(CVar v) e' =
   let sub' = substitute e cv
@@ -285,6 +305,7 @@ substitute e cv@(CVar v) e' =
     -- induction
     CApp (App e0 e1) -> mkCApp (sub' e0) (sub' e1)
     CEq (Eq e0 e1) -> sub' e0 === sub' e1
+    CCond (Cond x y z) -> sub' x ? sub' y > sub' z
     -- induction, but rename binder if it conflicts with fv(e)
     CLam (Lam b@(Binder v'@(Var _ v'Pri) t) body)
       | v /= v' ->
@@ -339,6 +360,14 @@ instance Reducible CoreExpr where
       case (e0', e1') of
         (CLit l0, CLit l1) -> pure $ mkCBool $ l0 == l1
         _ -> pure $ e0' === e1'
+    CCond (Cond x y z) -> do
+      x' <- reduce x
+      case x' of
+        CLit LBool {} -> reduce $ if bool x' then y else z
+        _ -> do
+          y' <- reduce y
+          z' <- reduce z
+          pure $ CCond (Cond x' y' z')
     -- (4) var/literal
     _ -> pure expr
 
@@ -352,6 +381,8 @@ alphaEq e0 e1 = case (e0, e1) of
   (CApp (App e0a e0b), CApp (App e1a e1b)) -> e0a @= e1a Prel.&& e0b @= e1b
   (CVar v0, CVar v1) -> v0 == v1
   (CLit l0, CLit l1) -> l0 == l1
+  (CEq (Eq e0a e1a), CEq (Eq e0b e1b)) -> (e0a @= e0b) && (e1a @= e1b)
+  (CCond (Cond x0 y0 z0), CCond (Cond x1 y1 z1)) -> (x0 @= x1) && (y0 @= y1) && (z0 @= z1)
   _ -> False
 
 (@=) :: CoreExpr -> CoreExpr -> Bool
@@ -451,13 +482,24 @@ pCLam = do
   lam <- pLam
   CLam . lam <$> pCExpr
 
+pCond pExpr = do
+  P.reserved "if"
+  x <- pExpr
+  P.reserved "then"
+  y <- pExpr
+  P.reserved "else"
+  Cond x y <$> pExpr
+
+pCCond = CCond <$> pCond pCExpr
+
 pCTerm :: CExprParser
 pCTerm =
   P.choice
     [ P.parens pCExpr,
       pCLit,
       pCVar,
-      pCLam
+      pCLam,
+      pCCond
     ]
 
 cOperatorTable :: [[P.Operator P.Parser CoreExpr]]

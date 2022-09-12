@@ -9,7 +9,7 @@ import Mean.Viz
 import qualified Mean.Parser as P
 import Text.PrettyPrint
 import Data.List
-import Prelude hiding ((<>), (*), (&&), (||))
+import Prelude hiding ((<>), (*), (&&), (||), (>))
 import qualified Prelude as Prel
 
 data CaseExpr a where
@@ -31,7 +31,6 @@ instance Reducible (CaseExpr a) where
   reduce expr = case expr of
     Case b cs -> do
       b' <- reduce b
-      traceM $ "0" ++ show b'
       case cs of
         [] -> error "empty case statement"
         [(c, e)] -> do
@@ -44,7 +43,7 @@ instance Reducible (CaseExpr a) where
           c' <- reduce c
           e' <- reduce e
           cs' <- reduce (Case b cs)
-          reduce $ RTernOp Cond (b' === c') e' cs'
+          reduce $ (b' === c') ? e' > cs'
 
 -------------------------------------------------------------------------------
 -- Parsing

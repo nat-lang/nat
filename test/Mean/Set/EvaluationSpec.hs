@@ -18,14 +18,12 @@ spec = do
 
   describe "eval" $ do
     it "reduces set expressions to characteristic functions" $ do
-      let s = ESet $ Set [x,y,z,f]
+      let i = ELit . Core.LInt
+      let s = ESet $ Set [i 0, i 1, i 2, i 3]
 
-      Core.eval (s * x) `shouldBe` Right Core.true
-      Core.eval (s * y) `shouldBe` Right Core.true
-      Core.eval (s * z) `shouldBe` Right Core.true
-      Core.eval (s * f) `shouldBe` Right Core.true
+      Core.eval (s * i 0) `shouldBe` Right Core.true
+      Core.eval (s * i 1) `shouldBe` Right Core.true
+      Core.eval (s * i 2) `shouldBe` Right Core.true
+      Core.eval (s * i 3) `shouldBe` Right Core.true
 
-      let b = mkEVar "b"
-
-      Core.eval (s * b) `shouldBe` Right Core.false
-      Core.eval (s * s) `shouldBe` Right Core.false
+      Core.eval (s * i 4) `shouldBe` Right Core.false

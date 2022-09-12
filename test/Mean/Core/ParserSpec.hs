@@ -57,6 +57,14 @@ spec = do
       parse pCLam "\\f.(\\x.f(x x))(\\x.f(x x))"
         `shouldBe` Right (f ~> (x ~> (f * (x * x))) * (x ~> (f * (x * x))))
 
+  describe "pCCond" $ do
+    it "parses ternary conditionals over variables" $ do
+      parse pCCond "if x then y else z" `shouldBe` Right (x ? y > z)
+    it "parses ternary conditionals over lambdas" $ do
+      parse pCCond "if \\x.x then \\y.y else \\z.z" `shouldBe` Right ((x ~> x) ? (y ~> y) > (z ~> z))
+    it "parses ternary conditionals over function applications" $ do
+      parse pCCond "if f(x) then f(y) else f(z)" `shouldBe` Right ((f * x) ? (f * y) > (f * z))
+
   describe "pCExpr" $ do
     it "parses functional application of variables" $ do
       parse pCExpr "f x" `shouldBe` Right (f * x)

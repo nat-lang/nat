@@ -7,7 +7,7 @@ import Mean.Core hiding ((@=), (*=))
 import qualified Mean.Core as Core
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Prelude hiding (and, exp, id, not, or, succ, (*), (+), (++))
+import Prelude hiding (and, exp, id, not, or, succ, (*), (+), (++), (>))
 
 e0 @= e1 = (e0 Core.@= e1) @?= True
 
@@ -77,8 +77,17 @@ spec = do
 
     it "does not reduce equality relations between anything else" $ do
       eval (x === y) `shouldBe` Right (x === y)
-      Core.eval ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
-      Core.eval ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
+      eval ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
+      eval ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
+    
+    it "reduces ternary conditionals on booleans" $ do
+      eval (true ? y > z) `shouldBe` Right y
+      
+    it "reduces ternary conditionals over terms that reduce to booleans" $ do
+      eval ((x ~> x) * true ? (y ~> y) > z)`shouldBe` Right (y ~> y)
+
+    it "reduces nothing else" $ do
+      eval ((f * x) ? (f * y) > (f * z)) `shouldBe` Right ((f * x) ? (f * y) > (f * z))
 
   describe "confluence (*=)" $ do
     -- λnλfλx . f(n f x)
