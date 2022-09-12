@@ -2,13 +2,14 @@
 
 module Mean.Module where
 
+import Debug.Trace (traceM)
 import Data.Text
 import Data.Void
-import Mean.Core
-import qualified Mean.Syntax as S
+import Mean.Core hiding (Eq)
+import Mean.Syntax
 import qualified Mean.Parser as P
 
-data ModuleExpr = MDecl Name S.Expr
+data ModuleExpr = MDecl Name Expr deriving (Eq, Show)
 
 type Module = [ModuleExpr]
 
@@ -25,7 +26,7 @@ pMDecl = do
   P.reserved "let"
   name <- P.identifier
   P.symbol "="
-  MDecl name <$> S.pExpr
+  MDecl name <$> pExpr
 
 pModule :: P.Parser Module
 pModule = pMDecl `P.sepBy` P.delimiter

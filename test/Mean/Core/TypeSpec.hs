@@ -2,11 +2,8 @@
 
 module Mean.Core.TypeSpec where
 
-import Mean.Core.Parser
-import Mean.Core.Syntax
-import Mean.Core.Type
-import Mean.Core.TypeEnv
-import Mean.Core.Viz
+import Mean.Core
+import Mean.Type
 import Test.Hspec
 
 spec :: Spec

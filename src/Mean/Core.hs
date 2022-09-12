@@ -14,7 +14,7 @@ import qualified Mean.Parser as P
 import Mean.Viz ( Pretty(ppr), angles, anglesIf )
 import Text.PrettyPrint
     ( Doc, (<+>), (<>), brackets, char, parens, text )
-import Prelude hiding ((&&), (||), Eq, (<>))
+import Prelude hiding (Eq, (<>))
 import qualified Prelude as Prel
 
 type Evaluation = ExceptT EvalError Identity
@@ -22,14 +22,16 @@ type Evaluation = ExceptT EvalError Identity
 class Reducible a where
   reduce :: a -> Evaluation CoreExpr
 
-type Expressible a = (Reducible a, Pretty a)
+type Expressible a = (Prel.Eq a, Reducible a, Pretty a)
 
 data EvalError
   = UnboundVariable Name
   | NotTruthy CoreExpr
+  deriving (Prel.Eq)
 
 instance Show EvalError where
   show (UnboundVariable n) = "Unbound variable: " ++ show n
+  show (NotTruthy e) = "Not truthy: " ++ show e
 
 class FV a where
   fv :: a -> Set.Set Name
@@ -83,6 +85,15 @@ data App a where App :: Expressible a => a -> a -> App a
 
 data Eq a where Eq :: Expressible a => a -> a -> Eq a
 
+instance Prel.Eq (Lambda a) where
+  (Lam b0 e0) == (Lam b1 e1) = b0 == b1 && e0 == e1
+
+instance Prel.Eq (App a) where
+  (App e0 e1) == (App e0' e1') = e0 == e0' && e1 == e1'
+
+instance Prel.Eq (Eq a) where
+  (Eq e0 e1) == (Eq e0' e1') = e0 == e0' && e1 == e1'
+
 data CoreExpr
   = CLit Lit
   | CVar Var
@@ -90,11 +101,7 @@ data CoreExpr
   | CLam (Lambda CoreExpr)
   | CApp (App CoreExpr)
   | CEq (Eq CoreExpr)
-
-instance Prel.Eq CoreExpr where
-  e == e' = case (e, e') of
-    (CLit {}, CLit {}) -> e == e'
-    _ -> False
+  deriving (Prel.Eq)
 
 instance Pretty TyVar where
   ppr _ (TV t) = text t
@@ -191,6 +198,9 @@ lOne = LInt 1
 lZero :: Lit
 lZero = LInt 0
 
+zero = CLit lZero
+one = CLit lOne
+
 lTrue :: Lit
 lTrue = LBool True
 
@@ -270,24 +280,24 @@ fresh v0 v1 fv =
 substitute e cv@(CVar v) e' =
   let sub' = substitute e cv
   in case e' of
-        -- relevant base case
-        CVar v' | v' == v -> e
-        -- induction
-        CApp (App e0 e1) -> mkCApp (sub' e0) (sub' e1)
-        CEq (Eq e0 e1) -> sub' e0 === sub' e1
-        -- induction, but rename binder if it conflicts with fv(e)
-        CLam (Lam b@(Binder v'@(Var _ v'Pri) t) body)
-          | v /= v' ->
-            let fvE = fv e
-                fvB = fv body
-            in if v'Pri `Set.member` fvE
-                  then
-                    let v'' = fresh v' v (fvE `Set.union` fvB)
-                        body' = sub' $ substitute (CVar v'') (CVar v') body
-                    in mkCLam (Binder v'' t) body'
-                  else mkCLam b (sub' body)
-        -- irrelevent base cases
-        _ -> e'
+    -- relevant base case
+    CVar v' | v' == v -> e
+    -- induction
+    CApp (App e0 e1) -> mkCApp (sub' e0) (sub' e1)
+    CEq (Eq e0 e1) -> sub' e0 === sub' e1
+    -- induction, but rename binder if it conflicts with fv(e)
+    CLam (Lam b@(Binder v'@(Var _ v'Pri) t) body)
+      | v /= v' ->
+        let fvE = fv e
+            fvB = fv body
+        in if v'Pri `Set.member` fvE
+              then
+                let v'' = fresh v' v (fvE `Set.union` fvB)
+                    body' = sub' $ substitute (CVar v'') (CVar v') body
+                in mkCLam (Binder v'' t) body'
+              else mkCLam b (sub' body)
+    -- irrelevent base cases
+    _ -> e'
 substitute _ _ _ = error "can't substitute for anything but a variable!"
 
 instance Reducible CoreExpr where
@@ -327,7 +337,7 @@ instance Reducible CoreExpr where
       e0' <- reduce e0
       e1' <- reduce e1
       case (e0', e1') of
-        (CLit {}, CLit {}) -> pure $ mkCBool $ e0' == e1'
+        (CLit l0, CLit l1) -> pure $ mkCBool $ l0 == l1
         _ -> pure $ e0' === e1'
     -- (4) var/literal
     _ -> pure expr

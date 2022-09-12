@@ -11,6 +11,11 @@ import Mean.Viz
 import qualified Mean.Parser as P
 import Prelude hiding ((*), (~>))
 
+-- λeλb . e
+leaf = e ~> (b ~> e)
+-- λxλlλrλeλb . b(x)(l e b)(r e b)
+node = x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
+
 mkChurchTree :: Expressible a => T.Tree a -> Evaluation CoreExpr
 mkChurchTree t = case t of
   T.Leaf -> pure leaf
@@ -18,18 +23,14 @@ mkChurchTree t = case t of
     e' <- reduce e
     l' <- mkChurchTree l
     r' <- mkChurchTree r
-    pure $ node * e' * l' * r'
-  where
-    -- λeλb . e
-    leaf = e ~> (b ~> e)
-    -- λxλlλrλeλb . b(x)(l e b)(r e b)
-    node = x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
+    reduce $ node * e' * l' * r'
 
 instance Expressible a => Reducible (T.Tree a) where
   reduce = mkChurchTree
 
 instance Show a => Pretty (T.Tree a) where
   ppr p e = text $ show e
+
 -------------------------------------------------------------------------------
 -- Parsing
 -------------------------------------------------------------------------------

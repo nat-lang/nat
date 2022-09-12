@@ -2,9 +2,9 @@
 
 module Mean.Syntax where
 
-import Mean.Core
+import Mean.Core hiding (mkBinder, mkFn, eq)
 import Mean.Case
-import Mean.Relations
+import Mean.Relations hiding ((?), (>), nEq, not', (&&), (||))
 import Mean.Tree
 import Mean.Set
 import Mean.Viz
@@ -12,6 +12,7 @@ import Control.Monad.State
 import qualified Mean.Parser as P
 
 import Prelude hiding (Eq)
+import qualified Prelude as Prel
 
 data Expr
   = ELit Lit
@@ -20,10 +21,11 @@ data Expr
   | ELam (Lambda Expr)
   | EApp (App Expr)
   | EEq (Eq Expr)
-  | ERel RelExpr
+  | ERel (RelExpr Expr)
   | ETree (Tree Expr)
-  | ECase CaseExpr
-  | ESet SetExpr
+  | ECase (CaseExpr Expr)
+  | ESet (SetExpr Expr)
+  deriving (Prel.Eq)
 
 instance Pretty (Lambda Expr) where
   ppr p (Lam b e) =
@@ -47,60 +49,73 @@ instance Pretty Expr where
 instance Show Expr where
   show = show . ppr 0
 
-{-
-mkVar :: Name -> Expr
-mkVar v = EVar $ mkVar v
+mkEVar :: Name -> Expr
+mkEVar = EVar . mkVar
 
-mkLam :: Binder -> Expr -> Expr
-mkLam b = ELam . Lam b
+mkELam :: Binder -> Expr -> Expr
+mkELam b = ELam . Lam b
 
-mkApp :: Expr -> Expr -> Expr
-mkApp e = EApp . App e
+mkEApp :: Expr -> Expr -> Expr
+mkEApp e = EApp . App e
 
 mkBinder :: Expr -> Binder
 mkBinder (EVar v) = Binder v TyNil
 mkBinder _ = error "can't bind anything but a variable!"
 
-mkBind :: Expr -> Expr
-mkBind = EBind . mkBinder
+mkEBind :: Expr -> Expr
+mkEBind = EBind . mkBinder
 
-mkFn :: Expr -> Expr -> Expr
-mkFn = mkLam . mkBinder
+mkEFn :: Expr -> Expr -> Expr
+mkEFn = mkELam . mkBinder
 
 (*) :: Expr -> Expr -> Expr
-(*) = mkApp
+(*) = mkEApp
 
 (~>) :: Expr -> Expr -> Expr
-(~>) = mkFn
+(~>) = mkEFn
 
 infixl 9 *
 
 infixl 8 ~>
+
+f :: Expr
+f = mkEVar "f"
+
+x :: Expr
+x = mkEVar "x"
+
+y :: Expr
+y = mkEVar "y"
+
+z :: Expr
+z = mkEVar "z"
 
 true = ELit $ LBool True
 
 false = ELit $ LBool False
 
 (&&) :: Expr -> Expr -> Expr
-p && q = EBinOp And p q
+p && q = ERel (RBinOp And p q)
 
 (||) :: Expr -> Expr -> Expr
-p || q = SBinOp Or p q
+p || q = ERel (RBinOp Or p q)
 
-eq = SBinOp Eq
+eq e0 e1 = EEq (Eq e0 e1)
 
 (===) = eq
 
-nEq = SBinOp NEq
+nEq :: Expr -> Expr -> Expr
+nEq e0 e1 = ERel (RBinOp NEq e0 e1)
 
+(!==) :: Expr -> Expr -> Expr
 (!==) = nEq
 
-not' = SUnOp Neg
+not' :: Expr -> Expr
+not' = ERel . RUnOp Neg
 
-(?) = STernOp Cond
+(?) x y z = ERel (RTernOp Cond x y z)
 
 e > e' = e e'
--}
 
 instance Reducible Expr where
   reduce expr = case expr of
@@ -134,7 +149,7 @@ pELam = do
   lam <- pLam
   ELam . lam <$> pExpr
 
-finally fn p = do
+after p fn = do
   mA <- P.observing p
   case mA of
     Left e -> fn >> P.parseError e
@@ -144,18 +159,23 @@ pETree :: ExprParser
 pETree = do
   s <- get
   put (s {P.inTree = True})
-  t <- finally (put $ s {P.inTree = False}) (pTree pExpr)
+  t <- after (pTree pENode) (put $ s {P.inTree = False})
   pure $ ETree t
+  where
+    pEBind = EBind <$> pBinder
+    pENode = P.try pExpr P.<|> pEBind
+
+pECase =  ECase <$> pCase pExpr
+pESet = ESet <$> pSet pExpr
 
 terms =
   [ P.parens pExpr,
     ELit <$> pLit,
     EVar <$> pVar,
-    EBind <$> pBinder,
+    ERel <$> pRTernOp pExpr,
     pELam,
-    ECase <$> pCase pExpr,
-    ESet <$> pSet pExpr,
-    pRel pExpr ERel
+    pECase,
+    pESet
   ]
 
 pTerm :: ExprParser
@@ -166,7 +186,15 @@ pTerm = do
 
 operatorTable :: [[P.Operator P.Parser Expr]]
 operatorTable =
-  [[ P.infixOpL "==" (\e0 e1 -> EEq (Eq e0 e1)) ]]
+  [
+    [ P.prefixOp "!" (ERel . RUnOp Neg) ],
+    [ P.infixOpL "==" (\e0 e1 -> EEq (Eq e0 e1)),
+      P.infixOpL "!=" (biExpr NEq),
+      P.infixOpL "&&" (biExpr And),
+      P.infixOpL "||" (biExpr Or)
+    ]
+  ] where
+    biExpr = \op e0 e1 -> ERel (RBinOp op e0 e1)
 
 pExpr' :: ExprParser
 pExpr' = P.makeExprParser pTerm operatorTable

@@ -2,18 +2,24 @@
 
 module Mean.Set where
 
+import Debug.Trace (traceM)
 import Mean.Core hiding (fresh)
 import Mean.Case
 import Mean.Viz
 import Data.List
 import qualified Mean.Parser as P
 import qualified Data.Set as Set
+import Prelude hiding (Eq)
+import qualified Prelude as Prel
 
-data SetExpr where
-  Set :: Expressible a => [a] -> SetExpr
-  -- SSetComp :: Reducible a => (a, a) -> SetExpr
+data SetExpr a where
+  Set :: Expressible a => [a] -> SetExpr a
+  -- SSetComp :: Reducible a => (a, a) -> (SetExpr a)
 
-instance Pretty SetExpr where
+instance Prel.Eq (SetExpr a) where
+  (Set es) == (Set es') = es == es'
+
+instance Pretty (SetExpr a) where
   ppr p e = case e of
     Set es -> brackets $ text (intercalate ", " (show . ppr p <$> es))
   
@@ -24,14 +30,17 @@ fresh es = go (mkVar "x") (fv es)
                             then go (incrVarId v) fv
                             else CVar v
 
-instance Reducible SetExpr where
+instance Reducible (SetExpr a) where
   reduce expr = case expr of
     Set es -> do
+      traceM "->"
       es' <- mapM reduce es
+      traceM "-->"
       let x = fresh es'
-
+      traceM "--->"
       e <- reduce $ Case x $ [(c, true) | c <- es'] ++ [(x, false)]
-  
+      traceM "---->"
+      traceM (show e)
       pure (x ~> e)
 
 -------------------------------------------------------------------------------

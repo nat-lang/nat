@@ -5,6 +5,7 @@ module Mean.Parser
     Lex.IndentOpt(..), Lex.indentBlock,
     Operator(..), makeExprParser,
     C.char,
+    dbg,
     module Mean.Parser,
     module Text.Megaparsec
   )

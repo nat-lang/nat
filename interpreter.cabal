@@ -150,12 +150,16 @@ test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Mean.Case.EvaluationSpec
       Mean.Core.EvaluationSpec
       Mean.Core.ParserSpec
       Mean.Core.TypeSpec
       Mean.Module.ParserSpec
-      Mean.Sugar.EvaluationSpec
-      Mean.Sugar.ParserSpec
+      Mean.Relations.EvaluationSpec
+      Mean.Set.EvaluationSpec
+      Mean.Syntax.EvaluationSpec
+      Mean.Syntax.ParserSpec
+      Mean.Tree.EvaluationSpec
       Paths_interpreter
   hs-source-dirs:
       test

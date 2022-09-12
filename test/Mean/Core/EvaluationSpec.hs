@@ -3,32 +3,30 @@
 module Mean.Core.EvaluationSpec where
 
 import Debug.Trace (traceM)
-import Mean.Core.Encoding
-import Mean.Core.Parser
-import Mean.Core.Syntax hiding ((@=), (*=))
-import qualified Mean.Core.Syntax as S
-import Mean.Core.Viz
+import Mean.Core hiding ((@=), (*=))
+import qualified Mean.Core as Core
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Prelude hiding (and, exp, id, not, or, succ, (!), (&&), (*), (**), (+), (++), (-), (>), (||))
+import Prelude hiding (and, exp, id, not, or, succ, (*), (+), (++))
 
-e0 @= e1 = (e0 S.@= e1) @?= True
+e0 @= e1 = (e0 Core.@= e1) @?= True
 
-e0 !@= e1 = (e0 S.@= e1) @?= False
+e0 !@= e1 = (e0 Core.@= e1) @?= False
 
-e0 *= e1 = (e0 S.*= e1) @?= True
+e0 *= e1 = (e0 Core.*= e1) @?= True
 
 spec :: Spec
 spec = do
   let zero = CLit lZero
   let one = CLit lOne
+  let id = x ~> x
 
   describe "substitution" $ do
     it "substitutes expressions for variables" $ do
-      sub y z z `shouldBe` y
+      substitute y z z `shouldBe` y
 
     it "does so discriminately" $ do
-      sub y z x `shouldBe` x
+      substitute y z x `shouldBe` x
 
     it "avoids variable capture" $ do
       let f1 = CVar $ Var "f0" "f1"
@@ -37,12 +35,12 @@ spec = do
       --  (1) a nested binder conflicts with v, as in
       --        (λf . f)[x/f]
       --     in which case we want (λf . f) rather than (λf . x)
-      sub x f (f ~> f) `shouldBe` f ~> f
+      substitute x f (f ~> f) `shouldBe` f ~> f
 
       --  (2) a nested binder conflicts with a free variable in e, as in
       --        (λf . f n)[f/n]
       --     in which case we want (λf1 . f1 f) rather than (λf . f f)
-      sub f n (f ~> (f * n)) `shouldBe` f1 ~> (f1 * f)
+      substitute f n (f ~> (f * n)) `shouldBe` f1 ~> (f1 * f)
 
   describe "alpha equivalence (@=)" $ do
     it "recognizes alpha equivalence" $ do
@@ -69,43 +67,18 @@ spec = do
   describe "eval" $ do
     let id' y = (x ~> x) * y
 
-    it "reduces truth conditional unary operations on booleans" $ do
-      eval (not' true) `shouldBe` Right false
-      eval (not' false) `shouldBe` Right true
-    it "reduces truth conditional unary operations on function applications" $ do
-      eval (not' (id' true)) `shouldBe` Right false
-      eval (not' (id' false)) `shouldBe` Right true
-
-    it "reduces truth conditional binary operations on booleans" $ do
-      eval (true && false) `shouldBe` Right false
-      eval (true || false) `shouldBe` Right true
-    it "reduces truth conditional binary operations on function applications" $ do
-      eval (id' true && id' false) `shouldBe` Right false
-      eval (id' true || id' false) `shouldBe` Right true
-
-    it "reduces equality relations between primitives" $ do
+    it "reduces equality relations between literals" $ do
       eval (true === false) `shouldBe` Right false
-      eval (true !== false) `shouldBe` Right true
-      eval (x === y) `shouldBe` Right false
-      eval (x !== y) `shouldBe` Right true
-      eval (zero === zero) `shouldBe` Right true
       eval (zero === one) `shouldBe` Right false
-      eval (zero !== one) `shouldBe` Right true
-    it "reduces equality relations between expressions" $ do
+      eval (zero === zero) `shouldBe` Right true
+
+    it "reduces equality relations between relations" $ do
       eval (id' true === id' false) `shouldBe` Right false
-      eval (id' true !== id' false) `shouldBe` Right true
 
-    it "reduces ternary conditionals on booleans" $ do
-      eval (false ? l > r) `shouldBe` Right r
-      eval (true ? l > r) `shouldBe` Right l
-    it "reduces ternary conditionals on function applications" $ do
-      eval (((x ~> x) * false) ? l > r) `shouldBe` Right r
-      eval (((x ~> x) * true) ? ((x ~> x) * l) > r) `shouldBe` Right l
-    it "fails on un truthy conditionals" $ do
-      eval (x ? l > r) `shouldBe` Left (S.NotTruthy x)
-
-    it "only evaluates operations on terms whose bound variables have already been substituted?" $ do
-      eval (x ~> (x === true ? l > r)) `shouldBe` Right (x ~> (x === true ? l > r))
+    it "does not reduce equality relations between anything else" $ do
+      eval (x === y) `shouldBe` Right (x === y)
+      Core.eval ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
+      Core.eval ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
 
   describe "confluence (*=)" $ do
     -- λnλfλx . f(n f x)
