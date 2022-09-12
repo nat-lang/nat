@@ -40,6 +40,7 @@ library
       Interpreter.Fragment
       Mean.Case
       Mean.Core
+      Mean.Dom
       Mean.Module
       Mean.Parser
       Mean.Relations

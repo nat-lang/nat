@@ -18,7 +18,7 @@ import Control.Monad.Reader
 import Control.Monad.State
     ( MonadState(put, get), StateT, evalStateT )
 import Data.Either (partitionEithers)
-import Data.List (nub)
+import Data.List (nub, foldl')
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
@@ -52,6 +52,9 @@ toList (TyEnv env) = Map.toList env
 
 isIn :: S.TyScheme -> TyEnv -> Bool
 isIn ty = elem ty . map snd . toList
+
+mkEnv :: [(S.Name, S.TyScheme)] -> TyEnv
+mkEnv = foldl' extend empty
 
 instance Semigroup TyEnv where
   (<>) = merge
@@ -206,6 +209,17 @@ infer expr = case expr of
     (t1, c1) <- infer e1
     tv <- fresh
     return (tv, c0 ++ c1 ++ [(t0, t1 `S.TyFun` tv)])
+  S.CEq (S.Eq e0 e1) -> do
+    (t0, c0) <- infer e0
+    (t1, c1) <- infer e1
+    tv <- fresh
+    return (S.tyBool, c0 ++ c1 ++ [(t0, tv), (t1, tv)])
+  S.CCond (S.Cond x y z) -> do
+    (tX, cX) <- infer x
+    (tY, cY) <- infer y
+    (tZ, cZ) <- infer z
+    tv <- fresh
+    return (tv, cX ++ cY ++ cZ ++ [(tX, S.tyBool), (tY, tv), (tZ, tv)])
 
 normalize :: S.TyScheme -> S.TyScheme
 normalize (S.Forall _ body) = S.Forall (map snd ord) (normtype body)
