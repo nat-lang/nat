@@ -3,7 +3,7 @@
 module Mean.Relations where
 
 import Debug.Trace (traceM)
-import Mean.Core
+import Mean.Core hiding (BinOp)
 import Mean.Viz
 import qualified Mean.Parser as P
 import Text.PrettyPrint

@@ -47,6 +47,7 @@ library
       Mean.Set
       Mean.Syntax
       Mean.Tree
+      Mean.TyOp
       Mean.Type
       Mean.Viz
       Service.API.ConstituencyTrees

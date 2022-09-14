@@ -14,7 +14,7 @@ import qualified Mean.Parser as P
 import Mean.Viz ( Pretty(ppr), angles, anglesIf )
 import Text.PrettyPrint
     ( Doc, (<+>), (<>), brackets, char, parens, text )
-import Prelude hiding (Eq, (<>), (>))
+import Prelude hiding (Eq, GT, LT, (<>), (>), (*))
 import qualified Prelude as Prel
 
 type Evaluation = ExceptT EvalError Identity
@@ -85,16 +85,15 @@ data App a where App :: Expressible a => a -> a -> App a
 
 data Cond a where Cond :: Expressible a => a -> a -> a -> Cond a
 
-data Eq a where Eq :: Expressible a => a -> a -> Eq a
+data BinOp = Add | Sub | Mul | LT | GT | LTE | GTE | Eq deriving (Show, Prel.Eq)
+
+binOpTy op = case op of Add -> tyInt; Sub -> tyInt; Mul -> tyInt; _ -> tyBool
 
 instance Prel.Eq (Lambda a) where
   (Lam b0 e0) == (Lam b1 e1) = b0 == b1 && e0 == e1
 
 instance Prel.Eq (App a) where
   (App e0 e1) == (App e0' e1') = e0 == e0' && e1 == e1'
-
-instance Prel.Eq (Eq a) where
-  (Eq e0 e1) == (Eq e0' e1') = e0 == e0' && e1 == e1'
 
 instance Prel.Eq (Cond a) where
   (Cond a0 a1 a2) == (Cond a0' a1' a2') = [a0, a1, a2] == [a0', a1', a2']
@@ -105,8 +104,8 @@ data CoreExpr
   | CBind Binder
   | CLam (Lambda CoreExpr)
   | CApp (App CoreExpr)
-  | CEq (Eq CoreExpr)
   | CCond (Cond CoreExpr)
+  | CBinOp BinOp CoreExpr CoreExpr
   deriving (Prel.Eq)
 
 instance Pretty TyVar where
@@ -139,9 +138,6 @@ instance Pretty Lit where
     LInt n -> text (show n)
     LBool b -> text (show b)
 
-instance Pretty (Eq a) where
-  ppr p (Eq e0 e1) = ppr p e0 <+> "==" <+> ppr p e1
-
 instance Pretty (Cond a) where
   ppr p (Cond x y z) = text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
 
@@ -152,14 +148,24 @@ instance Pretty CoreExpr where
     CBind b -> ppr p b
     CLam l -> ppr p l
     CApp a -> ppr p a
-    CEq e -> ppr p e
     CCond c -> ppr p c
+    CBinOp op e0 e1 -> let
+      op' = case op of
+        Add -> "+"
+        Sub -> "-"
+        Mul -> "*"
+        LT -> "<"
+        LTE -> "<="
+        GT -> ">"
+        GTE -> ">="
+        Eq -> "=="
+      in  ppr p e0 <+> text op' <+> ppr p e1
 
 instance Pretty TyScheme where
   ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
 
 instance Show CoreExpr where
-  show e = (show . ppr 0) e
+  show = show . ppr 0
 
 instance Show Type where
   show = show . ppr 0
@@ -260,7 +266,7 @@ b :: CoreExpr
 b = mkCVar "b"
 
 eq :: CoreExpr -> CoreExpr -> CoreExpr
-eq e0 e1 = CEq (Eq e0 e1)
+eq = CBinOp Eq
 
 (===) :: CoreExpr -> CoreExpr -> CoreExpr
 (===) = eq
@@ -274,8 +280,8 @@ instance FV CoreExpr where
     CVar (Var _ v) -> Set.singleton v
     CLam (Lam (Binder (Var _ v) _) body) -> fv body \\ Set.singleton v
     CApp (App e0 e1) -> fv [e0, e1]
-    CEq (Eq e0 e1) -> fv [e0, e1]
     CCond (Cond x y z) -> fv [x, y, z]
+    CBinOp _ e0 e1 -> fv [e0, e1]
     _ -> Set.empty
 
 instance FV [CoreExpr] where
@@ -304,8 +310,8 @@ substitute e cv@(CVar v) e' =
     CVar v' | v' == v -> e
     -- induction
     CApp (App e0 e1) -> mkCApp (sub' e0) (sub' e1)
-    CEq (Eq e0 e1) -> sub' e0 === sub' e1
     CCond (Cond x y z) -> sub' x ? sub' y > sub' z
+    CBinOp op e0 e1 -> CBinOp op (sub' e0) (sub' e1)
     -- induction, but rename binder if it conflicts with fv(e)
     CLam (Lam b@(Binder v'@(Var _ v'Pri) t) body)
       | v /= v' ->
@@ -328,9 +334,9 @@ instance Reducible CoreExpr where
     CApp (App e0 e1) -> case e0 of
       -- (1a) function application, beta reduce
       CLam (Lam (Binder v _) body) -> do
-        -- traceM (show expr)
+        -- traceM ("\n0 " ++ show expr)
         e <- reduce (substitute e1 (CVar v) body)
-        -- traceM (show e)
+        -- traceM ("\n1 " ++ show e)
         pure e
       -- (1b) binders have a semantics of their own: they may be applied
       -- to terms, in which case they simply abstract a free variable.
@@ -353,21 +359,28 @@ instance Reducible CoreExpr where
     CLam (Lam b body) -> do
       body' <- reduce body
       pure $ mkCLam b body'
-    -- (3) equality is defined for primitives
-    CEq (Eq e0 e1) -> do
+    -- (3) some operations are defined for literals
+    CBinOp op e0 e1 -> do
       e0' <- reduce e0
       e1' <- reduce e1
-      case (e0', e1') of
-        (CLit l0, CLit l1) -> pure $ mkCBool $ l0 == l1
-        _ -> pure $ e0' === e1'
+      pure $ case (e0', e1') of
+        (CLit (LBool b0), CLit (LBool b1)) -> CLit $ case op of
+          Eq -> LBool $ (==) b0 b1
+        (CLit (LInt i0), CLit (LInt i1)) -> CLit $ case op of
+          Add -> LInt $ (+) i0 i1
+          Sub -> LInt $ (-) i0 i1
+          Mul -> LInt $ (Prel.*) i0 i1
+          LT -> LBool $ (<) i0 i1
+          LTE -> LBool $ (<=) i0 i1
+          GT -> LBool $ (Prel.>) i0 i1
+          GTE -> LBool $ (>=) i0 i1
+          Eq -> LBool $ (==) i0 i1
+        _ -> CBinOp op e0' e1'
     CCond (Cond x y z) -> do
       x' <- reduce x
       case x' of
         CLit LBool {} -> reduce $ if bool x' then y else z
-        _ -> do
-          y' <- reduce y
-          z' <- reduce z
-          pure $ CCond (Cond x' y' z')
+        _ -> pure $ CCond (Cond x' y z)
     -- (4) var/literal
     _ -> pure expr
 
@@ -381,7 +394,7 @@ alphaEq e0 e1 = case (e0, e1) of
   (CApp (App e0a e0b), CApp (App e1a e1b)) -> e0a @= e1a Prel.&& e0b @= e1b
   (CVar v0, CVar v1) -> v0 == v1
   (CLit l0, CLit l1) -> l0 == l1
-  (CEq (Eq e0a e1a), CEq (Eq e0b e1b)) -> (e0a @= e0b) && (e1a @= e1b)
+  (CBinOp op e0a e1a, CBinOp op' e0b e1b) -> (op == op') && (e0a @= e0b) && (e1a @= e1b)
   (CCond (Cond x0 y0 z0), CCond (Cond x1 y1 z1)) -> (x0 @= x1) && (y0 @= y1) && (z0 @= z1)
   _ -> False
 
@@ -504,7 +517,7 @@ pCTerm =
 
 cOperatorTable :: [[P.Operator P.Parser CoreExpr]]
 cOperatorTable =
-  [[ P.infixOpL "==" (\e0 e1 -> CEq (Eq e0 e1)) ]]
+  [[ P.infixOpL "==" (CBinOp Eq) ]]
 
 pCExpr' :: CExprParser
 pCExpr' = P.makeExprParser pCTerm cOperatorTable

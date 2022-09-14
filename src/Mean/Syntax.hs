@@ -2,16 +2,19 @@
 
 module Mean.Syntax where
 
-import Mean.Core hiding (mkBinder, mkFn, eq)
+import Debug.Trace (traceM)
+import Mean.Core hiding (mkBinder, mkFn, eq, f, x, (~>), (*))
+import qualified Mean.Core as Core
 import Mean.Case
-import Mean.Relations hiding ((?), (>), nEq, not', (&&), (||))
+import Mean.Relations hiding ((?), (>), nEq, not', (&&), (||), BinOp)
 import Mean.Tree
 import Mean.Set
 import Mean.Viz
+import Text.PrettyPrint ((<+>), text, parens)
 import Control.Monad.State
 import qualified Mean.Parser as P
 
-import Prelude hiding (Eq)
+import Prelude hiding (Eq, (*))
 import qualified Prelude as Prel
 
 data Expr
@@ -20,12 +23,14 @@ data Expr
   | EBind Binder
   | ELam (Lambda Expr)
   | EApp (App Expr)
-  | EEq (Eq Expr)
   | ECond (Cond Expr)
+  | EBinOp BinOp Expr Expr
   | ERel (RelExpr Expr)
   | ETree (Tree Expr)
   | ECase (CaseExpr Expr)
   | ESet (SetExpr Expr)
+  | ELet Var Expr Expr
+  | ELetRec Var Expr
   deriving (Prel.Eq)
 
 instance Pretty (Lambda Expr) where
@@ -34,6 +39,8 @@ instance Pretty (Lambda Expr) where
       ELam Lam {} -> ppr (p + 1) e
       _ -> brackets (ppr (p + 1) e)
 
+ppLet p v e e' = text (show v) <+> "=" <+> ppr p e <+> "in" <+> ppr p e'
+
 instance Pretty Expr where
   ppr p e = case e of
     ELit l -> ppr p l
@@ -41,11 +48,14 @@ instance Pretty Expr where
     EBind b -> ppr p b
     ELam lam -> ppr p lam
     EApp app -> ppr p app
-    EEq eq -> ppr p eq
+    ECond c -> ppr p c
     ERel rel -> ppr p rel
     ETree t -> ppr p t
     ECase c -> ppr p c
     ESet s -> ppr p s
+    EBinOp op e0 e1 -> text (show op) <> parens (ppr p e0 <+> ppr p e1)
+    ELet v e e' -> "let" <+> ppLet p v e e'
+    ELetRec v e -> "letrec" <+> ppLet p v e e
 
 instance Show Expr where
   show = show . ppr 0
@@ -101,7 +111,7 @@ p && q = ERel (RBinOp And p q)
 (||) :: Expr -> Expr -> Expr
 p || q = ERel (RBinOp Or p q)
 
-eq e0 e1 = EEq (Eq e0 e1)
+eq = EBinOp Eq
 
 (===) = eq
 
@@ -126,23 +136,33 @@ instance Reducible Expr where
     ELam (Lam b e) -> do
       e' <- reduce e
       reduce $ mkCLam b e'
+    -- makes us cbv above core...
     EApp (App e0 e1) -> do
       e0' <- reduce e0
       e1' <- reduce e1
       reduce $ mkCApp e0' e1'
-    EEq (Eq e0 e1) -> do
-      e0' <- reduce e0
-      e1' <- reduce e1
-      reduce $ CEq $ Eq e0' e1'
     ECond (Cond x y z) -> do
       x' <- reduce x
       y' <- reduce y
       z' <- reduce z
       reduce $ CCond $ Cond x' y' z'
+    EBinOp op e0 e1 ->  do
+      e0' <- reduce e0
+      e1' <- reduce e1
+      reduce $ CBinOp op e0' e1'
     ETree t -> reduce t
     ECase c -> reduce c
     ESet s -> reduce s
     ERel r -> reduce r
+
+    ELet v e0 e1 -> reduce $ (EVar v ~> e1) * e0
+    ELetRec v e -> let
+      f = Core.f; x = Core.x
+      (~>) = (Core.~>); (*) = (Core.*)
+      y = f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+      in do
+        e' <- reduce e
+        pure (y * (CVar v ~> e'))
 
 -------------------------------------------------------------------------------
 -- Parsing
@@ -194,7 +214,7 @@ operatorTable :: [[P.Operator P.Parser Expr]]
 operatorTable =
   [
     [ P.prefixOp "!" (ERel . RUnOp Neg) ],
-    [ P.infixOpL "==" (\e0 e1 -> EEq (Eq e0 e1)),
+    [ P.infixOpL "==" (EBinOp Eq),
       P.infixOpL "!=" (biExpr NEq),
       P.infixOpL "&&" (biExpr And),
       P.infixOpL "||" (biExpr Or)

@@ -38,6 +38,7 @@ instance Reducible (CaseExpr a) where
           b' <- reduce b
           if c' == b'
             then reduce e
+            -- crude check for totality
             else error "case without default"
         ((c, e) : cs) -> do
           c' <- reduce c

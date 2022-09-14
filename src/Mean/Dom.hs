@@ -7,4 +7,4 @@ import Mean.Set
 import Mean.Syntax
 
 data DomExpr a where
-  Dom :: Expressible a => Type -> Set a -> DomExpr a
+  Dom :: Expressible a => Type -> SetExpr a -> DomExpr a

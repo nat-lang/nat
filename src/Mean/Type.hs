@@ -209,11 +209,11 @@ infer expr = case expr of
     (t1, c1) <- infer e1
     tv <- fresh
     return (tv, c0 ++ c1 ++ [(t0, t1 `S.TyFun` tv)])
-  S.CEq (S.Eq e0 e1) -> do
+  S.CBinOp op e0 e1 -> do
     (t0, c0) <- infer e0
     (t1, c1) <- infer e1
     tv <- fresh
-    return (S.tyBool, c0 ++ c1 ++ [(t0, tv), (t1, tv)])
+    return (S.binOpTy op, c0 ++ c1 ++ [(t0, tv), (t1, tv)])
   S.CCond (S.Cond x y z) -> do
     (tX, cX) <- infer x
     (tY, cY) <- infer y

@@ -72,7 +72,7 @@ spec = do
       eval (zero === one) `shouldBe` Right false
       eval (zero === zero) `shouldBe` Right true
 
-    it "reduces equality relations between relations" $ do
+    it "reduces equality relations between terms that reduce to literals" $ do
       eval (id' true === id' false) `shouldBe` Right false
 
     it "does not reduce equality relations between anything else" $ do
@@ -86,8 +86,11 @@ spec = do
     it "reduces ternary conditionals over terms that reduce to booleans" $ do
       eval ((x ~> x) * true ? (y ~> y) > z)`shouldBe` Right (y ~> y)
 
-    it "reduces nothing else" $ do
+    it "reduces ternary conditionals over nothing else" $ do
       eval ((f * x) ? (f * y) > (f * z)) `shouldBe` Right ((f * x) ? (f * y) > (f * z))
+
+    it "reduces arithmetic on terms that reduce to natural numbers" $ do
+      eval (CBinOp Add ((x ~> x) * one) ((x ~> x) * one)) `shouldBe` Right (CLit $ LInt 2)
 
   describe "confluence (*=)" $ do
     -- λnλfλx . f(n f x)
