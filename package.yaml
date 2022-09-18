@@ -98,3 +98,4 @@ tests:
       - hspec-wai
       - hspec-wai-json
       - aeson
+      - raw-strings-qq

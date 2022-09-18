@@ -38,17 +38,12 @@ library
       Interpreter.CompositionTest
       Interpreter.Evaluation
       Interpreter.Fragment
-      Mean.Case
-      Mean.Core
-      Mean.Dom
-      Mean.Module
+      Mean.Evaluation.Surface
+      Mean.Evaluation.Type
       Mean.Parser
-      Mean.Relations
-      Mean.Set
-      Mean.Syntax
-      Mean.Tree
-      Mean.TyOp
-      Mean.Type
+      Mean.Syntax.Module
+      Mean.Syntax.Surface
+      Mean.Syntax.Type
       Mean.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments
@@ -152,16 +147,11 @@ test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Mean.Case.EvaluationSpec
-      Mean.Core.EvaluationSpec
-      Mean.Core.ParserSpec
-      Mean.Core.TypeSpec
-      Mean.Module.ParserSpec
-      Mean.Relations.EvaluationSpec
-      Mean.Set.EvaluationSpec
-      Mean.Syntax.EvaluationSpec
-      Mean.Syntax.ParserSpec
-      Mean.Tree.EvaluationSpec
+      Mean.Evaluation.SurfaceSpec
+      Mean.Evaluation.TypeSpec
+      Mean.Syntax.ModuleSpec
+      Mean.Syntax.SurfaceSpec
+      Mean.Syntax.TypeSpec
       Paths_interpreter
   hs-source-dirs:
       test
@@ -196,6 +186,7 @@ test-suite spec
     , parser-combinators
     , pretty
     , random >=1.1 && <1.3
+    , raw-strings-qq
     , repline >=0.1.2.0
     , servant
     , servant-server

@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Module where
+module Mean.Syntax.Module where
 
-import Debug.Trace (traceM)
 import Data.Text
 import Data.Void
-import Mean.Core hiding (Eq)
-import Mean.Syntax
+import Debug.Trace (traceM)
+import Mean.Syntax.Surface
 import qualified Mean.Parser as P
 
 data ModuleExpr = MDecl Name Expr deriving (Eq, Show)

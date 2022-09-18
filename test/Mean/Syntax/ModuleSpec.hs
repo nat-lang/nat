@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Module.ParserSpec where  
+module Mean.Syntax.ModuleSpec where
 
+import Mean.Syntax.Module
+import Mean.Syntax.Surface
 import Mean.Parser (parse)
-import Mean.Module
-import Mean.Syntax
 import Test.Hspec
 
 spec :: Spec
