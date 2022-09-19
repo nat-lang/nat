@@ -34,7 +34,7 @@ data Type
   = TyVar TyVar
   | TyCon String
   | TyFun Type Type
-  | TySum (Set.Set Type)
+  | TyUnion (Set.Set Type)
   | -- TyNil is a placeholder left by the parser in lieu of an explicit
     -- type annotation. It says "infer my type, please".
     TyNil

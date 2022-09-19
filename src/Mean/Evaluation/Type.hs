@@ -4,7 +4,7 @@ module Mean.Evaluation.Type where
 
 import Data.Monoid
 
-import Control.Monad (replicateM)
+import Control.Monad (replicateM, liftM)
 import Control.Monad.Except
     ( replicateM,
       MonadError(throwError),
@@ -225,8 +225,18 @@ instance Inferrable Expr where
       (tZ, cZ) <- infer z
       tv <- fresh
       return (tv, cX ++ cY ++ cZ ++ [(tX, tyBool), (tY, tv), (tZ, tv)])
-    -- ETyCase (e,ty) cs -> do
-    --   tv <- fresh
+    ETyCase e cases -> let (ts,es) = unzip cases in do
+      tv <- fresh
+      eTs <- mapM infer es
+      (et, eCs) <- infer e
+
+      let (tEs, cEs) = unzip eTs
+      let cs = concat [ [(et, TyUnion (Set.fromList ts))],
+                        concat cEs,
+                        eCs,
+                        [(tv, t) | t <- tEs]
+                      ]
+      return (tv, cs)
 
 normalize :: TyScheme -> TyScheme
 normalize (Forall _ body) = Forall (map snd ord) (normtype body)
