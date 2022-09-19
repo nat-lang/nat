@@ -57,7 +57,8 @@ data Expr
   | EUnOp UnOp Expr
   | EBinOp BinOp Expr Expr
   | ETree (T.Tree Expr)
-  | ECase Expr [(Expr, Expr)]
+  | ELitCase Expr [(Expr, Expr)]
+  | ETyCase Expr [(Type, Expr)]
   | ESet (Set Expr)
   | ELet Var Expr Expr
   | EFix Var Expr
@@ -67,6 +68,10 @@ instance Pretty Lit where
   ppr p l = case l of
     LInt n -> text (show n)
     LBool b -> text (show b)
+
+ppCase p c es =
+  let pp (e0, e1) = ppr p e0 <+> text "->" <+> ppr p e1
+   in ppr p c <> char ':' <+> text (intercalate " | " (show . pp <$> es))
 
 instance Pretty Expr where
   ppr p e = case e of
@@ -98,9 +103,8 @@ instance Pretty Expr where
         infx p e0 e1 op = ppr p e0 <+> text op <+> ppr p e1
     ECond x y z -> text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
     ETree t -> text $ show e
-    ECase c es -> text "case" <+> ppr p c <> char ':' <+> text (intercalate ", " (show . pp <$> es))
-      where
-        pp (e0, e1) = ppr p e0 <+> text "->" <+> ppr p e1
+    ELitCase e es -> text "litcase" <+> ppCase p e es
+    ETyCase e es -> text "tycase" <+> ppCase p e es
     ESet s -> text $ show s
     ELet v e e' -> "let" <+> text (show v) <+> "=" <+> ppr p e <+> "in" <+> ppr p e'
     EFix v e -> text "fix" <+> text (show v) <+> text "in" <+> ppr p e
@@ -192,8 +196,8 @@ pELam = do
   P.symbol "."
   ELam b <$> pExpr
 
-pECase :: ExprParser
-pECase = P.try $ P.indentBlock P.spaceN p
+pELitCase :: ExprParser
+pELitCase = P.try $ P.indentBlock P.spaceN p
   where
     pCase = do
       c <- pExpr
@@ -204,7 +208,7 @@ pECase = P.try $ P.indentBlock P.spaceN p
       P.reserved "case"
       base <- pExpr
       P.reserved "of"
-      pure $ P.IndentSome Nothing (pure . ECase base) pCase
+      pure $ P.IndentSome Nothing (pure . ELitCase base) pCase
 
 pESet = do
   es <- P.curlies (pExpr `P.sepBy` (P.space >> P.char ',' >> P.space))
@@ -251,7 +255,7 @@ terms =
     pEVar,
     pECond,
     pELam,
-    pECase,
+    pELitCase,
     pESet
   ]
 

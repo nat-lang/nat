@@ -161,8 +161,7 @@ lookupTyEnv x = do
   (TyEnv env) <- ask
   case Map.lookup x env of
     Nothing -> throwError $ UnboundVariable x
-    Just s -> do
-      instantiate s
+    Just s -> instantiate s
 
 isInTyEnv :: TyScheme -> Infer Bool
 isInTyEnv ty = asks (isIn ty)
@@ -226,6 +225,8 @@ instance Inferrable Expr where
       (tZ, cZ) <- infer z
       tv <- fresh
       return (tv, cX ++ cY ++ cZ ++ [(tX, tyBool), (tY, tv), (tZ, tv)])
+    -- ETyCase (e,ty) cs -> do
+    --   tv <- fresh
 
 normalize :: TyScheme -> TyScheme
 normalize (Forall _ body) = Forall (map snd ord) (normtype body)
@@ -349,4 +350,4 @@ unifiable t0 t1 = case unify of
   where
     unify = runIdentity $ runExceptT $ unifies t0 t1
 
-t0 <=> t1 = unifiable t0 t1
+(<=>) = unifiable

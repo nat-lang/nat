@@ -101,7 +101,7 @@ spec = do
     it "reduces equality relations between terms that reduce to literals" $ do
       eval (id' true === id' false) `shouldBe` Right false
 
-    it "does not reduce equality relations between anything else" $ do
+    it "reduces equality relations between nothing else" $ do
       eval (x === y) `shouldBe` Right (x === y)
       eval ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
       eval ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
@@ -118,7 +118,7 @@ spec = do
     it "reduces arithmetic on terms that reduce to natural numbers" $ do
       eval (EBinOp Add ((x ~> x) * one) ((x ~> x) * one)) `shouldBe` Right (ELit $ LInt 2)
 
-    it "reduces truth conditional binary operations between operations on sets" $ do
+    it "reduces truth conditional binary operations between set membership" $ do
       let s = mkS [mkI 0, mkI 1]
 
       eval ((s * mkI 0) || (s * mkI 2)) `shouldBe` Right true
@@ -164,11 +164,11 @@ spec = do
       eval t `shouldBe` eval (churchNode * f * (churchNode * (x ~> x) * churchLeaf * churchLeaf) * (churchNode * y * churchLeaf * churchLeaf))
 
     it "reduces case expressions on booleans" $ do
-      eval (ECase true [(true, x)]) `shouldBe` Right x
-      eval (ECase false [(false, y), (true, x), (false, z)]) `shouldBe` Right y
+      eval (ELitCase true [(true, x)]) `shouldBe` Right x
+      eval (ELitCase false [(false, y), (true, x), (false, z)]) `shouldBe` Right y
 
     it "reduces case expressions on terms that reduce to booleans" $ do
-      eval (ECase one [((x ~> x) * one, one), (zero, x), (one, z)]) `shouldBe` Right one
+      eval (ELitCase one [((x ~> x) * one, one), (zero, x), (one, z)]) `shouldBe` Right one
 
     let id' y = (x ~> x) * y
 
@@ -180,11 +180,11 @@ spec = do
       eval (true && false) `shouldBe` Right false
       eval (true || false) `shouldBe` Right true
 
-    it "reduces truth conditional unary operations on function applications" $ do
+    it "reduces truth conditional unary operations on terms that reduce to booleans" $ do
       eval (not' (id' true)) `shouldBe` Right false
       eval (not' (id' false)) `shouldBe` Right true
 
-    it "reduces truth conditional binary operations on function applications" $ do
+    it "reduces truth conditional binary operations on terms that reduce to booleans" $ do
       eval (id' true && id' false) `shouldBe` Right false
       eval (id' true || id' false) `shouldBe` Right true
 
@@ -195,6 +195,21 @@ spec = do
 
     it "reduces inequalities between relations" $ do
       eval ((true && true) !== (false && false)) `shouldBe` Right true
+
+    it "reduces type case expressions" $ do
+      let b = Binder (mkVar "n") tyInt
+      let fnA = ELam b (EBinOp Add n one)
+      let fnB = ELam b (EBinOp Eq n one)
+
+      let tyCase = x ~> ETyCase x [(TyFun tyInt tyInt, x * zero), (TyFun tyInt tyBool, x * one)]
+
+      eval (tyCase * fnA) `shouldBe` Right one
+      eval (tyCase * fnB) `shouldBe` Right true
+
+      let tyCase = x ~> ETyCase x [(tyInt, EBinOp Add x one), (TyFun tyInt tyInt, x * one)]
+
+      eval (tyCase * one) `shouldBe` Right (mkI 2)
+      eval (tyCase * fnA) `shouldBe` Right (mkI 2)
 
   describe "confluence (*=)" $ do
     let (*=) e0 e1 = (e0 E.*= e1) @?= True

@@ -8,7 +8,10 @@ import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
+import Mean.Evaluation.Type hiding (TypeError (..), fresh)
+import qualified Mean.Evaluation.Type as Ty
 import Mean.Syntax.Surface
+import Mean.Syntax.Type
 import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
@@ -20,17 +23,21 @@ class Reducible a where
   reduce :: a -> Evaluation Expr
   substitute :: Expr -> Var -> a -> a
 
-class AlphaEq a where
+class Reducible a => AlphaEq a where
   alphaEq :: a -> a -> Bool
 
+-- Evaluative equality is the kind we recognize during evaluation.
+class Reducible a => EvalEq a where
+  (=*=) :: a -> a -> Bool
+
 data EvalError
-  = UnboundVariable Name
-  | NotTruthy Expr
+  = InexhaustiveCase Expr
+  | RuntimeTypeError Ty.TypeError
   deriving (P.Eq)
 
 instance Show EvalError where
-  show (UnboundVariable n) = "Unbound variable: " ++ show n
-  show (NotTruthy e) = "Not truthy: " ++ show e
+  show (InexhaustiveCase c) = "Inexhaustive case expr: " ++ show c
+  show (RuntimeTypeError e) = "Runtime type error: " ++ show e
 
 incrVarId :: Var -> Var
 incrVarId (Var vPub vPri) = Var vPub $ init vPri ++ show (digitToInt (last vPri) P.+ 1)
@@ -49,9 +56,7 @@ bool e = case e of
 
 instance Reducible [Expr] where
   fv es = foldl1 Set.union (fv <$> es)
-
--- reduce es =
--- substitute e v es =
+  substitute e v es = substitute e v <$> es
 
 class Arithmetic a where
   (+) :: a -> a -> a
@@ -68,12 +73,12 @@ instance Arithmetic Expr where
   (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
   _ - _ = error arithOnlyErr
 
--- λeλb . e
+-- λeb . e
 churchLeaf =
   let [e, b] = mkEVar <$> ["e", "b"]
    in e ~> (b ~> e)
 
--- λxλlλrλeλb . b(x)(l e b)(r e b)
+-- λxlreb . b(x)(l e b)(r e b)
 churchNode =
   let [e, b, x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
    in x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
@@ -87,7 +92,7 @@ instance Reducible Expr where
     EUnOp _ e -> fv e
     EBinOp _ e0 e1 -> fv [e0, e1]
     -- ETree (T.Tree Expr)
-    -- ECase Expr [(Expr, Expr)]
+    -- ELitCase Expr [(Expr, Expr)]
     -- ESet (Set Expr)
     -- ELet Var Expr Expr
     -- EFix Var Expr
@@ -100,12 +105,22 @@ instance Reducible Expr where
           -- relevant base case
           EVar v' | v' == v -> e
           -- induction
-          EApp e0 e1 -> (sub' e0) * (sub' e1)
+          EApp e0 e1 -> sub' e0 * sub' e1
           ECond x y z -> sub' x ? sub' y > sub' z
           EUnOp op e -> EUnOp op (sub' e)
           EBinOp op e0 e1 -> EBinOp op (sub' e0) (sub' e1)
+          ETyCase b cs ->
+            let (ts, es) = unzip cs
+                f = ETyCase (sub' b) (zip ts (substitute e v es))
+             in trace
+                  (show f)
+                  trace
+                  (show es)
+                  trace
+                  (show e)
+                  f
           -- ETree (T.Tree Expr)
-          -- ECase Expr [(Expr, Expr)]
+          -- ELitCase Expr [(Expr, Expr)]
           -- ESet (Set Expr)
           -- ELet Var Expr Expr
           -- EFix Var Expr
@@ -129,7 +144,7 @@ instance Reducible Expr where
     EApp e0 e1 -> case e0 of
       -- (1a) function application, beta reduce
       ELam (Binder v _) body -> reduce (substitute e1 v body)
-      -- (sugar) sets behave like their characteristic functions
+      -- (sugar) combinatorially, sets behave like their characteristic functions
       ESet s -> do
         e1' <- reduce e1
         pure $ ELit $ LBool $ Set.member e1' s
@@ -191,22 +206,19 @@ instance Reducible Expr where
             l' <- mkChurchTree l
             r' <- mkChurchTree r
             pure $ churchNode * e * l' * r'
-    ECase b cs -> do
+    ETyCase b cs -> case inferExpr empty b of
+      Left e -> throwError $ RuntimeTypeError e
+      Right (Forall _ ty) -> case cs of
+        ((ty', e) : cs') -> reduce $ if ty <=> ty' then e else ETyCase b cs'
+        _ -> throwError $ InexhaustiveCase expr
+    ELitCase b cs -> do
       b' <- reduce b
       case cs of
-        [] -> error "empty case statement"
-        [(c, e)] -> do
-          c' <- reduce c
-          b' <- reduce b
-          if c' == b'
-            then reduce e
-            else -- crude check for totality
-              error "case without default"
-        ((c, e) : cs) -> do
+        ((c, e) : cs') -> do
           c' <- reduce c
           e' <- reduce e
-          cs' <- reduce (ECase b cs)
-          reduce $ (b' === c') ? e' > cs'
+          reduce $ (b' === c') ? e' > ELitCase b cs'
+        _ -> throwError $ InexhaustiveCase expr
     ELet v e0 e1 -> reduce $ (EVar v ~> e1) * e0
     EFix v e ->
       let f = mkEVar "f"

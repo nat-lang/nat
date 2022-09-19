@@ -1,9 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Mean.Syntax.Type where
 
@@ -36,7 +34,10 @@ data Type
   = TyVar TyVar
   | TyCon String
   | TyFun Type Type
-  | TyNil
+  | TySum (Set.Set Type)
+  | -- TyNil is a placeholder left by the parser in lieu of an explicit
+    -- type annotation. It says "infer my type, please".
+    TyNil
   deriving (Prel.Eq, Ord)
 
 data TyScheme = Forall [TyVar] Type

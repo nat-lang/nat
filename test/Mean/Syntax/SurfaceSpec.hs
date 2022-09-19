@@ -113,11 +113,11 @@ spec = do
       parse pETree "[(f x) [f x] [f(x)]]"
         `shouldBe` Right (ETree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
 
-  describe "pECase" $ do
+  describe "pELitCase" $ do
     it "parses case statements" $ do
-      parse pECase "case x of\n\tTrue: y\n\tFalse: z" `shouldBe` Right (ECase x [(true, y), (false, z)])
+      parse pELitCase "case x of\n\tTrue: y\n\tFalse: z" `shouldBe` Right (ELitCase x [(true, y), (false, z)])
     it "parses nested case statements" $ do
-      parse pECase "case x of\n\tTrue: y\n\tFalse: case z of\n\t\tFalse: y\n\t\tTrue: x" `shouldBe` Right (ECase x [(true, y), (false, ECase z [(false, y), (true, x)])])
+      parse pELitCase "case x of\n\tTrue: y\n\tFalse: case z of\n\t\tFalse: y\n\t\tTrue: x" `shouldBe` Right (ELitCase x [(true, y), (false, ELitCase z [(false, y), (true, x)])])
 
   describe "pESet" $ do
     it "parses sets of integers" $ do
