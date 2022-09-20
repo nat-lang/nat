@@ -8,8 +8,7 @@ import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Evaluation.Type hiding (TypeError (..), fresh)
-import qualified Mean.Evaluation.Type as Ty
+import Mean.Evaluation.Type (TypeError, infer, (<=>))
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Viz
@@ -32,7 +31,7 @@ class Reducible a => EvalEq a where
 
 data EvalError
   = InexhaustiveCase Expr
-  | RuntimeTypeError Ty.TypeError
+  | RuntimeTypeError TypeError
   deriving (P.Eq)
 
 instance Show EvalError where
@@ -206,7 +205,7 @@ instance Reducible Expr where
             l' <- mkChurchTree l
             r' <- mkChurchTree r
             pure $ churchNode * e * l' * r'
-    ETyCase b cs -> case inferExpr empty b of
+    ETyCase b cs -> case infer b of
       Left e -> throwError $ RuntimeTypeError e
       Right (Forall _ ty) -> case cs of
         ((ty', e) : cs') -> reduce $ if ty <=> ty' then e else ETyCase b cs'

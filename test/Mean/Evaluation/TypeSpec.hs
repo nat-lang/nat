@@ -2,24 +2,36 @@
 
 module Mean.Evaluation.TypeSpec where
 
+import Data.List (foldl')
 import Debug.Trace (traceM)
+import Mean.Evaluation.Surface hiding (substitute)
+import Mean.Evaluation.Type hiding (Substitution (..))
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
-import Mean.Evaluation.Surface
-import Mean.Evaluation.Type
 import Test.Hspec
-import Prelude hiding ((>), (*))
+import Prelude hiding ((*), (>))
 
-inf = inferExpr empty
+mkEnv :: [(Name, TyScheme)] -> TyEnv
+mkEnv = foldl' extend mempty
+
 fn x ty y = ELam (Binder (mkVar x) ty) y
+
 (EVar (Var _ xPri)) = mkEVar "x"
+
 (EVar (Var _ yPri)) = mkEVar "y"
+
 tyA = mkTv "A"
+
 tyB = mkTv "B"
-[x,y,z] = mkEVar <$> ["x","y","z"]
+
+[x, y, z] = mkEVar <$> ["x", "y", "z"]
+
 true = ELit $ LBool True
+
 false = ELit $ LBool False
+
 zero = ELit $ LInt 0
+
 one = ELit $ LInt 1
 
 spec :: Spec
@@ -29,39 +41,39 @@ spec = do
       let env = mkEnv [(yPri, mkUnqScheme tyA)]
       let (Right (_, sub, ty, _)) = constraintsOnExpr env ((fn "x" tyInt x) * y)
 
-      apply sub ty `shouldBe` tyInt
+      substitute sub ty `shouldBe` tyInt
 
-  describe "inferExpr" $ do
+  describe "infer" $ do
     it "types literal integers" $ do
-      inf (ELit $ LInt 0) `shouldBe` Right (mkUnqScheme tyInt)
+      infer (ELit $ LInt 0) `shouldBe` Right (mkUnqScheme tyInt)
     it "types literal booleans" $ do
-      inf (ELit $ LBool True) `shouldBe` Right (mkUnqScheme tyBool)
+      infer (ELit $ LBool True) `shouldBe` Right (mkUnqScheme tyBool)
 
     it "infers the types of functions" $ do
-      let inferFnTy ty = inf (fn "x" ty x) `shouldBe` Right (mkUnqScheme (TyFun ty ty))
+      let inferFnTy ty = infer (fn "x" ty x) `shouldBe` Right (mkUnqScheme (TyFun ty ty))
 
       inferFnTy tyBool
       inferFnTy tyInt
 
     it "infers the types of function applications" $ do
-      let inferAppTy ty = inferExpr (mkEnv [(yPri, ty')]) ((fn "x" ty x) * y) `shouldBe` Right ty' where ty' = mkUnqScheme ty
+      let inferAppTy ty = infer' (mkEnv [(yPri, ty')]) ((fn "x" ty x) * y) `shouldBe` Right ty' where ty' = mkUnqScheme ty
 
       inferAppTy tyBool
       inferAppTy tyInt
-    
+
     it "types equalities" $ do
       let tb = mkUnqScheme tyBool
-      inf (one === one) `shouldBe` Right tb
-      inf (one === zero) `shouldBe` Right tb
-      inf (true === true) `shouldBe` Right tb
-      inf (true === false) `shouldBe` Right tb
+      infer (one === one) `shouldBe` Right tb
+      infer (one === zero) `shouldBe` Right tb
+      infer (true === true) `shouldBe` Right tb
+      infer (true === false) `shouldBe` Right tb
 
     it "enforces constraints on equalities" $ do
       let env = mkEnv [(xPri, mkUnqScheme tyA), (yPri, mkUnqScheme tyB)]
       let (Right (_, sub, _, _)) = constraintsOnExpr env (x === y)
 
-      apply sub tyA `shouldBe` apply sub tyB
-    
+      substitute sub tyA `shouldBe` substitute sub tyB
+
     it "enforces constraints on ternary conditionals" $ do
       let (EVar (Var _ zPri)) = mkEVar "z"
       let tyC = mkTv "C"
@@ -69,9 +81,9 @@ spec = do
       let env = mkEnv [(xPri, mkUnqScheme tyA), (yPri, mkUnqScheme tyB), (zPri, mkUnqScheme tyC)]
       let (Right (_, sub, ty, _)) = constraintsOnExpr env (x ? y > z)
 
-      apply sub tyA `shouldBe` tyBool
-      apply sub tyB `shouldBe` ty
-      apply sub tyC `shouldBe` ty
+      substitute sub tyA `shouldBe` tyBool
+      substitute sub tyB `shouldBe` ty
+      substitute sub tyC `shouldBe` ty
 
     it "types recursive functions" $ do
       let iE = ELit . LInt
@@ -82,5 +94,4 @@ spec = do
 
       let (Right fact') = eval fact
 
-      inf (fact' * one) `shouldBe` Right (mkUnqScheme tyInt)
-
+      infer (fact' * one) `shouldBe` Right (mkUnqScheme tyInt)
