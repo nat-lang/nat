@@ -22,11 +22,11 @@ class Reducible a where
   reduce :: a -> Evaluation Expr
   substitute :: Expr -> Var -> a -> a
 
-class Reducible a => AlphaEq a where
+class AlphaEq a where
   alphaEq :: a -> a -> Bool
 
 -- Evaluative equality is the kind we recognize during evaluation.
-class Reducible a => EvalEq a where
+class EvalEq a where
   (=*=) :: a -> a -> Bool
 
 data EvalError
@@ -110,14 +110,7 @@ instance Reducible Expr where
           EBinOp op e0 e1 -> EBinOp op (sub' e0) (sub' e1)
           ETyCase b cs ->
             let (ts, es) = unzip cs
-                f = ETyCase (sub' b) (zip ts (substitute e v es))
-             in trace
-                  (show f)
-                  trace
-                  (show es)
-                  trace
-                  (show e)
-                  f
+             in ETyCase (sub' b) (zip ts (substitute e v es))
           -- ETree (T.Tree Expr)
           -- ELitCase Expr [(Expr, Expr)]
           -- ESet (Set Expr)
@@ -208,7 +201,11 @@ instance Reducible Expr where
     ETyCase b cs -> case infer b of
       Left e -> throwError $ RuntimeTypeError e
       Right (Forall _ ty) -> case cs of
-        ((ty', e) : cs') -> reduce $ if ty <=> ty' then e else ETyCase b cs'
+        ((Binder v ty', e) : cs') ->
+          reduce $
+            if ty <=> ty'
+              then substitute b v e
+              else ETyCase b cs'
         _ -> throwError $ InexhaustiveCase expr
     ELitCase b cs -> do
       b' <- reduce b

@@ -58,7 +58,7 @@ data Expr
   | EBinOp BinOp Expr Expr
   | ETree (T.Tree Expr)
   | ELitCase Expr [(Expr, Expr)]
-  | ETyCase Expr [(Type, Expr)]
+  | ETyCase Expr [(Binder, Expr)]
   | ESet (Set Expr)
   | ELet Var Expr Expr
   | EFix Var Expr

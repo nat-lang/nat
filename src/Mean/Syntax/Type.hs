@@ -9,12 +9,13 @@ import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
 import Data.Functor ((<&>))
+import Data.List (intercalate)
 import qualified Data.Map as Map
 import Data.Set ((\\))
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import qualified Mean.Parser as P
-import Mean.Viz (Pretty (ppr), angles, anglesIf)
+import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies)
 import Text.PrettyPrint
   ( Doc,
     brackets,
@@ -49,6 +50,8 @@ mkUnqScheme = Forall []
 mkTv :: String -> Type
 mkTv = TyVar . TV
 
+mkTyUnion = TyUnion . Set.fromList
+
 tyInt, tyBool :: Type
 tyInt = TyCon "n"
 tyBool = TyCon "t"
@@ -64,6 +67,7 @@ instance Pretty Type where
   ppr p (TyCon t) = anglesIf (p == 0) $ text t
   ppr p (TyVar t) = anglesIf (p == 0) $ ppr p t
   ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
+  ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
   ppr p TyNil = text "TyNil"
 
 instance Pretty TyScheme where

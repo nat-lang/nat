@@ -198,15 +198,16 @@ spec = do
 
     it "reduces type case expressions" $ do
       let b = Binder (mkVar "n") tyInt
+      let (EVar zV) = z
       let fnA = ELam b (EBinOp Add n one)
       let fnB = ELam b (EBinOp Eq n one)
 
-      let tyCase = x ~> ETyCase x [(TyFun tyInt tyInt, x * zero), (TyFun tyInt tyBool, x * one)]
+      let tyCase = x ~> ETyCase x [(Binder zV $ TyFun tyInt tyInt, z * zero), (Binder zV $ TyFun tyInt tyBool, z * one)]
 
       eval (tyCase * fnA) `shouldBe` Right one
       eval (tyCase * fnB) `shouldBe` Right true
 
-      let tyCase = x ~> ETyCase x [(tyInt, EBinOp Add x one), (TyFun tyInt tyInt, x * one)]
+      let tyCase = x ~> ETyCase x [(Binder zV tyInt, EBinOp Add z one), (Binder zV $ TyFun tyInt tyInt, z * one)]
 
       eval (tyCase * one) `shouldBe` Right (mkI 2)
       eval (tyCase * fnA) `shouldBe` Right (mkI 2)
