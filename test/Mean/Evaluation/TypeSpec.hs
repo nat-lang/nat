@@ -45,9 +45,9 @@ spec = do
       substitute sub ty `shouldBe` tyInt
 
   describe "infer" $ do
-    it "types literal integers" $ do
+    it "infers the type of literal integers" $ do
       infer (ELit $ LInt 0) `shouldBe` Right (mkUnqScheme tyInt)
-    it "types literal booleans" $ do
+    it "infers the type of literal booleans" $ do
       infer (ELit $ LBool True) `shouldBe` Right (mkUnqScheme tyBool)
 
     it "infers the types of functions" $ do
@@ -62,7 +62,7 @@ spec = do
       inferAppTy tyBool
       inferAppTy tyInt
 
-    it "types equalities" $ do
+    it "infers the type of equalities" $ do
       let tb = mkUnqScheme tyBool
       infer (one === one) `shouldBe` Right tb
       infer (one === zero) `shouldBe` Right tb
@@ -133,4 +133,9 @@ spec = do
 
   describe "the union type" $ do
     it "is unified with other types existentially" $ do
-      True `shouldBe` False
+      let [tA, tB, tC] = TyCon <$> ["A", "B", "C"]
+      let unionTy = mkTyUnion [tA, tB]
+
+      unionTy <=> tA `shouldBe` True
+      unionTy <=> tB `shouldBe` True
+      unionTy <=> tC `shouldBe` False

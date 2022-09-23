@@ -64,7 +64,7 @@ spec = do
       -- λfλx . x(f) == λfλx . y(f)
       (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
     it "recognizes syntactic equivalence" $ do
-      -- this is just a special case of alpha equivalence,
+      -- this is naturally a special case of alpha equivalence,
       -- but probably @= should check for syntactic equivalence
       -- before trying substitutions for the sake of efficiency. tbc
       x @= x
