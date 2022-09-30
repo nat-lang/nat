@@ -3,6 +3,7 @@
 
 module Mean.Syntax.Surface
   ( T.Tree (..),
+    T.fromList,
     module Mean.Syntax.Surface,
   )
 where
@@ -14,34 +15,19 @@ import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (traceM)
 import qualified Mean.Parser as P
 import Mean.Syntax.Type
+import Mean.Var
 import Mean.Viz
 import Text.Megaparsec.Debug (dbg)
 import Text.PrettyPrint (char, parens, text, (<+>), (<>))
 import Prelude hiding (Eq, GT, LT, (*), (<>))
 import qualified Prelude as Prel
 
-type Name = String
-
 data Lit
   = LInt Int
   | LBool Bool
   deriving (Prel.Eq, Ord, Show)
 
-data Var = Var Name Name
-
-instance Prel.Eq Var where
-  (Var _ v) == (Var _ v') = v == v'
-
-instance Ord Var where
-  compare (Var _ v0) (Var _ v1) = compare v0 v1
-
-instance Show Var where
-  show (Var vPub vPri) = vPub
-
-data Binder = Binder Var Type deriving (Prel.Eq, Ord)
-
-instance Pretty Binder where
-  ppr p (Binder n t) = char 'λ' <> text (show n)
+data Binder b = Binder b Type deriving (Prel.Eq, Ord)
 
 data UnOp = Neg deriving (Prel.Eq, Ord, Show)
 
@@ -50,18 +36,20 @@ data BinOp = Add | Sub | Mul | LT | GT | GTE | LTE | Eq | NEq | And | Or derivin
 data Expr
   = ELit Lit
   | EVar Var
-  | EBind Binder
-  | ELam Binder Expr
+  | EBind (Binder Var)
+  | ELam (Binder Var) Expr
   | EApp Expr Expr
   | ECond Expr Expr Expr
   | EUnOp UnOp Expr
   | EBinOp BinOp Expr Expr
   | ETree (T.Tree Expr)
   | ELitCase Expr [(Expr, Expr)]
-  | ETyCase Expr [(Binder, Expr)]
+  | ETyCase Expr [(Binder Expr, Expr)]
   | ESet (Set Expr)
   | ELet Var Expr Expr
   | EFix Var Expr
+  | ETup [Expr]
+  | EIdx Int
   deriving (Prel.Eq, Ord)
 
 instance Pretty Lit where
@@ -102,7 +90,7 @@ instance Pretty Expr where
       where
         infx p e0 e1 op = ppr p e0 <+> text op <+> ppr p e1
     ECond x y z -> text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
-    ETree t -> text $ show e
+    ETree t -> text $ T.drawTree t
     ELitCase e es -> text "litcase" <+> ppCase p e es
     ETyCase e es -> text "tycase" <+> ppCase p e es
     ESet s -> text $ show s
@@ -112,8 +100,11 @@ instance Pretty Expr where
 instance Show Expr where
   show = show . ppr 0
 
-mkVar :: Name -> Var
-mkVar v = Var v (v ++ "0")
+instance Show b => Pretty (Binder b) where
+  ppr p (Binder n t) = char 'λ' <> text (show n)
+
+instance Show (Binder Expr) where
+  show (Binder e t) = show e ++ ":" ++ show t
 
 mkEVar :: Name -> Expr
 mkEVar = EVar . mkVar
@@ -121,11 +112,21 @@ mkEVar = EVar . mkVar
 (*) :: Expr -> Expr -> Expr
 (*) = EApp
 
+(&>) :: (Expr, Type) -> Binder Var
+(&>) (EVar v, t) = Binder v t
+(&>) _ = error "can't bind anything but a variable!"
+
+(+>) :: (Expr, Type) -> Expr -> Expr
+(+>) (e, t) = ELam $ (&>) (e, t)
+
 (~>) :: Expr -> Expr -> Expr
-(EVar v) ~> e = ELam (Binder v TyNil) e
-_ ~> _ = error "can't bind anything but a variable!"
+(~>) e = (+>) (e, TyNil)
 
 infixl 9 *
+
+infixl 8 &>
+
+infixr 8 +>
 
 infixl 8 ~>
 
@@ -169,8 +170,8 @@ pLit = P.choice [pInt, pBool]
 pVar :: P.Parser Var
 pVar = mkVar <$> P.identifier
 
-pBinder :: P.Parser Binder
-pBinder = do
+pVarBinder :: P.Parser (Binder Var)
+pVarBinder = do
   P.symbol "\\"
   n <- P.identifier
   Binder (mkVar n) <$> pOptionalType
@@ -192,7 +193,7 @@ pECond = do
 
 pELam :: ExprParser
 pELam = do
-  b <- pBinder
+  b <- pVarBinder
   P.symbol "."
   ELam b <$> pExpr
 
@@ -200,8 +201,8 @@ pELitCase :: ExprParser
 pELitCase = P.try $ P.indentBlock P.spaceN p
   where
     pCase = do
-      c <- pExpr
-      P.reserved ":"
+      c <- pTerm
+      P.reserved "->"
       r <- pExpr
       pure (c, r)
     p = do
@@ -209,6 +210,26 @@ pELitCase = P.try $ P.indentBlock P.spaceN p
       base <- pExpr
       P.reserved "of"
       pure $ P.IndentSome Nothing (pure . ELitCase base) pCase
+
+pExprBinder :: P.Parser (Binder Expr)
+pExprBinder = do
+  e <- pTerm
+  P.reserved ":"
+  Binder e <$> pType
+
+pETyCase :: ExprParser
+pETyCase = P.try $ P.indentBlock P.spaceN p
+  where
+    pCase = do
+      b <- pExprBinder
+      P.reserved "->"
+      r <- pExpr
+      pure (b, r)
+    p = do
+      P.reserved "tycase"
+      base <- pExpr
+      P.reserved "of"
+      pure $ P.IndentSome Nothing (pure . ETyCase base) pCase
 
 pESet = do
   es <- P.curlies (pExpr `P.sepBy` (P.space >> P.char ',' >> P.space))
@@ -229,7 +250,7 @@ pETree = do
   t <- after (pTree pENode) (put $ s {P.inTree = False})
   pure $ ETree t
   where
-    pEBind = EBind <$> pBinder
+    pEBind = EBind <$> pVarBinder
     pENode = P.try pExpr P.<|> pEBind
 
 pTree pNode =
@@ -256,6 +277,7 @@ terms =
     pECond,
     pELam,
     pELitCase,
+    pETyCase,
     pESet
   ]
 
@@ -271,7 +293,14 @@ operatorTable =
     [ P.infixOpL "==" (EBinOp Eq),
       P.infixOpL "!=" (EBinOp NEq),
       P.infixOpL "&&" (EBinOp And),
-      P.infixOpL "||" (EBinOp Or)
+      P.infixOpL "||" (EBinOp Or),
+      P.infixOpL "+" (EBinOp Add),
+      P.infixOpL "-" (EBinOp Sub),
+      P.infixOpL "*" (EBinOp Mul),
+      P.infixOpL "<" (EBinOp LT),
+      P.infixOpL "<=" (EBinOp LTE),
+      P.infixOpL ">" (EBinOp GT),
+      P.infixOpL ">=" (EBinOp GTE)
     ]
   ]
 

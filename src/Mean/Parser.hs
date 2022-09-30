@@ -1,38 +1,41 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Parser
-  ( 
-    Lex.IndentOpt(..), Lex.indentBlock,
-    Operator(..), makeExprParser,
+  ( Lex.IndentOpt (..),
+    Lex.indentBlock,
+    Operator (..),
+    makeExprParser,
     C.char,
+    C.space1,
     dbg,
     module Mean.Parser,
-    module Text.Megaparsec
+    module Text.Megaparsec,
   )
 where
 
 import Control.Monad.Combinators.Expr
-    ( Operator(..), makeExprParser )
-import Debug.Trace (traceM)
-import Text.Megaparsec ((<|>), try, some, many, sepBy, choice, between, notFollowedBy, lookAhead, observing, runParserT, parseError, ParseErrorBundle, ParsecT)
-import qualified Text.Megaparsec.Char as C
-import qualified Text.Megaparsec.Char.Lexer as Lex
-import Text.Megaparsec.Debug (dbg)
-
-import Control.Monad.Identity ( runIdentity, Identity )
+  ( Operator (..),
+    makeExprParser,
+  )
+import Control.Monad.Identity (Identity, runIdentity)
+import Control.Monad.State
 import Data.Functor ((<&>))
 import Data.Text (Text)
 import qualified Data.Text.IO as TiO
-import Control.Monad.State
 import Data.Void (Void)
+import Debug.Trace (traceM)
+import Text.Megaparsec (ParseErrorBundle, ParsecT, between, choice, lookAhead, many, notFollowedBy, observing, parseError, runParserT, sepBy, sepEndBy, some, try, (<|>))
+import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
+import qualified Text.Megaparsec.Char.Lexer as Lex
+import Text.Megaparsec.Debug (dbg)
 
 newtype ParseState = ParseState {inTree :: Bool}
 
 type Parser = ParsecT Void Text (StateT ParseState Identity)
 
 keywords :: [String]
-keywords = ["if", "then", "else", "let", "dom", "case", "of"]
+keywords = ["if", "then", "else", "let", "dom", "case", "tycase", "of", ":"]
 
 lineComment = L.skipLineComment "//"
 
@@ -65,6 +68,9 @@ angles = btw "<" ">"
 
 curlies :: Parser a -> Parser a
 curlies = btw "{" "}"
+
+commaSep :: Parser a -> Parser [a]
+commaSep p = p `sepBy` (space >> C.char ',' >> space)
 
 reserved :: Text -> Parser ()
 reserved w = (lexeme . try) (C.string w *> notFollowedBy C.alphaNumChar)

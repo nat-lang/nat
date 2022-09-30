@@ -1,5 +1,6 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Mean.Evaluation.Type where
 
@@ -34,31 +35,34 @@ import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
 import qualified Mean.Syntax.Surface as S
 import Mean.Syntax.Type
+import Mean.Unification
+import Mean.Var
 import Mean.Viz
+import Prelude hiding ((<*>))
 
 -------------------------------------------------------------------------------
 -- Classes
 -------------------------------------------------------------------------------
 
-newtype TyEnv = TyEnv {types :: Map.Map S.Name TyScheme}
+newtype TyEnv = TyEnv {types :: Map.Map Var TyScheme}
   deriving (Eq)
 
 mkTyEnv :: TyEnv
 mkTyEnv = TyEnv Map.empty
 
-extend :: TyEnv -> (S.Name, TyScheme) -> TyEnv
+extend :: TyEnv -> (Var, TyScheme) -> TyEnv
 extend env (v, t) = env {types = Map.insert v t (types env)}
 
-remove :: TyEnv -> S.Name -> TyEnv
+remove :: TyEnv -> Var -> TyEnv
 remove (TyEnv env) var = TyEnv (Map.delete var env)
 
 merge :: TyEnv -> TyEnv -> TyEnv
 merge (TyEnv a) (TyEnv b) = TyEnv (Map.union a b)
 
-toList :: TyEnv -> [(S.Name, TyScheme)]
+toList :: TyEnv -> [(Var, TyScheme)]
 toList (TyEnv env) = Map.toList env
 
-fromList :: [(S.Name, TyScheme)] -> TyEnv
+fromList :: [(Var, TyScheme)] -> TyEnv
 fromList = TyEnv . Map.fromList
 
 isIn :: TyScheme -> TyEnv -> Bool
@@ -93,69 +97,43 @@ newtype ConstraintState = CState {count :: Int}
 initConstrain :: ConstraintState
 initConstrain = CState {count = 0}
 
-type Constraint = (Type, Type)
-
--- | Constraint solver monad
-type UnifyM a = ExceptT TypeError Identity a
-
-newtype Substitution = Sub (Map.Map TyVar Type) deriving (Eq, Ord, Semigroup, Monoid, Show)
-
-mkSub v t = Sub $ Map.singleton v t
-
-class Substitutable a where
-  substitute :: Substitution -> a -> a
-  fv :: a -> Set.Set TyVar
-
 class Inferrable a where
-  constrain :: a -> Constrain (Type, [Constraint])
+  constrain :: a -> Constrain (Type, [Constraint Type])
   infer' :: TyEnv -> a -> Either TypeError TyScheme
   infer :: a -> Either TypeError TyScheme
 
-class Unifiable a where
-  unify :: a -> UnifyM Substitution
+instance Substitutable Type Type where
+  substitute t0 t1 = case (t0, t1) of
+    (_, TyCon {}) -> t1
+    (e, TyVar a) -> Map.findWithDefault t1 a e
+    (s, TyFun t0' t1') -> let sub' = substitute s in sub' t0' `TyFun` sub' t1'
+    (s, TyUnion ts) -> TyUnion $ Set.fromList (substitute s <$> Set.toList ts)
 
-instance Substitutable Type where
-  substitute _ (TyCon a) = TyCon a
-  substitute (Sub s) t@(TyVar a) = Map.findWithDefault t a s
-  substitute s (TyFun t0 t1) = let sub' = substitute s in sub' t0 `TyFun` sub' t1
-  substitute s (TyUnion ts) = TyUnion $ Set.fromList (substitute s <$> Set.toList ts)
+instance FV Type where
+  fv t = case t of
+    TyCon {} -> Set.empty
+    TyVar a -> Set.singleton a
+    TyFun t0 t1 -> fv t0 `Set.union` fv t1
+    TyUnion ts -> foldMap fv ts
 
-  fv TyCon {} = Set.empty
-  fv (TyVar a) = Set.singleton a
-  fv (TyFun t0 t1) = fv t0 `Set.union` fv t1
-  fv (TyUnion ts) = foldMap fv ts
-
-instance Substitutable TyScheme where
-  substitute (Sub s) (Forall as t) = Forall as $ substitute s' t
+instance Substitutable Type TyScheme where
+  substitute e (Forall as t) = Forall as $ substitute s' t
     where
-      s' = Sub $ foldr Map.delete s as
+      s' = foldr Map.delete e as
+
+instance FV TyScheme where
   fv (Forall as t) = fv t `Set.difference` Set.fromList as
 
-instance Substitutable Constraint where
-  substitute s (t0, t1) = (substitute s t0, substitute s t1)
-  fv (t0, t1) = fv t0 `Set.union` fv t1
-
-instance Substitutable a => Substitutable [a] where
-  substitute = map . substitute
-  fv = foldr (Set.union . fv) Set.empty
-
-instance Substitutable TyEnv where
+instance Substitutable Type TyEnv where
   substitute s (TyEnv env) = TyEnv $ Map.map (substitute s) env
+
+instance FV TyEnv where
   fv (TyEnv env) = fv $ Map.elems env
 
 data TypeError
-  = NotUnifiable Type Type
-  | InfiniteType TyVar Type
-  | UnboundVariable String
-  | UnificationMismatch [Type] [Type]
-  deriving (Eq)
-
-instance Show TypeError where
-  show (NotUnifiable a b) =
-    concat ["cannot unify types: \n\t", show a, "\nwith \n\t", show b]
-  show (InfiniteType (TV a) b) =
-    concat ["cannot construct the infinite type: ", a, " = ", show b]
-  show (UnboundVariable a) = "not in scope: " ++ a
+  = UnboundVariable Var
+  | TyUnificationError (UnificationError Type)
+  deriving (Eq, Show)
 
 -------------------------------------------------------------------------------
 -- Inference
@@ -165,15 +143,15 @@ instance Show TypeError where
 closeOver :: Type -> TyScheme
 closeOver = normalize . generalize mkTyEnv
 
-isTv t = case t of (Forall _ (TyVar TV {})) -> True; _ -> False
+isTv t = case t of (Forall _ (TyVar Var {})) -> True; _ -> False
 
 -- | Extend type environment
-inTyEnv :: (S.Name, TyScheme) -> Constrain a -> Constrain a
+inTyEnv :: (Var, TyScheme) -> Constrain a -> Constrain a
 inTyEnv (v, t) m = do
   local (\e -> remove e v `extend` (v, t)) m
 
 -- | Lookup type in the environment
-checkTy :: S.Name -> Constrain Type
+checkTy :: Var -> Constrain Type
 checkTy x = do
   (TyEnv env) <- ask
   case Map.lookup x env of
@@ -191,8 +169,8 @@ freshIfNil ty = case ty of
 instantiate :: TyScheme -> Constrain Type
 instantiate (Forall as t) = do
   as' <- mapM (const fresh) as
-  let s = Sub $ Map.fromList $ zip as as'
-  return $ substitute s t
+  let e = Map.fromList $ zip as as'
+  return $ substitute e t
 
 generalize :: TyEnv -> Type -> TyScheme
 generalize env t = Forall as t
@@ -219,16 +197,16 @@ instance Inferrable S.Expr where
   infer' env expr = case runConstrain env (constrain expr) of
     Left err -> Left err
     Right (ty, cs) -> case runUnify cs of
-      Left err -> Left err
+      Left err -> Left $ TyUnificationError err
       Right sub -> Right $ closeOver $ substitute sub ty
 
   constrain expr = case expr of
     S.ELit (S.LInt _) -> return (tyInt, [])
     S.ELit (S.LBool _) -> return (tyBool, [])
-    S.EVar (S.Var _ v) -> do
+    S.EVar v -> do
       t <- checkTy v
       return (t, [])
-    S.ELam (S.Binder (S.Var _ v) t) e -> do
+    S.ELam (S.Binder v t) e -> do
       t' <- freshIfNil t
       (t'', cs) <- constrainWith e v t'
       return (t' `TyFun` t'', cs)
@@ -241,16 +219,22 @@ instance Inferrable S.Expr where
       (t0, c0) <- constrain e0
       (t1, c1) <- constrain e1
       tv <- fresh
-      return (tyOp op, c0 ++ c1 ++ [(t0, tv), (t1, tv)])
+      return (tv, c0 ++ c1 ++ [(t0, t1), (tyOp op, tv)])
     S.ECond x y z -> do
       (tX, cX) <- constrain x
       (tY, cY) <- constrain y
       (tZ, cZ) <- constrain z
       tv <- fresh
       return (tv, cX ++ cY ++ cZ ++ [(tX, tyBool), (tY, tv), (tZ, tv)])
+    S.ETup es -> do
+      tv <- fresh
+      cs <- mapM constrain es
+      let (ts, cs') = unzip cs
+      return (tv, (tv, TyTup ts) : concat cs')
     S.ETyCase e cases -> do
       tv <- fresh
-      eTs <- mapM (\(S.Binder (S.Var _ v) t, e) -> constrainWith e v t) cases
+      -- needs to generalize to exprs with vars
+      eTs <- mapM (\(S.Binder (S.EVar v) t, e) -> constrainWith e v t) cases
       (et, eCs) <- constrain e
 
       let (tEs, cEs) = unzip eTs
@@ -267,9 +251,9 @@ instance Inferrable S.Expr where
 normalize :: TyScheme -> TyScheme
 normalize (Forall _ body) = Forall (map snd ord) (normtype body)
   where
-    ord = zip (nub $ fvs body) (map TV letters)
-
+    ord = zip (nub $ fvs body) (map mkVar letters)
     fvs = Set.toList . fv
+    normtypes = fmap normtype
 
     normtype (TyVar a) =
       case Prelude.lookup a ord of
@@ -277,64 +261,45 @@ normalize (Forall _ body) = Forall (map snd ord) (normtype body)
         Nothing -> error "type variable not in signature"
     normtype (TyCon a) = TyCon a
     normtype (TyFun a b) = TyFun (normtype a) (normtype b)
-    normtype (TyUnion ts) = TyUnion (Set.fromList $ normtype <$> Set.toList ts)
+    normtype (TyTup ts) = TyTup (normtypes ts)
+    normtype (TyUnion ts) = TyUnion (Set.fromList $ normtypes $ Set.toList ts)
     normtype TyNil = error "missing type annotation"
 
 -------------------------------------------------------------------------------
 -- Unification
 -------------------------------------------------------------------------------
 
--- | The empty substitution
-emptySub :: Substitution
-emptySub = mempty
-
--- | Compose substitutions
-compose :: Substitution -> Substitution -> Substitution
-compose (Sub s0) (Sub s1) = Sub $ Map.map (substitute (Sub s0)) s1 `Map.union` s0
-
--- | Run the constraint solver
-runUnify :: [Constraint] -> Either TypeError Substitution
-runUnify = runIdentity . runExceptT . unify
-
-instance Unifiable [(Type, Type)] where
-  unify cs = case cs of
-    [] -> pure emptySub
-    ((t0, t1) : cs') ->
-      let sub v t = do
-            let sub' = mkSub v t
-            u <- unify $ substitute sub' cs'
-            pure $ u `compose` sub'
-          some t ts = or (unifiable t <$> Set.toList ts)
-       in case (t0, t1) of
-            _ | t0 == t1 -> unify cs'
-            (TyVar v, t) -> sub v t
-            (t, TyVar v) -> sub v t
-            (TyFun t0 t1, TyFun t0' t1') -> unify (cs' ++ [(t0, t0'), (t1, t1')])
-            (TyUnion ts, t) | some t ts -> unify cs'
-            (t, TyUnion ts) | some t ts -> unify cs'
-            _ -> throwError $ NotUnifiable t0 t1
+instance Unifiable Type where
+  unify t0 t1 =
+    let some t ts = or (unifiable t <$> Set.toList ts)
+     in case (t0, t1) of
+          _ | t0 == t1 -> pure mempty
+          (TyVar v, t) -> pure $ mkEnv v t
+          (t, TyVar v) -> pure $ mkEnv v t
+          (TyFun t0 t1, TyFun t0' t1') -> do
+            u0 <- unify t0 t0'
+            u1 <- unify t1 t1'
+            pure (u0 <*> u1)
+          (TyUnion ts, t) | some t ts -> pure mempty
+          (t, TyUnion ts) | some t ts -> pure mempty
+          _ -> throwError $ NotUnifiable t0 t1
 
 -------------------------------------------------------------------------------
 -- Entrypoints
 -------------------------------------------------------------------------------
 
 -- | Run the constraint generation monad
-runConstrain :: TyEnv -> Constrain (Type, [Constraint]) -> Either TypeError (Type, [Constraint])
+runConstrain :: TyEnv -> Constrain (Type, [Constraint Type]) -> Either TypeError (Type, [Constraint Type])
 runConstrain env m = runExcept $ evalStateT (runReaderT m env) initConstrain
 
 -- | Return the internal constraints used in solving for the type of an expression
-constraintsOnExpr' :: TyEnv -> S.Expr -> Either TypeError ([Constraint], Substitution, Type, TyScheme)
+constraintsOnExpr' :: TyEnv -> S.Expr -> Either TypeError ([Constraint Type], Env Type, Type, TyScheme)
 constraintsOnExpr' env ex = case runConstrain env (constrain ex) of
   Left err -> Left err
   Right (ty, cs) -> case runUnify cs of
-    Left err -> Left err
+    Left err -> Left $ TyUnificationError err
     Right sub -> Right (cs, sub, ty, sc)
       where
         sc = closeOver $ substitute sub ty
 
 constraintsOnExpr = constraintsOnExpr' mkTyEnv
-
-unifiable :: Type -> Type -> Bool
-unifiable t0 t1 = isRight $ runIdentity $ runExceptT $ unify [(t0, t1)]
-
-(<=>) = unifiable

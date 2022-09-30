@@ -6,16 +6,18 @@ import Data.List (foldl')
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import Mean.Evaluation.Surface hiding (substitute)
-import Mean.Evaluation.Type hiding (Substitution (..))
-import Mean.Syntax.Surface
+import Mean.Evaluation.Type hiding (mkTyEnv)
+import Mean.Syntax.Surface hiding (fromList)
 import Mean.Syntax.Type
+import Mean.Unification
+import Mean.Var
 import Test.Hspec
 import Prelude hiding ((*), (>))
 
-mkEnv :: [(Name, TyScheme)] -> TyEnv
-mkEnv = foldl' extend mempty
+mkTyEnv :: [(Var, TyScheme)] -> TyEnv
+mkTyEnv = foldl' extend mempty
 
-fn x ty y = ELam (Binder (mkVar x) ty) y
+fn x ty = ELam (Binder (mkVar x) ty)
 
 tyA = mkTv "A"
 
@@ -23,9 +25,13 @@ tyB = mkTv "B"
 
 [x, y, z, w] = mkEVar <$> ["x", "y", "z", "w"]
 
-(EVar (Var _ xPri)) = x
+(EVar xV) = x
 
-(EVar (Var _ yPri)) = y
+(EVar yV) = y
+
+(EVar zV) = z
+
+(EVar wV) = w
 
 true = ELit $ LBool True
 
@@ -39,7 +45,7 @@ spec :: Spec
 spec = do
   describe "constraintsOnExpr" $ do
     it "enforces constraints on type variables" $ do
-      let env = mkEnv [(yPri, mkUnqScheme tyA)]
+      let env = mkTyEnv [(yV, mkUnqScheme tyA)]
       let (Right (_, sub, ty, _)) = constraintsOnExpr' env (fn "x" tyInt x * y)
 
       substitute sub ty `shouldBe` tyInt
@@ -57,7 +63,7 @@ spec = do
       inferFnTy tyInt
 
     it "infers the types of function applications" $ do
-      let inferAppTy ty = infer' (mkEnv [(yPri, ty')]) ((fn "x" ty x) * y) `shouldBe` Right ty' where ty' = mkUnqScheme ty
+      let inferAppTy ty = infer' (mkTyEnv [(yV, ty')]) ((fn "x" ty x) * y) `shouldBe` Right ty' where ty' = mkUnqScheme ty
 
       inferAppTy tyBool
       inferAppTy tyInt
@@ -70,16 +76,15 @@ spec = do
       infer (true === false) `shouldBe` Right tb
 
     it "enforces constraints on equalities" $ do
-      let env = mkEnv [(xPri, mkUnqScheme tyA), (yPri, mkUnqScheme tyB)]
+      let env = mkTyEnv [(xV, mkUnqScheme tyA), (yV, mkUnqScheme tyB)]
       let (Right (_, sub, _, _)) = constraintsOnExpr' env (x === y)
 
       substitute sub tyA `shouldBe` substitute sub tyB
 
     it "enforces constraints on ternary conditionals" $ do
-      let (EVar (Var _ zPri)) = mkEVar "z"
       let tyC = mkTv "C"
 
-      let env = mkEnv [(xPri, mkUnqScheme tyA), (yPri, mkUnqScheme tyB), (zPri, mkUnqScheme tyC)]
+      let env = mkTyEnv [(xV, mkUnqScheme tyA), (yV, mkUnqScheme tyB), (zV, mkUnqScheme tyC)]
       let (Right (_, sub, ty, _)) = constraintsOnExpr' env (x ? y > z)
 
       substitute sub tyA `shouldBe` tyBool
@@ -100,30 +105,28 @@ spec = do
     -- these tests can be less circuitous when we have type
     -- annotations for terms other than binders
     let tA = mkTv "A"
-    let (EVar zV) = z
-    let env = fromList [(xPri, mkUnqScheme tA)]
+    let env = fromList [(xV, mkUnqScheme tA)]
 
-    let incompatibleCases = [(Binder zV tyInt, z === zero), (Binder zV tyBool, z ? one > zero)]
-    let compatibleCases = [(Binder zV tyInt, z === zero), (Binder zV tyBool, z)]
+    let incompatibleCases = [(Binder z tyInt, z === zero), (Binder z tyBool, z ? one > zero)]
+    let compatibleCases = [(Binder z tyInt, z === zero), (Binder z tyBool, z)]
 
     it "constrains case bodies to have the same type" $ do
       infer' env (ETyCase x compatibleCases) `shouldBe` Right (mkUnqScheme tyBool)
-      infer' env (ETyCase x incompatibleCases) `shouldBe` Left (NotUnifiable tyBool tyInt)
+      infer' env (ETyCase x incompatibleCases) `shouldBe` Left (TyUnificationError $ NotUnifiable tyBool tyInt)
 
     it "propagates the constraints of its case bodies" $ do
-      let (EVar (Var _ wPri)) = w
       let tB = mkTv "B"
       let tC = mkTv "C"
-      let env' = merge env $ fromList [(yPri, mkUnqScheme tB), (wPri, mkUnqScheme tC)]
-      let tyCase = ETyCase x [(Binder zV tyInt, EBinOp Add z y), (Binder zV tyBool, EBinOp Eq z w ? one > zero)]
+      let env' = merge env $ fromList [(yV, mkUnqScheme tB), (wV, mkUnqScheme tC)]
+      let tyCase = ETyCase x [(Binder z tyInt, EBinOp Add z y), (Binder z tyBool, EBinOp Eq z w ? one > zero)]
       let (Right (_, sub, _, _)) = constraintsOnExpr' env' tyCase
 
       substitute sub tB `shouldBe` tyInt
       substitute sub tC `shouldBe` tyBool
 
     it "propagates the constraints of its argument" $ do
-      let env' = extend env (yPri, mkUnqScheme tyInt)
-      let (Right (_, sub, _, _)) = constraintsOnExpr' env' (ETyCase (EBinOp Add x y) compatibleCases)
+      let env' = extend env (yV, mkUnqScheme tyInt)
+      let (Right (cs, sub, t, ts)) = constraintsOnExpr' env' (ETyCase (EBinOp Add x y) compatibleCases)
 
       substitute sub tA `shouldBe` tyInt
 

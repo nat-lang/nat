@@ -6,6 +6,7 @@ import qualified Data.Set as Set
 import Mean.Parser (parse)
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
+import Mean.Var
 import Test.Hspec
 import Prelude hiding ((&&), (*), (>), (||))
 
@@ -60,7 +61,7 @@ spec = do
     it "parses untyped lambdas" $ do
       parse pELam "\\x.x" `shouldBe` Right (x ~> x)
     it "parses typed lambdas" $ do
-      parse pELam "\\a:<A>.a" `shouldBe` Right (ELam (Binder (mkVar "a") (TyVar $ TV "A")) (mkEVar "a"))
+      parse pELam "\\a:<A>.a" `shouldBe` Right (ELam (Binder (mkVar "a") (mkTv "A")) (mkEVar "a"))
       parse pELam "\\a:<n,t>.a" `shouldBe` Right (ELam (Binder (mkVar "a") (TyFun tyInt tyBool)) (mkEVar "a"))
     it "parses lambdas with complex bodies" $ do
       parse pELam "\\f.(\\x.f(x x))(\\x.f(x x))"
@@ -114,10 +115,14 @@ spec = do
         `shouldBe` Right (ETree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
 
   describe "pELitCase" $ do
-    it "parses case statements" $ do
-      parse pELitCase "case x of\n\tTrue: y\n\tFalse: z" `shouldBe` Right (ELitCase x [(true, y), (false, z)])
-    it "parses nested case statements" $ do
-      parse pELitCase "case x of\n\tTrue: y\n\tFalse: case z of\n\t\tFalse: y\n\t\tTrue: x" `shouldBe` Right (ELitCase x [(true, y), (false, ELitCase z [(false, y), (true, x)])])
+    it "parses literal case statements" $ do
+      parse pELitCase "case x of\n\tTrue -> y\n\tFalse -> z" `shouldBe` Right (ELitCase x [(true, y), (false, z)])
+    it "parses nested literal case statements" $ do
+      parse pELitCase "case x of\n\tTrue -> y\n\tFalse -> case z of\n\t\t  False -> y\n\t\t  True -> x" `shouldBe` Right (ELitCase x [(true, y), (false, ELitCase z [(false, y), (true, x)])])
+
+  describe "pETyCase" $ do
+    it "parses typecase statements" $ do
+      parse pETyCase "tycase x of\n\ty:<n> -> y\n\tz:<t> -> z" `shouldBe` Right (ETyCase x [(Binder y tyInt, y), (Binder z tyBool, z)])
 
   describe "pESet" $ do
     it "parses sets of integers" $ do
@@ -162,9 +167,13 @@ spec = do
       parse pExpr "x != y" `shouldBe` Right (x !== y)
       parse pExpr "x && y" `shouldBe` Right (x && y)
       parse pExpr "x || y" `shouldBe` Right (x || y)
+      parse pExpr "x + y" `shouldBe` Right (EBinOp Add x y)
+      parse pExpr "x - y" `shouldBe` Right (EBinOp Sub x y)
     it "parses binary operations on expressions" $ do
       parse pExpr "(f x) && (f y)" `shouldBe` Right ((f * x) && (f * y))
       parse pExpr "(f x) || (f y)" `shouldBe` Right ((f * x) || (f * y))
+      parse pExpr "(f x) + (f y)" `shouldBe` Right (EBinOp Add (f * x) (f * y))
+
     it "parses operations of different arity on primitives in concert" $ do
       parse pExpr "!(p == q)" `shouldBe` Right (not' (p === q))
       parse pExpr "!(p != q)" `shouldBe` Right (not' (p !== q))

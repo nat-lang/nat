@@ -13,8 +13,8 @@ spec = do
       parse pType "<n>" `shouldBe` Right tyInt
       parse pType "<t>" `shouldBe` Right tyBool
     it "parses variable types" $ do
-      parse pType "<A>" `shouldBe` Right (TyVar $ TV "A")
-      parse pType "<ZZ>" `shouldBe` Right (TyVar $ TV "ZZ")
+      parse pType "<A>" `shouldBe` Right (mkTv "A")
+      parse pType "<ZZ>" `shouldBe` Right (mkTv "ZZ")
     it "parses functional types" $ do
       parse pType "<n,t>" `shouldBe` Right (TyFun tyInt tyBool)
-      parse pType "<n,<A,t>>" `shouldBe` Right (TyFun tyInt (TyFun (TyVar $ TV "A") tyBool))
+      parse pType "<n,<A,t>>" `shouldBe` Right (TyFun tyInt (TyFun (mkTv "A") tyBool))

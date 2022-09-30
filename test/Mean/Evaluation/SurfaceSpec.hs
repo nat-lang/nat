@@ -4,13 +4,16 @@ import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import Mean.Evaluation.Surface hiding ((*=), (@=))
 import qualified Mean.Evaluation.Surface as E
+import Mean.Parser (parse)
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
+import Mean.Unification
+import Mean.Var
 import Test.HUnit ((@?=))
 import Test.Hspec
 import Prelude hiding (LTE, id, (&&), (*), (>), (||))
 
-[f, x, y, z, l, r, a, b, e, p, q, n, m] = mkEVar <$> ["f", "x", "y", "z", "l", "r", "a", "b", "e", "p", "q", "n", "m"]
+[f, x, y, z, l, r, a, b, c, e, p, q, n, m] = mkEVar <$> ["f", "x", "y", "z", "l", "r", "a", "b", "c", "e", "p", "q", "n", "m"]
 
 zero = ELit $ LInt 0
 
@@ -32,26 +35,21 @@ spec = do
     let zV = mkVar "z"
 
     it "substitutes expressions for variables" $ do
-      substitute y zV z `shouldBe` y
+      substitute (mkEnv zV y) z `shouldBe` y
 
     it "does so discriminately" $ do
-      substitute y zV x `shouldBe` x
+      substitute (mkEnv zV y) x `shouldBe` x
 
     it "avoids variable capture" $ do
       let f1 = EVar $ Var "f0" "f1"
 
-      -- there are two possible conflicts for a substitution e'[e/v]:
-      --  (1) a nested binder conflicts with v, as in
-      --        (λf . f)[x/f]
-      --     in which case we want (λf . f) rather than (λf . x)
+      -- see note in Evaluation.Surface:
+      -- (1)
       let fV = mkVar "f"
-      substitute x fV (f ~> f) `shouldBe` f ~> f
-
-      --  (2) a nested binder conflicts with a free variable in e, as in
-      --        (λf . f n)[f/n]
-      --     in which case we want (λf1 . f1 f) rather than (λf . f f)
+      substitute (mkEnv fV x) (f ~> f) `shouldBe` f ~> f
+      -- (2)
       let nV = mkVar "n"
-      substitute f nV (f ~> (f * n)) `shouldBe` f1 ~> (f1 * f)
+      substitute (mkEnv nV f) (f ~> (f * n)) `shouldBe` f1 ~> (f1 * f)
 
   describe "alpha equivalence (@=)" $ do
     let (@=) e0 e1 = (e0 E.@= e1) @?= True
@@ -109,7 +107,7 @@ spec = do
     it "reduces ternary conditionals on booleans" $ do
       eval (true ? y > z) `shouldBe` Right y
 
-    it "reduces ternary conditionals over terms that reduce to booleans" $ do
+    it "reduces ternary conditionals on terms that reduce to booleans" $ do
       eval ((x ~> x) * true ? (y ~> y) > z) `shouldBe` Right (y ~> y)
 
     it "reduces ternary conditionals over nothing else" $ do
@@ -197,20 +195,26 @@ spec = do
       eval ((true && true) !== (false && false)) `shouldBe` Right true
 
     it "reduces type case expressions" $ do
-      let b = Binder (mkVar "n") tyInt
-      let (EVar zV) = z
-      let fnA = ELam b (EBinOp Add n one)
-      let fnB = ELam b (EBinOp Eq n one)
+      let iFn = (+>) (n, tyInt)
+      let fnA = iFn (EBinOp Add n one)
+      let fnB = iFn (EBinOp Eq n one)
 
-      let tyCase = x ~> ETyCase x [(Binder zV $ TyFun tyInt tyInt, z * zero), (Binder zV $ TyFun tyInt tyBool, z * one)]
+      let tyCase = x ~> ETyCase x [(Binder z (TyFun tyInt tyInt), z * zero), (Binder z (TyFun tyInt tyBool), z * one)]
 
       eval (tyCase * fnA) `shouldBe` Right one
       eval (tyCase * fnB) `shouldBe` Right true
 
-      let tyCase = x ~> ETyCase x [(Binder zV tyInt, EBinOp Add z one), (Binder zV $ TyFun tyInt tyInt, z * one)]
+      let tyCase = x ~> ETyCase x [(Binder z tyInt, EBinOp Add z one), (Binder z (TyFun tyInt tyInt), z * one)]
 
       eval (tyCase * one) `shouldBe` Right (mkI 2)
       eval (tyCase * fnA) `shouldBe` Right (mkI 2)
+
+  -- let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), z * one)]
+  -- let tup0 = ETup [zero, one]
+  -- let tup1 = ETup [one, zero, mkI 2]
+
+  -- eval (tyCase * tup0) `shouldBe` Right (mkI 2)
+  -- eval (tyCase * tup1) `shouldBe` Right (mkI 2)
 
   describe "confluence (*=)" $ do
     let (*=) e0 e1 = (e0 E.*= e1) @?= True
