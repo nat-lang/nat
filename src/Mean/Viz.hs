@@ -1,5 +1,6 @@
 module Mean.Viz
   ( text,
+    parens,
     module Mean.Viz,
   )
 where

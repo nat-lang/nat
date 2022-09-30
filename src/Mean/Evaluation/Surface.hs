@@ -4,6 +4,7 @@
 
 module Mean.Evaluation.Surface where
 
+import Control.Monad ((>=>))
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.Identity (Identity (runIdentity))
 import Data.Char (digitToInt)
@@ -148,6 +149,8 @@ isIdx e = case e of EIdx {} -> True; _ -> False
 idxOf (EIdx i) = i
 idxOf _ = error "not an index"
 
+reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
+
 instance Reducible Expr where
   -- cbn
   reduce expr = case expr of
@@ -160,12 +163,12 @@ instance Reducible Expr where
         e1' <- reduce e1
         pure $ ELit $ LBool $ Set.member e1' s
       -- indexed access to tuples
-      ETup t | isIdx e1 -> pure (t !! idxOf e1)
+      ETup t | isIdx e1 -> reduce (t !! idxOf e1)
       -- (1b) binders have a semantics of their own: they may be applied
       -- to terms, in which case they simply abstract a free variable.
       EBind b -> reduce (ELam b e1)
-      -- (1c) normal form for lhs (free var), goto rhs
-      EVar {} -> do
+      -- (1c) normal form for lhs, goto rhs
+      _ | not (reducible e0) -> do
         e1' <- reduce e1
         pure (e0 * e1')
       -- (1d) lhs can be reduced
@@ -219,16 +222,18 @@ instance Reducible Expr where
             l' <- mkChurchTree l
             r' <- mkChurchTree r
             pure $ churchNode * e * l' * r'
-    ETyCase b cs -> case infer b of
-      Left e -> throwError $ RuntimeTypeError e
-      Right (Forall _ ty) -> case cs of
-        ((Binder v ty', e) : cs') ->
-          if ty <=> ty'
-            then case runUnify [(v, b)] of
-              Left e -> throwError $ EUnificationError e
-              Right s -> reduce $ substitute s e
-            else reduce $ ETyCase b cs'
-        _ -> throwError $ InexhaustiveCase expr
+    ETyCase b cs -> do
+      b' <- reduce b
+      case infer b' of
+        Left e -> throwError $ RuntimeTypeError e
+        Right (Forall _ ty) -> case cs of
+          ((Binder v ty', e) : cs') ->
+            if unifiable ty ty'
+              then case runUnify [(v, b)] of
+                Left e -> throwError $ EUnificationError e
+                Right s -> reduce $ substitute s e
+              else reduce $ ETyCase b cs'
+          _ -> throwError $ InexhaustiveCase expr
     ELitCase b cs -> do
       b' <- reduce b
       case cs of
@@ -243,6 +248,7 @@ instance Reducible Expr where
           x = mkEVar "x"
           y = f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
        in reduce (y * (EVar v ~> e))
+    ETup es -> ETup <$> mapM reduce es
     -- (3) var/literal
     _ -> pure expr
 

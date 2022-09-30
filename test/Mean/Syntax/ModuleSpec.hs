@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Mean.Syntax.ModuleSpec where
 
@@ -7,6 +8,7 @@ import Mean.Syntax.Module
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Test.Hspec
+import Text.RawString.QQ
 import Prelude hiding ((*))
 
 [f@(EVar vF), x@(EVar vX), y@(EVar vY), z] = mkEVar <$> ["f", "x", "y", "z"]
@@ -33,10 +35,31 @@ spec = do
 
   describe "pModule" $ do
     it "parses modules" $ do
-      parse pModule "let f = \\x:<n> . \\y:<n> . x + y \n let x = 0 \n let y = 1 \n f(x)(y)"
+      let mod =
+            [r|let f = \x:<n>.\y:<n>. x + y
+               let x = 0
+               let y = 1
+               f(x)(y)
+            |]
+      parse pModule mod
         `shouldBe` Right
           [ MDecl vF ((x, tyInt) +> (y, tyInt) +> EBinOp Add x y),
             MDecl vX $ mkI 0,
             MDecl vY $ mkI 1,
             MExec (f * x * y)
           ]
+
+      let mod =
+            [r|let succ = \x:<n> . x + 1
+              let x = 0
+              let t = [X [succ] [X [succ] [x]]]
+              let unit = \e.\b . e
+              let FA = \x.\l.\r.\z. tycase (FA l, FA r) of
+                  (l',r'):(<A,B>, <A>) -> (l' x) (r' x)
+                  (l',r'):(<A>, <A,B>) -> (r' x) (l' x)
+                  _ -> unit
+            |]
+
+      parse pModule mod
+        `shouldBe` Right
+          []

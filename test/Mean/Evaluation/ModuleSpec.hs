@@ -12,6 +12,8 @@ import Mean.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
 
+-- λeb . e
+-- λxlreb . b(x)(l e b)(r e b)
 mod0 =
   [r|let succ = \x:<n> . x + 1
      let x = 0
@@ -22,9 +24,6 @@ mod0 =
         (l',r'):(<A>, <A,B>) -> (r' x) (l' x)
         _ -> unit
   |]
-
--- λeb . e
--- λxlreb . b(x)(l e b)(r e b)
 
 p = parse pModule
 

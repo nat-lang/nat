@@ -96,6 +96,8 @@ instance Pretty Expr where
     ESet s -> text $ show s
     ELet v e e' -> "let" <+> text (show v) <+> "=" <+> ppr p e <+> "in" <+> ppr p e'
     EFix v e -> text "fix" <+> text (show v) <+> text "in" <+> ppr p e
+    ETup es -> parens $ text (intercalate ", " (show <$> es))
+    EIdx i -> brackets (text $ show i)
 
 instance Show Expr where
   show = show . ppr 0
@@ -197,6 +199,11 @@ pELam = do
   P.symbol "."
   ELam b <$> pExpr
 
+pETup :: ExprParser
+pETup = do
+  es <- P.parens (P.commaSep pExpr)
+  pure $ ETup es
+
 pELitCase :: ExprParser
 pELitCase = P.try $ P.indentBlock P.spaceN p
   where
@@ -218,9 +225,9 @@ pExprBinder = do
   Binder e <$> pType
 
 pETyCase :: ExprParser
-pETyCase = P.try $ P.indentBlock P.spaceN p
+pETyCase = dbg "etycase" $ P.try $ P.indentBlock P.spaceN p
   where
-    pCase = do
+    pCase = dbg "case" $ do
       b <- pExprBinder
       P.reserved "->"
       r <- pExpr
@@ -232,7 +239,7 @@ pETyCase = P.try $ P.indentBlock P.spaceN p
       pure $ P.IndentSome Nothing (pure . ETyCase base) pCase
 
 pESet = do
-  es <- P.curlies (pExpr `P.sepBy` (P.space >> P.char ',' >> P.space))
+  es <- P.curlies (P.commaSep pExpr)
   pure $ ESet $ fromList es
 
 after p fn = do
@@ -271,14 +278,15 @@ pTree pNode =
       T.Node e l <$> pTree pNode
 
 terms =
-  [ P.parens pExpr,
+  [ P.try $ P.parens pExpr,
     pELit,
     pEVar,
     pECond,
     pELam,
     pELitCase,
     pETyCase,
-    pESet
+    pESet,
+    pETup
   ]
 
 pTerm :: ExprParser

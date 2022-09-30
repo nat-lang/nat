@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import qualified Mean.Parser as P
 import Mean.Var
-import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies)
+import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies, parens)
 import Text.PrettyPrint
   ( Doc,
     brackets,
@@ -62,6 +62,7 @@ instance Pretty Type where
   ppr p (TyVar v) = anglesIf (p == 0) $ text (show v)
   ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
+  ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p TyNil = text "TyNil"
 
 instance Pretty TyScheme where

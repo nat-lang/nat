@@ -194,7 +194,16 @@ spec = do
     it "reduces inequalities between relations" $ do
       eval ((true && true) !== (false && false)) `shouldBe` Right true
 
-    it "reduces type case expressions" $ do
+    let tup = ETup [id * true, id * false]
+
+    it "reduces the elements of tuples" $ do
+      eval tup `shouldBe` Right (ETup [true, false])
+
+    it "reduces tuple access by index" $ do
+      eval (tup * EIdx 0) `shouldBe` Right true
+      eval (tup * EIdx 1) `shouldBe` Right false
+
+    it "reduces typecase expressions with variable bindings" $ do
       let iFn = (+>) (n, tyInt)
       let fnA = iFn (EBinOp Add n one)
       let fnB = iFn (EBinOp Eq n one)
@@ -209,12 +218,13 @@ spec = do
       eval (tyCase * one) `shouldBe` Right (mkI 2)
       eval (tyCase * fnA) `shouldBe` Right (mkI 2)
 
-  -- let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), z * one)]
-  -- let tup0 = ETup [zero, one]
-  -- let tup1 = ETup [one, zero, mkI 2]
+    it "reduces typecase expressions with complex bindings" $ do
+      let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), EBinOp Mul z one)]
+      let tup0 = ETup [zero, one]
+      let tup1 = ETup [one, zero, mkI 2]
 
-  -- eval (tyCase * tup0) `shouldBe` Right (mkI 2)
-  -- eval (tyCase * tup1) `shouldBe` Right (mkI 2)
+      eval (tyCase * tup0) `shouldBe` Right (mkI 2)
+      eval (tyCase * tup1) `shouldBe` Right (mkI 2)
 
   describe "confluence (*=)" $ do
     let (*=) e0 e1 = (e0 E.*= e1) @?= True

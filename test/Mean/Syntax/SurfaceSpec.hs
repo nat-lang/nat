@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Mean.Syntax.SurfaceSpec where
 
@@ -8,6 +9,7 @@ import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Var
 import Test.Hspec
+import Text.RawString.QQ
 import Prelude hiding ((&&), (*), (>), (||))
 
 [f, x, y, z, p, q] = mkEVar <$> ["f", "x", "y", "z", "p", "q"]
@@ -23,6 +25,8 @@ lFalse = LBool False
 true = ELit lTrue
 
 false = ELit lFalse
+
+mkI = ELit . LInt
 
 mkS = ESet . Set.fromList
 
@@ -47,8 +51,8 @@ spec = do
 
   describe "pELit" $ do
     it "parses literal expressions" $ do
-      parse pELit "1" `shouldBe` Right (ELit lOne)
-      parse pELit "0" `shouldBe` Right (ELit lZero)
+      parse pELit "1" `shouldBe` Right (mkI 1)
+      parse pELit "0" `shouldBe` Right (mkI 0)
       parse pELit "True" `shouldBe` Right true
       parse pELit "False" `shouldBe` Right false
 
@@ -78,7 +82,7 @@ spec = do
   describe "pETree" $ do
     it "parses trees of integers" $ do
       parse pETree "[0 [1] [0]]"
-        `shouldBe` Right (ETree (Node (ELit $ LInt 0) (Node (ELit lOne) Leaf Leaf) (Node (ELit lZero) Leaf Leaf)))
+        `shouldBe` Right (ETree (Node (ELit $ LInt 0) (Node (mkI 1) Leaf Leaf) (Node (mkI 0) Leaf Leaf)))
 
     it "parses trees of booleans" $ do
       parse pETree "[True [True] [False]]"
@@ -109,24 +113,42 @@ spec = do
 
     it "parses trees of sets" $ do
       parse pETree "[{0,1} [{True,False}] [{x,y,z}]]"
-        `shouldBe` Right (ETree (Node (mkS [ELit lZero, ELit lOne]) (Node (mkS [true, false]) Leaf Leaf) (Node (mkS [x, y, z]) Leaf Leaf)))
+        `shouldBe` Right (ETree (Node (mkS [mkI 0, mkI 1]) (Node (mkS [true, false]) Leaf Leaf) (Node (mkS [x, y, z]) Leaf Leaf)))
     it "parses trees of function applications" $ do
       parse pETree "[(f x) [f x] [f(x)]]"
         `shouldBe` Right (ETree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
 
   describe "pELitCase" $ do
-    it "parses literal case statements" $ do
+    it "parses literal case expressions" $ do
       parse pELitCase "case x of\n\tTrue -> y\n\tFalse -> z" `shouldBe` Right (ELitCase x [(true, y), (false, z)])
-    it "parses nested literal case statements" $ do
+    it "parses nested literal case expressions" $ do
       parse pELitCase "case x of\n\tTrue -> y\n\tFalse -> case z of\n\t\t  False -> y\n\t\t  True -> x" `shouldBe` Right (ELitCase x [(true, y), (false, ELitCase z [(false, y), (true, x)])])
 
   describe "pETyCase" $ do
-    it "parses typecase statements" $ do
+    it "parses typecase expressions with variable binders" $ do
       parse pETyCase "tycase x of\n\ty:<n> -> y\n\tz:<t> -> z" `shouldBe` Right (ETyCase x [(Binder y tyInt, y), (Binder z tyBool, z)])
+    it "parses typecase expressions with complex binders" $ do
+      let tyCase =
+            [r|tycase x of
+                 (p,q):(<A>, <B>) -> p(q)
+                 (p,q,f):(<A>, <B>, <C>) -> p(q)(f)
+            |]
+      let binders =
+            [ Binder (ETup [p, q]) (TyTup [mkTv "A", mkTv "B"]),
+              Binder (ETup [p, q, f]) (TyTup [mkTv "A", mkTv "B", mkTv "C"])
+            ]
+      let exprs = [p * q, p * q * f]
+
+      parse pETyCase tyCase `shouldBe` Right (ETyCase x (zip binders exprs))
+
+  describe "pETup" $ do
+    it "parses tuples of expressions" $ do
+      parse pETup "(0,1,2)" `shouldBe` Right (ETup [mkI 0, mkI 1, mkI 2])
+      parse pETup "(f(x), \\x.x, {0,1,2})" `shouldBe` Right (ETup [f * x, x ~> x, mkS [mkI 0, mkI 1, mkI 2]])
 
   describe "pESet" $ do
     it "parses sets of integers" $ do
-      parse pESet "{0, 1}" `shouldBe` Right (mkS [ELit lZero, ELit lOne])
+      parse pESet "{0, 1}" `shouldBe` Right (mkS [mkI 0, mkI 1])
     it "parses sets of booleans" $ do
       parse pESet "{True, False}" `shouldBe` Right (mkS [true, false])
     it "parses sets of variables" $ do
