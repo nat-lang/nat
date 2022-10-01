@@ -50,6 +50,7 @@ data Expr
   | EFix Var Expr
   | ETup [Expr]
   | EIdx Int
+  | EWildcard
   deriving (Prel.Eq, Ord)
 
 instance Pretty Lit where
@@ -98,12 +99,13 @@ instance Pretty Expr where
     EFix v e -> text "fix" <+> text (show v) <+> text "in" <+> ppr p e
     ETup es -> parens $ text (intercalate ", " (show <$> es))
     EIdx i -> brackets (text $ show i)
+    EWildcard -> text "_"
 
 instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder n t) = char 'λ' <> text (show n)
+  ppr p (Binder n t) = char 'λ' <> text (show n) <> char ':' <> text (show t)
 
 instance Show (Binder Expr) where
   show (Binder e t) = show e ++ ":" ++ show t
@@ -218,6 +220,8 @@ pELitCase = P.try $ P.indentBlock P.spaceN p
       P.reserved "of"
       pure $ P.IndentSome Nothing (pure . ELitCase base) pCase
 
+pWildcardBinder = P.reserved "_" >> pure (Binder EWildcard TyNil)
+
 pExprBinder :: P.Parser (Binder Expr)
 pExprBinder = do
   e <- pTerm
@@ -225,10 +229,10 @@ pExprBinder = do
   Binder e <$> pType
 
 pETyCase :: ExprParser
-pETyCase = dbg "etycase" $ P.try $ P.indentBlock P.spaceN p
+pETyCase = P.try $ P.indentBlock P.spaceN p
   where
-    pCase = dbg "case" $ do
-      b <- pExprBinder
+    pCase = do
+      b <- pWildcardBinder P.<|> pExprBinder
       P.reserved "->"
       r <- pExpr
       pure (b, r)

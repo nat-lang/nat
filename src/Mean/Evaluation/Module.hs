@@ -17,15 +17,14 @@ instance Reducible Module where
     where
       reduce' :: Module -> Module -> Evaluation Module
       reduce' mod mod' =
-        trace ("\n??=>> " ++ show mod) $
-          let reduceIn = reduce . substitute (Map.fromList [(v, e) | MDecl v e <- mod'])
-           in case mod of
-                [] -> pure mod'
-                (e : es) ->
-                  let next m = reduce' es (mod' ++ [m])
-                   in case e of
-                        MDecl v e -> next <=< (pure . MDecl v) <=< reduceIn $ e
-                        MExec e -> next <=< (pure . MExec) <=< reduceIn $ e
+        let reduceIn = reduce . substitute (Map.fromList [(v, e) | MDecl v e <- mod'])
+         in case mod of
+              [] -> pure mod'
+              (e : es) ->
+                let next m = reduce' es (mod' ++ [m])
+                 in case e of
+                      MDecl v e -> next <=< (pure . MDecl v) <=< reduceIn $ e
+                      MExec e -> next <=< (pure . MExec) <=< reduceIn $ e
 
 eval :: Module -> Either EvalError Module
 eval m = runIdentity $ runExceptT $ reduce m

@@ -88,7 +88,7 @@ pTyTerm =
       P.reserved "n" >> pure tyInt,
       P.titularIdentifier <&> mkTv,
       P.identifier <&> TyCon,
-      P.parens $ P.commaSep pType <&> TyTup
+      P.parens $ P.commaSep pTyTerm <&> TyTup
     ]
 
 tyNil :: TyParser

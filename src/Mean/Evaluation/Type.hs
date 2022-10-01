@@ -231,6 +231,9 @@ instance Inferrable S.Expr where
       cs <- mapM constrain es
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
+    S.EWildcard -> do
+      tv <- fresh
+      return (tv, [])
     S.ETyCase e cases -> do
       tv <- fresh
       -- needs to generalize to exprs with vars
