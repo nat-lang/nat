@@ -120,19 +120,16 @@ spec = do
 
   describe "pELitCase" $ do
     it "parses literal case expressions" $ do
-      parse pELitCase "case x of\n\tTrue -> y\n\tFalse -> z" `shouldBe` Right (ELitCase x [(true, y), (false, z)])
+      parse pELitCase "case x of True -> y | False -> z" `shouldBe` Right (ELitCase x [(true, y), (false, z)])
     it "parses nested literal case expressions" $ do
-      parse pELitCase "case x of\n\tTrue -> y\n\tFalse -> case z of\n\t\t  False -> y\n\t\t  True -> x" `shouldBe` Right (ELitCase x [(true, y), (false, ELitCase z [(false, y), (true, x)])])
+      parse pELitCase "case x of True -> y | False -> case z of False -> y | True -> x" `shouldBe` Right (ELitCase x [(true, y), (false, ELitCase z [(false, y), (true, x)])])
 
   describe "pETyCase" $ do
     it "parses typecase expressions with variable binders" $ do
-      parse pETyCase "tycase x of\n\ty:<n> -> y\n\tz:<t> -> z" `shouldBe` Right (ETyCase x [(Binder y tyInt, y), (Binder z tyBool, z)])
+      parse pETyCase "tycase x of y:<n> -> y | z:<t> -> z" `shouldBe` Right (ETyCase x [(Binder y tyInt, y), (Binder z tyBool, z)])
     it "parses typecase expressions with complex binders" $ do
-      let tyCase =
-            [r|tycase x of
-                 (p,q):(<A>, <B>) -> p(q)
-                 (p,q,f):(<A>, <B>, <C>) -> p(q)(f)
-            |]
+      let tyCase = "tycase x of (p,q):(<A>, <B>) -> p(q) | (p,q,f):(<A>, <B>, <C>) -> p(q)(f)"
+
       let binders =
             [ Binder (ETup [p, q]) (TyTup [mkTv "A", mkTv "B"]),
               Binder (ETup [p, q, f]) (TyTup [mkTv "A", mkTv "B", mkTv "C"])

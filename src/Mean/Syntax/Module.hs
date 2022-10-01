@@ -22,12 +22,23 @@ type Module = [ModuleExpr]
 -- Parsing
 -------------------------------------------------------------------------------
 
-pMDecl :: P.Parser ModuleExpr
-pMDecl = do
+pMLetRecDecl :: P.Parser ModuleExpr
+pMLetRecDecl = do
+  P.reserved "letrec"
+  v <- pVar
+  P.symbol "="
+  e <- pExpr
+  pure $ MDecl v (EFix v e)
+
+pMLetDecl :: P.Parser ModuleExpr
+pMLetDecl = do
   P.reserved "let"
   v <- pVar
   P.symbol "="
   MDecl v <$> pExpr
+
+pMDecl :: P.Parser ModuleExpr
+pMDecl = P.choice [pMLetRecDecl, pMLetDecl]
 
 pMExec :: P.Parser ModuleExpr
 pMExec = MExec <$> pExpr
@@ -35,6 +46,6 @@ pMExec = MExec <$> pExpr
 pMExpr = P.choice [pMExec, pMDecl]
 
 pModule :: P.Parser Module
-pModule = dbg "mod" $ pMExpr `P.sepEndBy` P.delimiter
+pModule = pMExpr `P.sepEndBy` P.delimiter
 
 pFModule = P.parseFile pModule

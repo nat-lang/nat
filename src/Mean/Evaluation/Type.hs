@@ -133,6 +133,7 @@ instance FV TyEnv where
 data TypeError
   = UnboundVariable Var
   | TyUnificationError (UnificationError Type)
+  | UntypableExpr S.Expr
   deriving (Eq, Show)
 
 -------------------------------------------------------------------------------
@@ -250,6 +251,7 @@ instance Inferrable S.Expr where
             ]
 
       return (tv, concat cs)
+    _ -> throwError $ UntypableExpr expr
 
 normalize :: TyScheme -> TyScheme
 normalize (Forall _ body) = Forall (map snd ord) (normtype body)

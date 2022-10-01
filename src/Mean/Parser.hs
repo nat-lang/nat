@@ -35,7 +35,7 @@ newtype ParseState = ParseState {inTree :: Bool}
 type Parser = ParsecT Void Text (StateT ParseState Identity)
 
 keywords :: [String]
-keywords = ["if", "then", "else", "let", "dom", "case", "tycase", "of", ":"]
+keywords = ["if", "then", "else", "let", "letrec", "dom", "case", "tycase", "of", ":"]
 
 lineComment = L.skipLineComment "//"
 
@@ -72,6 +72,9 @@ curlies = btw "{" "}"
 commaSep :: Parser a -> Parser [a]
 commaSep p = p `sepBy` (space >> C.char ',' >> space)
 
+pipeSep :: Parser a -> Parser [a]
+pipeSep p = p `sepBy` try (C.space >> C.char '|' >> C.space)
+
 reserved :: Text -> Parser ()
 reserved w = (lexeme . try) (C.string w *> notFollowedBy C.alphaNumChar)
 
@@ -98,11 +101,6 @@ infixOpR name f = InfixR (f <$ symbol name)
 prefixOp, postfixOp :: Text -> (a -> a) -> Operator Parser a
 prefixOp name f = Prefix (f <$ symbol name)
 postfixOp name f = Postfix (f <$ symbol name)
-
-indent :: (Show a) => ([b] -> Parser a) -> Parser b -> Parser a
-indent p0 p1 = dbg "indent" $ L.indentBlock spaceN p
-  where
-    p = pure $ L.IndentSome Nothing p0 p1
 
 parse parser i = runIdentity $ evalStateT (runParserT parser "<input>" i) (ParseState {inTree = False})
 

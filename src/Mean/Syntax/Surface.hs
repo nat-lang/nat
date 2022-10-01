@@ -105,7 +105,7 @@ instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder n t) = char 'λ' <> text (show n) <> char ':' <> text (show t)
+  ppr p (Binder n t) = char 'λ' <> text (show n)
 
 instance Show (Binder Expr) where
   show (Binder e t) = show e ++ ":" ++ show t
@@ -207,18 +207,19 @@ pETup = do
   pure $ ETup es
 
 pELitCase :: ExprParser
-pELitCase = P.try $ P.indentBlock P.spaceN p
+pELitCase = do
+  P.reserved "case"
+  base <- pExpr
+  P.reserved "of"
+  P.spaceN
+  cases <- P.pipeSep pCase
+  pure $ ELitCase base cases
   where
     pCase = do
       c <- pTerm
       P.reserved "->"
       r <- pExpr
       pure (c, r)
-    p = do
-      P.reserved "case"
-      base <- pExpr
-      P.reserved "of"
-      pure $ P.IndentSome Nothing (pure . ELitCase base) pCase
 
 pWildcardBinder = P.reserved "_" >> pure (Binder EWildcard TyNil)
 
@@ -229,18 +230,19 @@ pExprBinder = do
   Binder e <$> pType
 
 pETyCase :: ExprParser
-pETyCase = P.try $ P.indentBlock P.spaceN p
+pETyCase = do
+  P.reserved "tycase"
+  base <- pExpr
+  P.reserved "of"
+  P.spaceN
+  cases <- P.pipeSep pCase
+  pure $ ETyCase base cases
   where
     pCase = do
       b <- pWildcardBinder P.<|> pExprBinder
       P.reserved "->"
       r <- pExpr
       pure (b, r)
-    p = do
-      P.reserved "tycase"
-      base <- pExpr
-      P.reserved "of"
-      pure $ P.IndentSome Nothing (pure . ETyCase base) pCase
 
 pESet = do
   es <- P.curlies (P.commaSep pExpr)

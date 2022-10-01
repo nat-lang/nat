@@ -7,13 +7,14 @@ module Mean.Evaluation.Surface where
 import Control.Monad ((>=>))
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.Identity (Identity (runIdentity))
+import Control.Monad.Reader (ReaderT (runReaderT))
 import Data.Char (digitToInt)
 import Data.Foldable (toList)
 import Data.List (foldl')
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Evaluation.Type (TypeError, infer)
+import Mean.Evaluation.Type (TyEnv, TypeError, infer, mkTyEnv)
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
@@ -22,7 +23,7 @@ import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
 
-type Evaluation = ExceptT EvalError Identity
+type Evaluation = ReaderT TyEnv (ExceptT ExprEvalError Identity)
 
 class Reducible a where
   reduce :: a -> Evaluation a
@@ -35,15 +36,11 @@ class AlphaEq a where
 class EvalEq a where
   (=*=) :: a -> a -> Bool
 
-data EvalError
+data ExprEvalError
   = InexhaustiveCase Expr
   | EUnificationError (UnificationError Expr)
   | RuntimeTypeError TypeError
-  deriving (P.Eq)
-
-instance Show EvalError where
-  show (InexhaustiveCase c) = "Inexhaustive case expr: " ++ show c
-  show (RuntimeTypeError e) = "Runtime type error: " ++ show e
+  deriving (P.Eq, Show)
 
 incrVarId :: Var -> Var
 incrVarId (Var vPub vPri) = Var vPub $ init vPri ++ show (digitToInt (last vPri) P.+ 1)
@@ -162,7 +159,7 @@ instance Reducible Expr where
       ESet s -> do
         e1' <- reduce e1
         pure $ ELit $ LBool $ Set.member e1' s
-      -- indexed access to tuples
+      -- (sugar) indexed access to tuples
       ETup t | isIdx e1 -> reduce (t !! idxOf e1)
       -- (1b) binders have a semantics of their own: they may be applied
       -- to terms, in which case they simply abstract a free variable.
@@ -199,6 +196,7 @@ instance Reducible Expr where
                       (ELit {}, ELit {}) -> eq
                       (ESet {}, ESet {}) -> eq
                       _ -> noop
+              -- as should inequality be
               NEq -> b $ (/=) e0' e1'
               LT -> b $ (<) e0' e1'
               LTE -> b $ (<=) e0' e1'
@@ -260,20 +258,19 @@ instance Unifiable Expr where
     (_, EVar v) -> pure $ mkEnv v e0
     (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
 
--- normal form
-simplify :: Expr -> Evaluation Expr
-simplify expr =
+normalize' :: Expr -> Evaluation Expr
+normalize' expr =
   reduce expr >>= \case
     ELam b body -> do
-      body' <- simplify body
+      body' <- normalize' body
       pure (ELam b body')
     EApp e0 e1 -> do
-      e0' <- simplify e0
-      e1' <- simplify e1
+      e0' <- normalize' e0
+      e1' <- normalize' e1
       pure (e0 * e1)
     EBinOp op e0 e1 -> do
-      e0' <- simplify e0
-      e1' <- simplify e1
+      e0' <- normalize' e0
+      e1' <- normalize' e1
       pure $ EBinOp op e0' e1'
     expr' -> pure expr'
 
@@ -300,14 +297,17 @@ instance AlphaEq Expr where
 (@!=) :: Expr -> Expr -> Bool
 e0 @!= e1 = not (e0 @= e1)
 
-eval :: Expr -> Either EvalError Expr
-eval e = runIdentity $ runExceptT $ reduce e
+eval :: Expr -> Either ExprEvalError Expr
+eval = eval' mkTyEnv
 
-eval' :: Expr -> Either EvalError Expr
-eval' e = runIdentity $ runExceptT $ simplify e
+eval' :: TyEnv -> Expr -> Either ExprEvalError Expr
+eval' tyEnv e = runIdentity $ runExceptT (runReaderT (reduce e) tyEnv)
+
+normalize :: Expr -> Either ExprEvalError Expr
+normalize e = runIdentity $ runExceptT (runReaderT (normalize' e) mkTyEnv)
 
 confluent :: Expr -> Expr -> Bool
-confluent e0 e1 = case (eval' e0, eval' e1) of
+confluent e0 e1 = case (normalize e0, normalize e1) of
   (Right e1', Right e0') -> e0' @= e1'
   _ -> False
 
