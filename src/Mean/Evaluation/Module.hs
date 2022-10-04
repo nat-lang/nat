@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Mean.Evaluation.Module where
 
@@ -10,13 +11,15 @@ import qualified Data.Map as Map
 import Debug.Trace (trace)
 import Mean.Evaluation.Surface
 import Mean.Evaluation.Type
+import Mean.Inference
 import Mean.Syntax.Module
 import Mean.Syntax.Surface
+import Mean.Syntax.Type
 import Mean.Unification
 
 data ModuleEvalError
   = MExprEvalError ExprEvalError
-  | MTypeError TypeError
+  | MTypeError TypeEnv Expr (InferenceError Type Expr)
   deriving (Eq, Show)
 
 instance Reducible Module where
@@ -34,18 +37,18 @@ instance Reducible Module where
                 MDecl v e -> next <=< (pure . MDecl v) <=< reduceIn mod' $ e
                 MExec e -> next <=< (pure . MExec) <=< reduceIn mod' $ e
 
-typeModule :: TyEnv -> Module -> Either TypeError TyEnv
+typeModule :: TypeEnv -> Module -> Either ModuleEvalError TypeEnv
 typeModule env mod = case mod of
   [] -> Right env
   (mExpr : mExprs) -> case mExpr of
     MExec {} -> Right env
-    MDecl v e -> case infer' env e of
-      Left err -> Left err
+    MDecl v e -> case inferIn env e of
+      Left err -> Left $ MTypeError env e err
       Right ty -> typeModule (extend env (v, ty)) mExprs
 
 eval :: Module -> Either ModuleEvalError Module
-eval m = case typeModule mkTyEnv m of
-  Left err -> Left $ MTypeError err
+eval m = case typeModule mkCEnv m of
+  Left err -> trace "foo" $ Left err
   Right env -> case runIdentity $ runExceptT $ runReaderT (reduce m) env of
-    Left err -> Left $ MExprEvalError err
+    Left err -> trace "bar" $ Left $ MExprEvalError err
     Right m -> Right m

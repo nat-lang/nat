@@ -154,6 +154,21 @@ x ? y = ECond x y
 (>) :: (Expr -> Expr) -> Expr -> Expr
 e > e' = e e'
 
+-- λeb . e
+churchLeaf =
+  let [e, b] = mkEVar <$> ["e", "b"]
+   in e ~> (b ~> e)
+
+-- λxlreb . b(x)(l e b)(r e b)
+churchNode =
+  let [e, b, x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
+   in x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
+
+mkChurchTree :: T.Tree Expr -> Expr
+mkChurchTree t = case t of
+  T.Leaf -> churchLeaf
+  T.Node e l r -> churchNode * e * mkChurchTree l * mkChurchTree r
+
 -------------------------------------------------------------------------------
 -- Parsing
 -------------------------------------------------------------------------------

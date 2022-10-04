@@ -42,7 +42,9 @@ library
       Mean.Evaluation.Module
       Mean.Evaluation.Surface
       Mean.Evaluation.Type
+      Mean.Inference
       Mean.Parser
+      Mean.Reduction
       Mean.Syntax.Logic
       Mean.Syntax.Module
       Mean.Syntax.Surface

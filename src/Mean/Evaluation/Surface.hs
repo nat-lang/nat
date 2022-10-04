@@ -13,8 +13,10 @@ import Data.Foldable (toList)
 import Data.List (foldl')
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Tree.Binary.Preorder (Tree)
 import Debug.Trace (trace, traceM)
-import Mean.Evaluation.Type (TyEnv, TypeError, infer, mkTyEnv)
+import Mean.Evaluation.Type hiding (fresh, normalize)
+import Mean.Inference
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
@@ -23,7 +25,7 @@ import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
 
-type Evaluation = ReaderT TyEnv (ExceptT ExprEvalError Identity)
+type Evaluation = ReaderT TypeEnv (ExceptT ExprEvalError Identity)
 
 class Reducible a where
   reduce :: a -> Evaluation a
@@ -39,7 +41,7 @@ class EvalEq a where
 data ExprEvalError
   = InexhaustiveCase Expr
   | EUnificationError (UnificationError Expr)
-  | RuntimeTypeError TypeError
+  | RuntimeTypeError (InferenceError Type Expr)
   deriving (P.Eq, Show)
 
 incrVarId :: Var -> Var
@@ -72,17 +74,7 @@ instance Arithmetic Expr where
   (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
   _ - _ = error arithOnlyErr
 
--- λeb . e
-churchLeaf =
-  let [e, b] = mkEVar <$> ["e", "b"]
-   in e ~> (b ~> e)
-
--- λxlreb . b(x)(l e b)(r e b)
-churchNode =
-  let [e, b, x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
-   in x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
-
-instance FV Expr where
+instance Contextual Expr where
   fv e = case e of
     EVar v -> Set.singleton v
     ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
@@ -212,19 +204,12 @@ instance Reducible Expr where
       case x' of
         ELit LBool {} -> reduce $ if bool x' then y else z
         _ -> pure $ ECond x' y z
-    ETree t -> mkChurchTree t >>= reduce
-      where
-        mkChurchTree t = case t of
-          Leaf -> pure churchLeaf
-          Node e l r -> do
-            l' <- mkChurchTree l
-            r' <- mkChurchTree r
-            pure $ churchNode * e * l' * r'
+    ETree t -> reduce $ mkChurchTree t
     ETyCase b cs -> do
       b' <- reduce b
       case infer b' of
         Left e -> throwError $ RuntimeTypeError e
-        Right (Forall _ ty) -> case cs of
+        Right ty -> case cs of
           ((Binder v ty', e) : cs') ->
             if unifiable ty ty'
               then case runUnify [(v, b)] of
@@ -298,13 +283,13 @@ instance AlphaEq Expr where
 e0 @!= e1 = not (e0 @= e1)
 
 eval :: Expr -> Either ExprEvalError Expr
-eval = eval' mkTyEnv
+eval = eval' mkCEnv
 
-eval' :: TyEnv -> Expr -> Either ExprEvalError Expr
+eval' :: TypeEnv -> Expr -> Either ExprEvalError Expr
 eval' tyEnv e = runIdentity $ runExceptT (runReaderT (reduce e) tyEnv)
 
 normalize :: Expr -> Either ExprEvalError Expr
-normalize e = runIdentity $ runExceptT (runReaderT (normalize' e) mkTyEnv)
+normalize e = runIdentity $ runExceptT (runReaderT (normalize' e) mkCEnv)
 
 confluent :: Expr -> Expr -> Bool
 confluent e0 e1 = case (normalize e0, normalize e1) of

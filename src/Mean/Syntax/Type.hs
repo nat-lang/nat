@@ -15,6 +15,7 @@ import Data.Set ((\\))
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import qualified Mean.Parser as P
+import Mean.Syntax.Logic
 import Mean.Var
 import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies, parens)
 import Text.PrettyPrint
@@ -36,17 +37,12 @@ data Type
   | TyTup [Type]
   | TyUnion (Set.Set Type)
   | TyUndef
+  | TyQuant (QExpr Type)
   | -- TyMap
     -- TyNil is a placeholder left by the parser in lieu of an explicit
     -- type annotation. It says "infer my type, please".
     TyNil
   deriving (Prel.Eq, Ord)
-
-data TyScheme = Forall [Var] Type
-  deriving (Prel.Eq, Ord)
-
-mkUnqScheme :: Type -> TyScheme
-mkUnqScheme = Forall []
 
 mkTv :: String -> Type
 mkTv = TyVar . mkVar
@@ -63,15 +59,10 @@ instance Pretty Type where
   ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
+  ppr p (TyQuant (Univ tvs ty)) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
   ppr p TyNil = text "TyNil"
 
-instance Pretty TyScheme where
-  ppr p (Forall tvs ty) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
-
 instance Show Type where
-  show = show . ppr 0
-
-instance Show TyScheme where
   show = show . ppr 0
 
 -------------------------------------------------------------------------------

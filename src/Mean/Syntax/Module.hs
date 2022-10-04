@@ -27,8 +27,7 @@ pMLetRecDecl = do
   P.reserved "letrec"
   v <- pVar
   P.symbol "="
-  e <- pExpr
-  pure $ MDecl v (EFix v e)
+  MDecl v . EFix v <$> pExpr
 
 pMLetDecl :: P.Parser ModuleExpr
 pMLetDecl = do
