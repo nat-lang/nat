@@ -15,8 +15,10 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
 import Debug.Trace (trace, traceM)
+import Mean.Evaluation.Context
 import Mean.Evaluation.Type hiding (fresh, normalize)
 import Mean.Inference
+import Mean.Reduction
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
@@ -24,11 +26,6 @@ import Mean.Var
 import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
-
-type Evaluation = ReaderT TypeEnv (ExceptT ExprEvalError Identity)
-
-class Reducible a where
-  reduce :: a -> Evaluation a
 
 -- Equality up to renaming of free variables.
 class AlphaEq a where
@@ -73,21 +70,6 @@ instance Arithmetic Expr where
   _ `mul` _ = error arithOnlyErr
   (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
   _ - _ = error arithOnlyErr
-
-instance Contextual Expr where
-  fv e = case e of
-    EVar v -> Set.singleton v
-    ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
-    EApp e0 e1 -> fv [e0, e1]
-    ECond x y z -> fv [x, y, z]
-    EUnOp _ e -> fv e
-    EBinOp _ e0 e1 -> fv [e0, e1]
-    ETree t -> fv (toList t)
-    -- ELitCase Expr [(Expr, Expr)]
-    -- ESet (Set Expr)
-    -- ELet Var Expr Expr
-    -- EFix Var Expr
-    _ -> Set.empty
 
 -- | There are two possible conflicts for a substitution e'[e/v]:
 --  (1) a nested binder conflicts with v, as in
@@ -140,7 +122,13 @@ idxOf _ = error "not an index"
 
 reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
 
-instance Reducible Expr where
+instance Reducible (Tree Expr) Expr ExprEvalError TypeEnv where
+  reduce t = reduce $ mkChurchTree t
+
+instance Reducible Expr Expr ExprEvalError TypeEnv where
+  runReduce = runReduce' mkCEnv
+  runNormalize = runNormalize' mkCEnv
+
   -- cbn
   reduce expr = case expr of
     -- (1) leftmost, outermost
@@ -204,7 +192,7 @@ instance Reducible Expr where
       case x' of
         ELit LBool {} -> reduce $ if bool x' then y else z
         _ -> pure $ ECond x' y z
-    ETree t -> reduce $ mkChurchTree t
+    ETree t -> reduce t
     ETyCase b cs -> do
       b' <- reduce b
       case infer b' of
@@ -225,15 +213,26 @@ instance Reducible Expr where
           e' <- reduce e
           reduce $ (b' === c') ? e' > ELitCase b cs'
         _ -> throwError $ InexhaustiveCase expr
-    ELet v e0 e1 -> reduce $ (EVar v ~> e1) * e0
-    EFix v e ->
-      let f = mkEVar "f"
-          x = mkEVar "x"
-          y = f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
-       in reduce (y * (EVar v ~> e))
+    ELet v e0 e1 -> reduce (inEnv v e0 e1)
+    EFix v e -> reduce $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
     -- (3) var/literal
     _ -> pure expr
+
+  normalize expr =
+    reduce expr >>= \case
+      ELam b body -> do
+        body' <- normalize body
+        pure (ELam b body')
+      EApp e0 e1 -> do
+        e0' <- normalize e0
+        e1' <- normalize e1
+        pure (e0 * e1)
+      EBinOp op e0 e1 -> do
+        e0' <- normalize e0
+        e1' <- normalize e1
+        pure $ EBinOp op e0' e1'
+      expr' -> pure expr'
 
 -- (x,y) (1,2)
 instance Unifiable Expr where
@@ -242,22 +241,7 @@ instance Unifiable Expr where
     (EVar v, _) -> pure $ mkEnv v e1
     (_, EVar v) -> pure $ mkEnv v e0
     (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
-
-normalize' :: Expr -> Evaluation Expr
-normalize' expr =
-  reduce expr >>= \case
-    ELam b body -> do
-      body' <- normalize' body
-      pure (ELam b body')
-    EApp e0 e1 -> do
-      e0' <- normalize' e0
-      e1' <- normalize' e1
-      pure (e0 * e1)
-    EBinOp op e0 e1 -> do
-      e0' <- normalize' e0
-      e1' <- normalize' e1
-      pure $ EBinOp op e0' e1'
-    expr' -> pure expr'
+    _ -> throwError $ NotUnifiable e0 e1
 
 instance AlphaEq [Expr] where
   alphaEq [] [] = True
@@ -283,16 +267,12 @@ instance AlphaEq Expr where
 e0 @!= e1 = not (e0 @= e1)
 
 eval :: Expr -> Either ExprEvalError Expr
-eval = eval' mkCEnv
+eval = runReduce
 
-eval' :: TypeEnv -> Expr -> Either ExprEvalError Expr
-eval' tyEnv e = runIdentity $ runExceptT (runReaderT (reduce e) tyEnv)
-
-normalize :: Expr -> Either ExprEvalError Expr
-normalize e = runIdentity $ runExceptT (runReaderT (normalize' e) mkCEnv)
+type Normalization = Either ExprEvalError Expr
 
 confluent :: Expr -> Expr -> Bool
-confluent e0 e1 = case (normalize e0, normalize e1) of
+confluent e0 e1 = case (runNormalize e0 :: Normalization, runNormalize e1 :: Normalization) of
   (Right e1', Right e0') -> e0' @= e1'
   _ -> False
 

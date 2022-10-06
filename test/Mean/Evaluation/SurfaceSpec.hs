@@ -159,7 +159,7 @@ spec = do
     it "reduces trees to their church encodings" $ do
       let t = ETree (Node f (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
 
-      eval t `shouldBe` eval (churchNode * f * (churchNode * (x ~> x) * churchLeaf * churchLeaf) * (churchNode * y * churchLeaf * churchLeaf))
+      eval t `shouldBe` eval (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
 
     it "reduces case expressions on booleans" $ do
       eval (ELitCase true [(true, x)]) `shouldBe` Right x
@@ -221,7 +221,7 @@ spec = do
     it "reduces typecase expressions with complex bindings" $ do
       let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), EBinOp Mul z one)]
       let tup0 = ETup [zero, one]
-      let tup1 = ETup [one, zero, mkI 2]
+      let tup1 = ETup [zero, one, mkI 2]
 
       eval (tyCase * tup0) `shouldBe` Right (mkI 2)
       eval (tyCase * tup1) `shouldBe` Right (mkI 2)

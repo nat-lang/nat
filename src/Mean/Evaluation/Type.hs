@@ -28,12 +28,14 @@ import Control.Monad.State
     state,
   )
 import Data.Either (isRight)
-import Data.List (foldl', nub)
+import Data.Foldable (toList)
+import Data.List (find, foldl', nub)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
+import Mean.Evaluation.Context
 import Mean.Inference
 import Mean.Syntax.Logic
 import qualified Mean.Syntax.Surface as S
@@ -69,9 +71,11 @@ instance Substitutable Type Type where
     (s, TyVar a) -> Map.findWithDefault t1 a s
     (s, TyFun t0' t1') -> let sub' = substitute s in sub' t0' `TyFun` sub' t1'
     (s, TyUnion ts) -> TyUnion $ Set.fromList (substitute s <$> Set.toList ts)
+    (s, TyTup ts) -> TyTup $ substitute s <$> ts
     (s, TyQuant (Univ as t)) -> TyQuant $ Univ as $ substitute s' t
       where
         s' = foldr Map.delete s as
+    _ -> error ("what am i? " ++ show (t0, t1))
 
 instance Contextual Type where
   fv t = case t of
@@ -85,9 +89,14 @@ instance Contextual Type where
 -- Inference
 -------------------------------------------------------------------------------
 
--- | Quantify a type universally over its
+-- | Generalize a type over its free variables
 closeOver :: Type -> Type
 closeOver = normalize . generalize mkCEnv
+
+generalize :: TypeEnv -> Type -> Type
+generalize env t = TyQuant $ Univ as t
+  where
+    as = Set.toList $ fv t `Set.difference` fv env
 
 instantiate :: Type -> TypeConstrain
 instantiate (TyQuant (Univ as t)) = do
@@ -95,11 +104,6 @@ instantiate (TyQuant (Univ as t)) = do
   let e = Map.fromList $ zip as as'
   return $ substitute e t
 instantiate t = error ("can only instantiate a quantified type, but got " ++ (show t))
-
-generalize :: TypeEnv -> Type -> Type
-generalize env t = TyQuant $ Univ as t
-  where
-    as = Set.toList $ fv t `Set.difference` fv env
 
 normalize :: Type -> Type
 normalize (TyQuant (Univ _ body)) = TyQuant $ Univ (map snd ord) (normtype body)
@@ -131,7 +135,7 @@ checkTy :: Var -> TypeConstrain
 checkTy x = do
   env <- ask
   case Map.lookup x env of
-    Nothing -> throwError $ IUnboundVariable x
+    Nothing -> throwError $ IUnboundVariable x env
     Just t -> case t of
       TyQuant {} -> instantiate t
       _ -> pure t
@@ -155,22 +159,40 @@ fresh = do
 
 tyOp op = case op of S.Add -> tyInt; S.Sub -> tyInt; S.Mul -> tyInt; _ -> tyBool
 
-constrainWith e v t = inTypeEnv (v, t) (constrain e)
+constrainWith e v t = inTypeEnv (v, t) (principal e)
+
+type Case = (S.Binder S.Expr, S.Expr)
+
+matchTyCase :: Type -> [Case] -> Maybe Case
+matchTyCase t = find (match t)
+  where
+    match ty (S.Binder _ ty', _) = ty <=> ty'
+
+-- | (1) mint fresh tvars for the vars in the pattern
+--   (2) constrain the pattern under these tvars
+--   (3) constrain the expr under these tvars
+--   (4) return the type of the expr and constrain
+--       the principal type of the pattern to equal its tycase,
+--       alongside any constraints incurred along the way
+constrainCase (S.Binder p t, expr) = do
+  t' <- freshIfNil t
+  let vs = Set.toList $ fv p
+  tvs <- mapM (const fresh) vs
+  let env = Map.fromList (zip vs tvs)
+
+  (pT, pCs) <- local (Map.union env) (principal p)
+  (tv, cs) <- local (Map.union env) (principal expr)
+
+  return (tv, (pT, t') : pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
-  inferIn e = infer' e initConstrain
-
+  inferIn env = infer' env initConstrain
   infer = inferIn mkCEnv
 
-  constraintsIn e = constraintsIn' e initConstrain
+  constraintsIn env = constraintsIn' env initConstrain
+  constraints = constraintsIn mkCEnv
 
-  constrain b = do
-    (a, cs) <- constrain' b
-    case runUnify cs of
-      Left e -> throwError $ IUnificationError b e
-      Right s -> pure (substitute s a, cs)
-
-  constrain' expr = case expr of
+  constrain expr = case expr of
     S.ELit (S.LInt _) -> return (tyInt, [])
     S.ELit (S.LBool _) -> return (tyBool, [])
     S.EVar v -> do
@@ -180,47 +202,54 @@ instance Inferrable Type S.Expr ConstraintState where
       t' <- freshIfNil t
       (t'', cs) <- constrainWith e v t'
       return (t' `TyFun` t'', cs)
+    S.EFix v e -> principal $ S.mkFixPoint v e
     S.EApp e0 e1 -> do
-      (t0, c0) <- constrain e0
-      (t1, c1) <- constrain e1
+      (t0, c0) <- principal e0
+      (t1, c1) <- principal e1
       tv <- fresh
       return (tv, c0 ++ c1 ++ [(t0, t1 `TyFun` tv)])
     S.EBinOp op e0 e1 -> do
-      (t0, c0) <- constrain e0
-      (t1, c1) <- constrain e1
+      (t0, c0) <- principal e0
+      (t1, c1) <- principal e1
       tv <- fresh
       return (tv, c0 ++ c1 ++ [(t0, t1), (tyOp op, tv)])
     S.ECond x y z -> do
-      (tX, cX) <- constrain x
-      (tY, cY) <- constrain y
-      (tZ, cZ) <- constrain z
+      (tX, cX) <- principal x
+      (tY, cY) <- principal y
+      (tZ, cZ) <- principal z
       tv <- fresh
       return (tv, cX ++ cY ++ cZ ++ [(tX, tyBool), (tY, tv), (tZ, tv)])
     S.ETup es -> do
       tv <- fresh
-      cs <- mapM constrain es
+      cs <- mapM principal es
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
     S.EWildcard -> do
       tv <- fresh
       return (tv, [])
     S.ETyCase e cases -> do
-      tv <- fresh
-      -- needs to generalize to exprs with vars
-      eTs <- mapM (\(S.Binder (S.EVar v) t, e) -> constrainWith e v t) cases
-      (et, eCs) <- constrain e
+      (et, eCs) <- principal e
 
+      case matchTyCase et cases of
+        Nothing -> throwError $ IInexhaustiveCase expr
+        Just (S.Binder p _, e') -> do
+          -- substitute the concrete type of the matched expr
+          -- for the possibly variable type of the case
+          (tv, e'Cs) <- constrainCase (S.Binder p et, e')
+
+          let cs =
+                [ [(et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))],
+                  eCs,
+                  e'Cs
+                ]
+
+          return (tv, concat cs)
+    S.ETree t -> do
+      eTs <- mapM principal (toList t)
       let (tEs, cEs) = unzip eTs
-      let ts = [t | (S.Binder _ t) <- map fst cases]
-      let cs =
-            [ [(et, TyUnion (Set.fromList ts))],
-              concat cEs,
-              eCs,
-              [(tv, t) | t <- tEs]
-            ]
-
-      return (tv, concat cs)
-    S.ETree t -> constrain $ S.mkChurchTree t
+      let t' = S.mkTypedChurchTree (TyUnion $ Set.fromList tEs) t
+      (tv, cs) <- principal t'
+      return (tv, concat $ cs : cEs)
     _ -> throwError $ IUnconstrainable expr
 
 -------------------------------------------------------------------------------
@@ -240,4 +269,7 @@ instance Unifiable Type where
             pure (u0 <*> u1)
           (TyUnion ts, t) | some t ts -> pure mempty
           (t, TyUnion ts) | some t ts -> pure mempty
+          (TyTup ts, TyTup ts') | length ts == length ts' -> unifyMany (zip ts ts')
+          -- (TyQuant (Univ vs t), t) ->
+          -- (t, TyQuant (Univ vs t)) ->
           _ -> throwError $ NotUnifiable t0 t1

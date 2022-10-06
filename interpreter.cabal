@@ -39,6 +39,7 @@ library
       Interpreter.Evaluation
       Interpreter.Fragment
       Mean.Cmd
+      Mean.Evaluation.Context
       Mean.Evaluation.Module
       Mean.Evaluation.Surface
       Mean.Evaluation.Type

@@ -51,6 +51,7 @@ data Expr
   | ETup [Expr]
   | EIdx Int
   | EWildcard
+  | EUndef
   deriving (Prel.Eq, Ord)
 
 instance Pretty Lit where
@@ -105,10 +106,10 @@ instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder n t) = char 'λ' <> text (show n)
+  ppr p (Binder n t) = char 'λ' <> text (show t) <> text (show n)
 
 instance Show (Binder Expr) where
-  show (Binder e t) = show e ++ ":" ++ show t
+  show = show . ppr 0
 
 mkEVar :: Name -> Expr
 mkEVar = EVar . mkVar
@@ -160,14 +161,25 @@ churchLeaf =
    in e ~> (b ~> e)
 
 -- λxlreb . b(x)(l e b)(r e b)
-churchNode =
-  let [e, b, x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
-   in x ~> (l ~> (r ~> (e ~> (b ~> (b * x * (l * e * b) * (r * e * b))))))
+typedChurchBranch ty =
+  let [e, b@(EVar bV), x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
+   in x ~> (l ~> (r ~> (e ~> ELam (Binder bV ty) (b * x * (l * e * b) * (r * e * b)))))
+
+churchBranch = typedChurchBranch TyNil
+
+mkTypedChurchTree :: Type -> T.Tree Expr -> Expr
+mkTypedChurchTree ty t = case t of
+  T.Leaf -> churchLeaf
+  T.Node e l r -> typedChurchBranch ty * e * mkTypedChurchTree ty l * mkTypedChurchTree ty r
 
 mkChurchTree :: T.Tree Expr -> Expr
-mkChurchTree t = case t of
-  T.Leaf -> churchLeaf
-  T.Node e l r -> churchNode * e * mkChurchTree l * mkChurchTree r
+mkChurchTree = mkTypedChurchTree TyNil
+
+mkFixPoint v e =
+  let f = mkEVar "f"
+      x = mkEVar "x"
+      y = f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+   in (y * (EVar v ~> e))
 
 -------------------------------------------------------------------------------
 -- Parsing

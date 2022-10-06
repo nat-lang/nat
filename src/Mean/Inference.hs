@@ -1,4 +1,5 @@
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Mean.Inference where
 
@@ -12,8 +13,9 @@ import Mean.Var
 
 data InferenceError a b
   = IUnconstrainable b
-  | IUnboundVariable Var
+  | IUnboundVariable Var (ConstraintEnv a)
   | IUnificationError b (UnificationError a)
+  | IInexhaustiveCase b
   deriving (Eq, Show)
 
 type Constraint a = (a, a)
@@ -26,28 +28,33 @@ mkCEnv = Map.empty
 -- | Constraint generation monad stack
 type ConstrainT a b s r =
   ( ReaderT
-      (ConstraintEnv a) -- Environment parameterized over b
+      (ConstraintEnv a) -- environment parameterized over a
       ( StateT
-          s -- Arbitrary state
+          s -- arbitrary state
           ( Except
-              (InferenceError a b) -- Errors
+              (InferenceError a b) -- errors
           )
       )
-      r -- Result
+      r -- result
   )
 
 type Constrain a b s = ConstrainT a b s (a, [Constraint a])
 
--- | Infer a from b.
-class (Unifiable a, Show s) => Inferrable a b s | a -> s where
-  constrain' :: b -> Constrain a b s
+principalize :: Unifiable a => (b -> Constrain a b s) -> b -> Constrain a b s
+principalize m b = do
+  (a, cs) <- m b
+  case runUnify cs of
+    Left e -> throwError $ IUnificationError b e
+    Right s -> do
+      pure (substitute s a, cs)
 
+-- | Infer a from b in state s.
+class Unifiable a => Inferrable a b s | b -> s where
   constrain :: b -> Constrain a b s
-  constrain b = do
-    (a, cs) <- constrain' b
-    case runUnify cs of
-      Left e -> throwError $ IUnificationError b e
-      Right s -> pure (substitute s a, cs)
+
+  -- | Calculate incremental principal types
+  principal :: b -> Constrain a b s
+  principal b = principalize constrain b
 
   -- | Run the constraint generation monad
   runConstrain ::
@@ -57,7 +64,7 @@ class (Unifiable a, Show s) => Inferrable a b s | a -> s where
     Either (InferenceError a b) (a, [Constraint a])
   runConstrain env s m = runExcept $ evalStateT (runReaderT m env) s
 
-  -- | Return the constraints used to make an inference
+  -- | Return the constraints used to make an inference in a given state and environment
   constraintsIn' ::
     ConstraintEnv a ->
     s ->
@@ -77,18 +84,25 @@ class (Unifiable a, Show s) => Inferrable a b s | a -> s where
       (InferenceError a b)
       ([Constraint a], ConstraintEnv a, a)
 
+  -- | Return the constraints used to make an inference
+  constraints ::
+    b ->
+    Either
+      (InferenceError a b)
+      ([Constraint a], ConstraintEnv a, a)
+
   -- | Infer with given state and environment
   infer' ::
     ConstraintEnv a ->
     s ->
     b ->
     Either (InferenceError a b) a
-  infer' env s expr = case runConstrain env s (constrain expr) of
+  infer' env s expr = case runConstrain env s (principal expr) of
     Left err -> Left err
     Right (a, _) -> pure a
 
   -- | Infer with given environment
   inferIn :: ConstraintEnv a -> b -> Either (InferenceError a b) a
 
-  -- | Infer with an unspecified environment
+  -- | Infer
   infer :: b -> Either (InferenceError a b) a

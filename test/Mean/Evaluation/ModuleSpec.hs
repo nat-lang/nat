@@ -6,9 +6,10 @@ module Mean.Evaluation.ModuleSpec where
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
 import Mean.Evaluation.Module
-import Mean.Evaluation.Surface (normalize)
+import Mean.Evaluation.Surface (Normalization)
 import Mean.Inference
 import Mean.Parser
+import Mean.Reduction
 import Mean.Syntax.Module
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
@@ -38,14 +39,6 @@ mkI = ELit . LInt
 spec :: Spec
 spec = do
   describe "eval" $ do
-    it "foo" $ do
-      let (Right m) = parse pExpr "[0 [0 [succ] [0]] [succ]]"
-      let (Right m') = normalize m
-      let env = Map.singleton (mkVar "succ") (TyFun tyInt tyInt)
-      traceM (show m')
-      inferIn env m' `shouldBe` Right TyNil
-      m' `shouldBe` mkI 0
-
     it "evaluates each expr within an accumulated environment" $ do
       let (Right mod0') = parse pModule mod0
       traceM (show mod0')

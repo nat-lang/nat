@@ -9,9 +9,11 @@ import Debug.Trace (traceM)
 import Mean.Evaluation.Surface hiding (substitute)
 import Mean.Evaluation.Type
 import Mean.Inference
+import Mean.Parser
 import Mean.Syntax.Surface hiding (fromList)
 import Mean.Syntax.Type
 import Mean.Unification
+import Mean.Unification (Substitutable (substitute))
 import Mean.Var
 import Test.Hspec
 import Prelude hiding ((*), (>))
@@ -99,43 +101,64 @@ spec = do
       let a = mkEVar "a"
       --  λn. if n ≤ 1 then 1 else n * fact (n - 1)
       let fact = EFix (mkVar "a") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (a * EBinOp Sub n (iE 1)))
-      let (Right fact') = eval fact
 
-      infer (fact' * one) `shouldBe` Right tyInt
+      infer (fact * one) `shouldBe` Right tyInt
+
+    it "types the branches of trees with polymorphic nodes as unions" $ do
+      let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"
+      let (Right (TyFun _ (TyFun ty _))) = infer t
+      let tA = mkTv "A"
+      ty `shouldBe` TyUnion (Set.fromList [tyBool, TyFun tA tA, tyInt])
+
+    it "types parametric polymorphic functions" $ do
+      let polyId = (y ~> ((y * true) ? (y * zero) > (y * one))) * (x ~> x)
+
+      infer polyId `shouldBe` Right tyInt
 
   describe "the typecase expression" $ do
     -- these tests can be less circuitous when we have type
     -- annotations for terms other than binders
     let tA = mkTv "A"
-    let env = Map.fromList [(xV, tA)]
+    let env = Map.fromList [(xV, tyInt)]
 
-    let incompatibleCases = [(Binder z tyInt, z === zero), (Binder z tyBool, z ? one > zero)]
-    let compatibleCases = [(Binder z tyInt, z === zero), (Binder z tyBool, z)]
+    it "has the type of its matched case body" $ do
+      let cases = [(Binder z tyInt, z === zero), (Binder z tyBool, z ? one > zero)]
 
-    it "constrains case bodies to have the same type" $ do
-      inferIn env (ETyCase x compatibleCases) `shouldBe` Right tyBool
-      let e = ETyCase x incompatibleCases
-      inferIn env e `shouldBe` Left (IUnificationError e $ NotUnifiable tyBool tyInt)
+      inferIn env (ETyCase x cases) `shouldBe` Right tyBool
 
-    it "propagates the constraints of its case bodies" $ do
-      let tB = mkTv "B"
-      let tC = mkTv "C"
-      let env' = Map.union env $ Map.fromList [(yV, tB), (wV, tC)]
+    it "propagates the constraints of its matched case body" $ do
       let tyCase = ETyCase x [(Binder z tyInt, EBinOp Add z y), (Binder z tyBool, EBinOp Eq z w ? one > zero)]
-      let (Right (_, sub, _)) = constraintsIn env' tyCase
 
+      let tB = mkTv "B"
+      let env' = Map.union env $ Map.singleton yV tB
+      let (Right (_, sub, _)) = constraintsIn env' tyCase
       substitute sub tB `shouldBe` tyInt
+
+      let tC = mkTv "C"
+      let env' = Map.fromList [(xV, tyBool), (wV, tC)]
+      let (Right (_, sub, _)) = constraintsIn env' tyCase
       substitute sub tC `shouldBe` tyBool
+
+    let cases = [(Binder z tyInt, z === zero), (Binder z tyBool, z)]
 
     it "propagates the constraints of its argument" $ do
       let env' = extend env (yV, tyInt)
-      let (Right (cs, sub, t)) = constraintsIn env' (ETyCase (EBinOp Add x y) compatibleCases)
+      let (Right (_, sub, _)) = constraintsIn env' (ETyCase (EBinOp Add x y) cases)
 
       substitute sub tA `shouldBe` tyInt
 
     it "constrains its argument to be the union of the type patterns of its cases" $ do
       let unionTy = mkTyUnion [tyInt, tyBool]
-      infer (x ~> ETyCase x compatibleCases) `shouldBe` Right (TyFun unionTy tyBool)
+      let (Right (TyFun argTy _)) = infer (x ~> ETyCase x cases)
+
+      argTy `shouldBe` unionTy
+
+    it "types complex case patterns" $ do
+      let [l@(EVar lV), r@(EVar rV)] = mkEVar <$> ["l", "r"]
+      let (Right tyCase) = parse pExpr "tycase (l, r) of (l',r'):(<A,B>, <A>) -> l'(r') | (l',r'):(<A>, <A,B>) -> r'(l') | _ -> (l,r)"
+      let env = Map.fromList [(lV, TyFun tyInt tyBool), (rV, tyInt)]
+
+      inferIn env tyCase `shouldBe` Right tyBool
 
   describe "the union type" $ do
     it "is unified with other types existentially" $ do

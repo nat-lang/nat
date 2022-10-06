@@ -12,6 +12,7 @@ import Debug.Trace (trace)
 import Mean.Evaluation.Surface
 import Mean.Evaluation.Type
 import Mean.Inference
+import Mean.Reduction
 import Mean.Syntax.Module
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
@@ -22,13 +23,13 @@ data ModuleEvalError
   | MTypeError TypeEnv Expr (InferenceError Type Expr)
   deriving (Eq, Show)
 
-instance Reducible Module where
+instance Reducible Module Module ExprEvalError TypeEnv where
   reduce mod = reduce' mod []
     where
-      reduceIn :: Module -> Expr -> Evaluation Expr
+      reduceIn :: Module -> Expr -> Reduction Expr ExprEvalError TypeEnv
       reduceIn mod = reduce . substitute (Map.fromList [(v, e) | MDecl v e <- mod])
 
-      reduce' :: Module -> Module -> Evaluation Module
+      reduce' :: Module -> Module -> Reduction Module ExprEvalError TypeEnv
       reduce' mod mod' = case mod of
         [] -> pure mod'
         (expr : exprs) ->
