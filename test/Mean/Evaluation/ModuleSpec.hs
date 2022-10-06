@@ -31,7 +31,7 @@ mod0 =
 
      let compose = \t.\op. t(unit)(op)
 
-     compose(tree)(FA)
+     compose(tree)(FA)(0)
 |]
 
 mkI = ELit . LInt

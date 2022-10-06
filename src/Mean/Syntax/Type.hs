@@ -38,8 +38,8 @@ data Type
   | TyUnion (Set.Set Type)
   | TyUndef
   | TyQuant (QExpr Type)
-  | -- TyMap
-    -- TyNil is a placeholder left by the parser in lieu of an explicit
+  | TyWild
+  | -- TyNil is a placeholder left by the parser in lieu of an explicit
     -- type annotation. It says "infer my type, please".
     TyNil
   deriving (Prel.Eq, Ord)
@@ -55,6 +55,7 @@ tyBool = TyCon "t"
 
 instance Pretty Type where
   ppr p (TyCon t) = anglesIf (p == 0) $ text t
+  ppr p TyWild = anglesIf (p == 0) $ text "_"
   ppr p (TyVar v) = anglesIf (p == 0) $ text (show v)
   ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))

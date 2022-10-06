@@ -175,11 +175,13 @@ mkTypedChurchTree ty t = case t of
 mkChurchTree :: T.Tree Expr -> Expr
 mkChurchTree = mkTypedChurchTree TyNil
 
-mkFixPoint v e =
+-- λf. (λx . f (x x)) (λx . f (x x))
+yCombinator =
   let f = mkEVar "f"
       x = mkEVar "x"
-      y = f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
-   in (y * (EVar v ~> e))
+   in f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+
+mkFixPoint v e = yCombinator * (EVar v ~> e)
 
 -------------------------------------------------------------------------------
 -- Parsing
@@ -248,7 +250,7 @@ pELitCase = do
       r <- pExpr
       pure (c, r)
 
-pWildcardBinder = P.reserved "_" >> pure (Binder EWildcard TyNil)
+pWildcardBinder = P.reserved "_" >> pure (Binder EWildcard TyWild)
 
 pExprBinder :: P.Parser (Binder Expr)
 pExprBinder = do

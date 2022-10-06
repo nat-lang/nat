@@ -49,7 +49,8 @@ typeModule env mod = case mod of
 
 eval :: Module -> Either ModuleEvalError Module
 eval m = case typeModule mkCEnv m of
-  Left err -> trace "foo" $ Left err
-  Right env -> case runIdentity $ runExceptT $ runReaderT (reduce m) env of
-    Left err -> trace "bar" $ Left $ MExprEvalError err
-    Right m -> Right m
+  Left err -> Left err
+  Right env ->
+    trace ("ENV --->" ++ show env) $ case runIdentity $ runExceptT $ runReaderT (reduce m) env of
+      Left err -> Left $ MExprEvalError err
+      Right m -> Right m

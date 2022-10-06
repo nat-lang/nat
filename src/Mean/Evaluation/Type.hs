@@ -68,6 +68,7 @@ initConstrain = CState {count = 0}
 instance Substitutable Type Type where
   substitute t0 t1 = case (t0, t1) of
     (_, TyCon {}) -> t1
+    (_, TyWild) -> t1
     (s, TyVar a) -> Map.findWithDefault t1 a s
     (s, TyFun t0' t1') -> let sub' = substitute s in sub' t0' `TyFun` sub' t1'
     (s, TyUnion ts) -> TyUnion $ Set.fromList (substitute s <$> Set.toList ts)
@@ -80,6 +81,7 @@ instance Substitutable Type Type where
 instance Contextual Type where
   fv t = case t of
     TyCon {} -> Set.empty
+    TyWild -> Set.empty
     TyVar a -> Set.singleton a
     TyFun t0 t1 -> fv t0 `Set.union` fv t1
     TyUnion ts -> foldMap fv ts
@@ -175,7 +177,6 @@ matchTyCase t = find (match t)
 --       the principal type of the pattern to equal its tycase,
 --       alongside any constraints incurred along the way
 constrainCase (S.Binder p t, expr) = do
-  t' <- freshIfNil t
   let vs = Set.toList $ fv p
   tvs <- mapM (const fresh) vs
   let env = Map.fromList (zip vs tvs)
@@ -183,7 +184,7 @@ constrainCase (S.Binder p t, expr) = do
   (pT, pCs) <- local (Map.union env) (principal p)
   (tv, cs) <- local (Map.union env) (principal expr)
 
-  return (tv, (pT, t') : pCs ++ cs)
+  return (tv, (pT, t) : pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
   inferIn env = infer' env initConstrain
@@ -202,7 +203,9 @@ instance Inferrable Type S.Expr ConstraintState where
       t' <- freshIfNil t
       (t'', cs) <- constrainWith e v t'
       return (t' `TyFun` t'', cs)
-    S.EFix v e -> principal $ S.mkFixPoint v e
+    S.EFix v e -> do
+      fv <- fresh
+      constrainWith (S.mkFixPoint v e) v fv
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
@@ -224,9 +227,7 @@ instance Inferrable Type S.Expr ConstraintState where
       cs <- mapM principal es
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
-    S.EWildcard -> do
-      tv <- fresh
-      return (tv, [])
+    S.EWildcard -> return (TyWild, [])
     S.ETyCase e cases -> do
       (et, eCs) <- principal e
 
@@ -261,6 +262,8 @@ instance Unifiable Type where
     let some t ts = or (unifiable t <$> Set.toList ts)
      in case (t0, t1) of
           _ | t0 == t1 -> pure mempty
+          (TyWild, _) -> pure mempty
+          (_, TyWild) -> pure mempty
           (TyVar v, t) -> pure $ mkEnv v t
           (t, TyVar v) -> pure $ mkEnv v t
           (TyFun t0 t1, TyFun t0' t1') -> do

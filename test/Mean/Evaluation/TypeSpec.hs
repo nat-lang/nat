@@ -98,11 +98,15 @@ spec = do
     it "types recursive functions" $ do
       let iE = ELit . LInt
       let n = mkEVar "n"
-      let a = mkEVar "a"
-      --  λn. if n ≤ 1 then 1 else n * fact (n - 1)
-      let fact = EFix (mkVar "a") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (a * EBinOp Sub n (iE 1)))
+      let f = mkEVar "f"
+      -- y = λf. (λx . f (x x)) (λx . f (x x))
+      -- y * (λfλn. if n ≤ 1 then 1 else n * f (n - 1))
+      let fact = EFix (mkVar "f") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (f * EBinOp Sub n (iE 1)))
 
-      infer (fact * one) `shouldBe` Right tyInt
+      let (Right (cs, env, t)) = constraints (fact * one)
+      traceM ("\nconstraints: " ++ show cs)
+      traceM ("\nenv: " ++ show env)
+      t `shouldBe` tyInt
 
     it "types the branches of trees with polymorphic nodes as unions" $ do
       let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"
@@ -147,18 +151,24 @@ spec = do
 
       substitute sub tA `shouldBe` tyInt
 
-    it "constrains its argument to be the union of the type patterns of its cases" $ do
+    it "constrains its argument to be the union of the pattern types of its cases" $ do
       let unionTy = mkTyUnion [tyInt, tyBool]
       let (Right (TyFun argTy _)) = infer (x ~> ETyCase x cases)
 
       argTy `shouldBe` unionTy
 
-    it "types complex case patterns" $ do
+    it "types tuple patterns" $ do
       let [l@(EVar lV), r@(EVar rV)] = mkEVar <$> ["l", "r"]
       let (Right tyCase) = parse pExpr "tycase (l, r) of (l',r'):(<A,B>, <A>) -> l'(r') | (l',r'):(<A>, <A,B>) -> r'(l') | _ -> (l,r)"
-      let env = Map.fromList [(lV, TyFun tyInt tyBool), (rV, tyInt)]
 
+      let env = Map.fromList [(lV, TyFun tyInt tyBool), (rV, tyInt)]
       inferIn env tyCase `shouldBe` Right tyBool
+
+      let env = Map.fromList [(rV, TyFun tyInt tyBool), (lV, tyInt)]
+      inferIn env tyCase `shouldBe` Right tyBool
+
+      let env = Map.fromList [(rV, tyInt), (lV, tyInt)]
+      inferIn env tyCase `shouldBe` Right (TyTup [tyInt, tyInt])
 
   describe "the union type" $ do
     it "is unified with other types existentially" $ do
