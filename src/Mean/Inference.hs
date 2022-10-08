@@ -8,8 +8,8 @@ import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (MonadState (get), StateT, evalStateT)
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
+import Mean.Context
 import Mean.Unification
-import Mean.Var
 
 data InferenceError a b
   = IUnconstrainable b

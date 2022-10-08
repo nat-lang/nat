@@ -6,6 +6,7 @@ import Data.List (foldl')
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
+import Mean.Context
 import Mean.Evaluation.Surface hiding (substitute)
 import Mean.Evaluation.Type
 import Mean.Inference
@@ -13,8 +14,6 @@ import Mean.Parser
 import Mean.Syntax.Surface hiding (fromList)
 import Mean.Syntax.Type
 import Mean.Unification
-import Mean.Unification (Substitutable (substitute))
-import Mean.Var
 import Test.Hspec
 import Prelude hiding ((*), (>))
 
@@ -109,7 +108,7 @@ spec = do
 
       infer (fact * one) `shouldBe` Right tyInt
 
-    it "types the branches of trees with polymorphic nodes as unions" $ do
+    it "types the domains of the functional branches of trees with polymorphic nodes as union types" $ do
       let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"
       let (Right (TyFun _ (TyFun ty _))) = infer t
       let tA = mkTv "A"

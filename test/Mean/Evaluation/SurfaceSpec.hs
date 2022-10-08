@@ -2,13 +2,13 @@ module Mean.Evaluation.SurfaceSpec where
 
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
+import Mean.Context
 import Mean.Evaluation.Surface hiding ((*=), (@=))
 import qualified Mean.Evaluation.Surface as E
 import Mean.Parser (parse)
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
-import Mean.Var
 import Test.HUnit ((@?=))
 import Test.Hspec
 import Prelude hiding (LTE, id, (&&), (*), (>), (||))

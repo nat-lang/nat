@@ -13,9 +13,9 @@ import Data.List (intercalate)
 import Data.Set
 import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (traceM)
+import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Type
-import Mean.Var
 import Mean.Viz
 import Text.Megaparsec.Debug (dbg)
 import Text.PrettyPrint (char, parens, text, (<+>), (<>))

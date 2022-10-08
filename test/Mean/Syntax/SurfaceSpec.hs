@@ -4,10 +4,10 @@
 module Mean.Syntax.SurfaceSpec where
 
 import qualified Data.Set as Set
+import Mean.Context
 import Mean.Parser (parse)
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
-import Mean.Var
 import Test.Hspec
 import Text.RawString.QQ
 import Prelude hiding ((&&), (*), (>), (||))

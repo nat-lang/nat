@@ -5,7 +5,7 @@
 module Mean.Syntax.Logic where
 
 import qualified Data.Set as Set
-import Mean.Var (Var)
+import Mean.Context (Var)
 import Mean.Viz
 import Text.PrettyPrint
   ( Doc,

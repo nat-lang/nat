@@ -2,11 +2,12 @@ module Mean.Evaluation.Context where
 
 import Data.Foldable (toList)
 import qualified Data.Set as Set
+import Mean.Context
 import Mean.Syntax.Surface
 import Mean.Unification
 
 instance Contextual Expr where
-  fv e = case e of
+  fv expr = case expr of
     EVar v -> Set.singleton v
     ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
     EApp e0 e1 -> fv [e0, e1]

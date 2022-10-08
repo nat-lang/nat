@@ -39,6 +39,7 @@ library
       Interpreter.Evaluation
       Interpreter.Fragment
       Mean.Cmd
+      Mean.Context
       Mean.Evaluation.Context
       Mean.Evaluation.Module
       Mean.Evaluation.Surface
@@ -51,7 +52,6 @@ library
       Mean.Syntax.Surface
       Mean.Syntax.Type
       Mean.Unification
-      Mean.Var
       Mean.Viz
       Service.API.ConstituencyTrees
       Service.API.Fragments

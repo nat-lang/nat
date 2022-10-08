@@ -15,6 +15,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
 import Debug.Trace (trace, traceM)
+import Mean.Context
 import Mean.Evaluation.Context
 import Mean.Evaluation.Type hiding (fresh, normalize)
 import Mean.Inference
@@ -22,7 +23,6 @@ import Mean.Reduction
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
-import Mean.Var
 import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
@@ -61,6 +61,7 @@ class Arithmetic a where
   (-) :: a -> a -> a
   mul :: a -> a -> a
 
+  arithOnlyErr :: a
   arithOnlyErr = error "can only perform arithmetic on natural numbers"
 
 instance Arithmetic Expr where

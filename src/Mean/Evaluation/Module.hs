@@ -9,6 +9,7 @@ import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.Reader (ReaderT (runReaderT))
 import qualified Data.Map as Map
 import Debug.Trace (trace)
+import Mean.Context
 import Mean.Evaluation.Surface
 import Mean.Evaluation.Type
 import Mean.Inference
@@ -48,6 +49,8 @@ typeModule env mod = case mod of
       Left err -> Left $ MTypeError env e err
       Right ty -> typeModule (extend env (v, ty)) mExprs
 
+-- (1) rename every private variable such that every variable is uniquely named
+-- ()
 eval :: Module -> Either ModuleEvalError Module
 eval m = case typeModule mkCEnv m of
   Left err -> Left err

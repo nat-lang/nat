@@ -5,6 +5,7 @@ module Mean.Evaluation.ModuleSpec where
 
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
+import Mean.Context (mkVar)
 import Mean.Evaluation.Module
 import Mean.Evaluation.Surface (Normalization)
 import Mean.Inference
@@ -13,7 +14,6 @@ import Mean.Reduction
 import Mean.Syntax.Module
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
-import Mean.Var (mkVar)
 import Test.Hspec
 import Text.RawString.QQ
 

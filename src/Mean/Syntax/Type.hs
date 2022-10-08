@@ -14,9 +14,9 @@ import qualified Data.Map as Map
 import Data.Set ((\\))
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
+import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Logic
-import Mean.Var
 import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies, parens)
 import Text.PrettyPrint
   ( Doc,

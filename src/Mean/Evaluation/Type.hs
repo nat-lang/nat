@@ -35,13 +35,13 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
+import Mean.Context
 import Mean.Evaluation.Context
 import Mean.Inference
 import Mean.Syntax.Logic
 import qualified Mean.Syntax.Surface as S
 import Mean.Syntax.Type
 import Mean.Unification
-import Mean.Var
 import Mean.Viz
 import Prelude hiding ((<*>))
 

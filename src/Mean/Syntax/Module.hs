@@ -5,9 +5,9 @@ module Mean.Syntax.Module where
 import Data.Text
 import Data.Void
 import Debug.Trace (traceM)
+import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Surface
-import Mean.Var
 import Text.Megaparsec.Debug (dbg)
 
 data ModuleExpr
