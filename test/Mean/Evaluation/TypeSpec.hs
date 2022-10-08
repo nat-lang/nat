@@ -95,6 +95,10 @@ spec = do
       substitute sub tyB `shouldBe` ty
       substitute sub tyC `shouldBe` ty
 
+    -- it "types the y combinator" $ do
+    --   let a = mkTv "A"
+    --   infer yCombinator `shouldBe` Right (TyFun (TyFun a a) a)
+
     it "types recursive functions" $ do
       let iE = ELit . LInt
       let n = mkEVar "n"
@@ -103,10 +107,7 @@ spec = do
       -- y * (λfλn. if n ≤ 1 then 1 else n * f (n - 1))
       let fact = EFix (mkVar "f") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (f * EBinOp Sub n (iE 1)))
 
-      let (Right (cs, env, t)) = constraints (fact * one)
-      traceM ("\nconstraints: " ++ show cs)
-      traceM ("\nenv: " ++ show env)
-      t `shouldBe` tyInt
+      infer (fact * one) `shouldBe` Right tyInt
 
     it "types the branches of trees with polymorphic nodes as unions" $ do
       let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"

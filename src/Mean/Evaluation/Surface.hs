@@ -7,7 +7,7 @@ module Mean.Evaluation.Surface where
 import Control.Monad ((>=>))
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.Reader (ReaderT (runReaderT))
+import Control.Monad.Reader (ReaderT (runReaderT), ask)
 import Data.Char (digitToInt)
 import Data.Foldable (toList)
 import Data.List (foldl')
@@ -97,10 +97,10 @@ instance Substitutable Expr Expr where
                 let (ts, es) = unzip cs
                  in ETyCase (sub' b) (zip ts (sub' <$> es))
               ETree t -> ETree $ fromList $ sub' <$> toList t
+              EFix v e -> EFix v (sub' e)
               -- ELitCase Expr [(Expr, Expr)]
               -- ESet (Set Expr)
               -- ELet Var Expr Expr
-              -- EFix Var Expr
               -- induction, but rename binder if it conflicts with fv(e).
               ELam b@(Binder v' t) body
                 | v /= v' ->
@@ -195,7 +195,8 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
     ETree t -> reduce t
     ETyCase b cs -> do
       b' <- reduce b
-      case infer b' of
+      env <- ask
+      case inferIn env b' of
         Left e -> throwError $ RuntimeTypeError e
         Right ty -> case cs of
           ((Binder v ty', e) : cs') ->

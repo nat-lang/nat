@@ -66,17 +66,19 @@ initConstrain :: ConstraintState
 initConstrain = CState {count = 0}
 
 instance Substitutable Type Type where
-  substitute t0 t1 = case (t0, t1) of
-    (_, TyCon {}) -> t1
-    (_, TyWild) -> t1
-    (s, TyVar a) -> Map.findWithDefault t1 a s
-    (s, TyFun t0' t1') -> let sub' = substitute s in sub' t0' `TyFun` sub' t1'
-    (s, TyUnion ts) -> TyUnion $ Set.fromList (substitute s <$> Set.toList ts)
-    (s, TyTup ts) -> TyTup $ substitute s <$> ts
-    (s, TyQuant (Univ as t)) -> TyQuant $ Univ as $ substitute s' t
-      where
-        s' = foldr Map.delete s as
-    _ -> error ("what am i? " ++ show (t0, t1))
+  substitute s t =
+    let sub' = substitute s
+     in case t of
+          TyCon {} -> t
+          TyWild -> TyWild
+          TyVar a -> Map.findWithDefault t a s
+          TyFun t0 t1 -> sub' t0 `TyFun` sub' t1
+          TyUnion ts -> TyUnion $ Set.fromList (sub' <$> Set.toList ts)
+          TyTup ts -> TyTup $ sub' <$> ts
+          TyQuant (Univ as t') -> TyQuant $ Univ as $ substitute s' t'
+            where
+              s' = foldr Map.delete s as
+          _ -> error ("what am i? " ++ show (s, t))
 
 instance Contextual Type where
   fv t = case t of
@@ -204,8 +206,8 @@ instance Inferrable Type S.Expr ConstraintState where
       (t'', cs) <- constrainWith e v t'
       return (t' `TyFun` t'', cs)
     S.EFix v e -> do
-      fv <- fresh
-      constrainWith (S.mkFixPoint v e) v fv
+      tv <- fresh
+      constrainWith e v (TyFun tv tv)
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1

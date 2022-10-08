@@ -175,11 +175,15 @@ mkTypedChurchTree ty t = case t of
 mkChurchTree :: T.Tree Expr -> Expr
 mkChurchTree = mkTypedChurchTree TyNil
 
--- λf. (λx . f (x x)) (λx . f (x x))
+-- λf:<T,T>. (λx:<A,TT> . f (x x)) (λx:<A,TT> . f (x x))
 yCombinator =
   let f = mkEVar "f"
       x = mkEVar "x"
-   in f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+      tT = mkTv "T"
+      tA = mkTv "A"
+      tF = TyFun tT tT
+      tX = TyFun tA (TyFun tA tT)
+   in (f, tF) +> (((x, tX) +> (f * (x * x))) * ((x, tX) +> (f * (x * x))))
 
 mkFixPoint v e = yCombinator * (EVar v ~> e)
 

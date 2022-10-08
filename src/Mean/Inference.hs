@@ -40,21 +40,18 @@ type ConstrainT a b s r =
 
 type Constrain a b s = ConstrainT a b s (a, [Constraint a])
 
-principalize :: Unifiable a => (b -> Constrain a b s) -> b -> Constrain a b s
-principalize m b = do
-  (a, cs) <- m b
-  case runUnify cs of
-    Left e -> throwError $ IUnificationError b e
-    Right s -> do
-      pure (substitute s a, cs)
-
 -- | Infer a from b in state s.
 class Unifiable a => Inferrable a b s | b -> s where
   constrain :: b -> Constrain a b s
 
   -- | Calculate incremental principal types
   principal :: b -> Constrain a b s
-  principal b = principalize constrain b
+  principal b = do
+    (a, cs) <- constrain b
+    case runUnify cs of
+      Left e -> throwError $ IUnificationError b e
+      Right s -> do
+        pure (substitute s a, cs)
 
   -- | Run the constraint generation monad
   runConstrain ::
