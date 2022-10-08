@@ -61,15 +61,15 @@ class Arithmetic a where
   (-) :: a -> a -> a
   mul :: a -> a -> a
 
-arithOnlyErr = "can only perform arithmetic on natural numbers"
+  arithOnlyErr = error "can only perform arithmetic on natural numbers"
 
 instance Arithmetic Expr where
   (ELit (LInt l0)) + (ELit (LInt l1)) = ELit $ LInt $ l0 P.+ l1
-  _ + _ = error arithOnlyErr
+  _ + _ = arithOnlyErr
   (ELit (LInt l0)) `mul` (ELit (LInt l1)) = ELit $ LInt $ l0 P.* l1
-  _ `mul` _ = error arithOnlyErr
+  _ `mul` _ = arithOnlyErr
   (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
-  _ - _ = error arithOnlyErr
+  _ - _ = arithOnlyErr
 
 -- | There are two possible conflicts for a substitution e'[e/v]:
 --  (1) a nested binder conflicts with v, as in
@@ -97,6 +97,7 @@ instance Substitutable Expr Expr where
                 let (ts, es) = unzip cs
                  in ETyCase (sub' b) (zip ts (sub' <$> es))
               ETree t -> ETree $ fromList $ sub' <$> toList t
+              -- todo: capture of v needs to be avoided
               EFix v e -> EFix v (sub' e)
               -- ELitCase Expr [(Expr, Expr)]
               -- ESet (Set Expr)

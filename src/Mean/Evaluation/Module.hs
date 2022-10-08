@@ -38,6 +38,7 @@ instance Reducible Module Module ExprEvalError TypeEnv where
                 MDecl v e -> next <=< (pure . MDecl v) <=< reduceIn mod' $ e
                 MExec e -> next <=< (pure . MExec) <=< reduceIn mod' $ e
 
+-- todo: freshness state needs to be passed too!
 typeModule :: TypeEnv -> Module -> Either ModuleEvalError TypeEnv
 typeModule env mod = case mod of
   [] -> Right env
