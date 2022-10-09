@@ -42,7 +42,7 @@ instance Pretty [Var] where
   ppr p [] = text ""
 
 mkVar :: Name -> Var
-mkVar v = Var v (v ++ "0")
+mkVar v = Var v v
 
 mkEnv :: Var -> a -> Env a
 mkEnv = Map.singleton
@@ -88,15 +88,10 @@ type RenameM a = StateT Int Identity a
 next :: Var -> RenameM Var
 next (Var vPub _) = do
   s <- get
-
-  let s' = s + 1
-  let v' = Var vPub (show s')
-
-  put s'
-  pure v'
+  put (s + 1)
+  pure $ Var vPub (show s)
 
 class (Contextual a, Substitutable a a) => Renamable a where
-  lift :: Var -> a
   rename :: a -> RenameM a
   runRename :: a -> a
   runRename a = runIdentity $ evalStateT (rename a) 0

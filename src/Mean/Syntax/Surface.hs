@@ -9,8 +9,9 @@ module Mean.Syntax.Surface
 where
 
 import Control.Monad.State
+import Data.Bifunctor (second)
 import Data.List (intercalate)
-import Data.Set
+import qualified Data.Set as Set
 import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (traceM)
 import Mean.Context
@@ -45,7 +46,7 @@ data Expr
   | ETree (T.Tree Expr)
   | ELitCase Expr [(Expr, Expr)]
   | ETyCase Expr [(Binder Expr, Expr)]
-  | ESet (Set Expr)
+  | ESet (Set.Set Expr)
   | ELet Var Expr Expr
   | EFix Var Expr
   | ETup [Expr]
@@ -53,6 +54,33 @@ data Expr
   | EWildcard
   | EUndef
   deriving (Prel.Eq, Ord)
+
+walk :: (Expr -> Expr) -> Expr -> Expr
+walk = walkBound . walkFree
+
+walkBound :: (Expr -> Expr) -> Expr -> Expr
+walkBound f expr =
+  let go = walkBound f
+   in case f expr of
+        ELam b e -> ELam b (go e)
+        ETyCase e cs -> ETyCase (go e) (fmap (second go) cs)
+        -- ELet Var Expr Expr
+        EFix v e -> EFix v (go e)
+        _ -> expr
+
+walkFree :: (Expr -> Expr) -> Expr -> Expr
+walkFree f expr =
+  let go = walkFree f
+   in case f expr of
+        EApp e0 e1 -> EApp (go e0) (go e1)
+        ECond x y z -> ECond (go x) (go y) (go z)
+        EUnOp op e -> EUnOp op (go e)
+        EBinOp op e0 e1 -> EBinOp op (go e0) (go e1)
+        ETree t -> ETree (fmap go t)
+        ELitCase e cs -> ELitCase (go e) (fmap (fmap go) cs)
+        ESet es -> ESet (Set.map go es)
+        ETup es -> ETup (fmap go es)
+        _ -> expr
 
 instance Pretty Lit where
   ppr p l = case l of
@@ -106,9 +134,9 @@ instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder n t) = char 'λ' <> text (show t) <> text (show n)
+  ppr p (Binder n t) = char 'λ' <> text (show n)
 
-instance Show (Binder Expr) where
+instance Show b => Show (Binder b) where
   show = show . ppr 0
 
 mkEVar :: Name -> Expr
@@ -279,7 +307,7 @@ pETyCase = do
 
 pESet = do
   es <- P.curlies (P.commaSep pExpr)
-  pure $ ESet $ fromList es
+  pure $ ESet $ Set.fromList es
 
 after p fn = do
   mA <- P.observing p

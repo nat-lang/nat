@@ -79,9 +79,15 @@ instance Arithmetic Expr where
 --  (2) a nested binder conflicts with a free variable in e, as in
 --        (λf . f n)[f/n]
 --     in which case we want (λf1 . f1 f) rather than (λf . f f)
+
+{-
 instance Substitutable Expr Expr where
-  substitute env e = foldl' (uncurry . sub) e (Map.toList env)
+  substitute env e = foldl' (\e' s -> walk (sub' s) e') e (Map.toList env)
     where
+      sub' :: (Var, Expr) -> Expr -> Expr
+      sub' (v, e) e' = case e' of
+        EVar v' | v' == v -> e
+        _ -> e'
       -- e'[e/v]
       sub :: Expr -> Var -> Expr -> Expr
       sub e' v e =
@@ -116,7 +122,7 @@ instance Substitutable Expr Expr where
                         else ELam b (sub' body)
               -- irrelevent base cases
               _ -> e'
-
+-}
 isIdx e = case e of EIdx {} -> True; _ -> False
 
 idxOf (EIdx i) = i
@@ -201,9 +207,9 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
       case inferIn env b' of
         Left e -> throwError $ RuntimeTypeError e
         Right ty -> case cs of
-          ((Binder v ty', e) : cs') ->
+          ((Binder p ty', e) : cs') ->
             if unifiable ty ty'
-              then case runUnify [(v, b)] of
+              then case runUnify [(p, b)] of
                 Left e -> throwError $ EUnificationError e
                 Right s -> reduce $ substitute s e
               else reduce $ ETyCase b cs'
@@ -270,7 +276,7 @@ instance AlphaEq Expr where
 e0 @!= e1 = not (e0 @= e1)
 
 eval :: Expr -> Either ExprEvalError Expr
-eval = runReduce
+eval = runReduce . runRename
 
 type Normalization = Either ExprEvalError Expr
 
