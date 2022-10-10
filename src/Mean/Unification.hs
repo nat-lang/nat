@@ -28,7 +28,7 @@ class Substitutable a a => Unifiable a where
     ((a0, a1) : cs') -> do
       u <- unify a0 a1
       us <- unifyMany (substitute u cs')
-      pure $ u <*> us
+      pure $ u <.> us
 
   runUnify :: [Pair a] -> Either (UnificationError a) (Env a)
   runUnify = runIdentity . runExceptT . unifyMany

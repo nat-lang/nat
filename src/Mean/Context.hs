@@ -80,8 +80,8 @@ instance Contextual a => Contextual (Env a) where
   fv :: Contextual a => Env a -> Set.Set Var
   fv env = fv $ Map.elems env
 
-(<*>) :: Substitutable a a => Env a -> Env a -> Env a
-(<*>) e0 e1 = Map.map (substitute e0) e1 `Map.union` e0
+(<.>) :: Substitutable a a => Env a -> Env a -> Env a
+(<.>) e0 e1 = Map.map (substitute e0) e1 `Map.union` e0
 
 type RenameM a = StateT Int Identity a
 

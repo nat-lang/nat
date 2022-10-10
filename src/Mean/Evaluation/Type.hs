@@ -43,7 +43,6 @@ import qualified Mean.Syntax.Surface as S
 import Mean.Syntax.Type
 import Mean.Unification
 import Mean.Viz
-import Prelude hiding ((<*>))
 
 -------------------------------------------------------------------------------
 -- Classes
@@ -271,7 +270,7 @@ instance Unifiable Type where
           (TyFun t0 t1, TyFun t0' t1') -> do
             u0 <- unify t0 t0'
             u1 <- unify t1 t1'
-            pure (u0 <*> u1)
+            pure (u0 <.> u1)
           (TyUnion ts, t) | some t ts -> pure mempty
           (t, TyUnion ts) | some t ts -> pure mempty
           (TyTup ts, TyTup ts') | length ts == length ts' -> unifyMany (zip ts ts')

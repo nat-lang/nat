@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Syntax.Surface
@@ -8,6 +9,7 @@ module Mean.Syntax.Surface
   )
 where
 
+import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State
 import Data.Bifunctor (second)
 import Data.List (intercalate)
@@ -56,31 +58,25 @@ data Expr
   deriving (Prel.Eq, Ord)
 
 walk :: (Expr -> Expr) -> Expr -> Expr
-walk = walkBound . walkFree
+walk f = runIdentity . walkM (return . f)
 
-walkBound :: (Expr -> Expr) -> Expr -> Expr
-walkBound f expr =
-  let go = walkBound f
-   in case f expr of
-        ELam b e -> ELam b (go e)
-        ETyCase e cs -> ETyCase (go e) (fmap (second go) cs)
+walkM :: Monad m => (Expr -> m Expr) -> Expr -> m Expr
+walkM f expr =
+  let go = walkM f
+   in f expr >>= \case
+        EApp e0 e1 -> EApp <$> go e0 <*> go e1
+        ECond x y z -> ECond <$> go x <*> go y <*> go z
+        EUnOp op e -> EUnOp op <$> go e
+        EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
+        ETree t -> ETree <$> mapM go t
+        ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
+        ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
+        ETup es -> ETup <$> mapM go es
+        ELam b e -> ELam b <$> go e
+        -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
         -- ELet Var Expr Expr
-        EFix v e -> EFix v (go e)
-        _ -> expr
-
-walkFree :: (Expr -> Expr) -> Expr -> Expr
-walkFree f expr =
-  let go = walkFree f
-   in case f expr of
-        EApp e0 e1 -> EApp (go e0) (go e1)
-        ECond x y z -> ECond (go x) (go y) (go z)
-        EUnOp op e -> EUnOp op (go e)
-        EBinOp op e0 e1 -> EBinOp op (go e0) (go e1)
-        ETree t -> ETree (fmap go t)
-        ELitCase e cs -> ELitCase (go e) (fmap (fmap go) cs)
-        ESet es -> ESet (Set.map go es)
-        ETup es -> ETup (fmap go es)
-        _ -> expr
+        EFix v e -> EFix v <$> go e
+        e' -> pure e'
 
 instance Pretty Lit where
   ppr p l = case l of
@@ -134,7 +130,7 @@ instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder n t) = char 'λ' <> text (show n)
+  ppr p (Binder b t) = char 'λ' <> text (show b)
 
 instance Show b => Show (Binder b) where
   show = show . ppr 0

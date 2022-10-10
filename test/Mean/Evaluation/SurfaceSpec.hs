@@ -71,7 +71,8 @@ spec = do
     it "recognizes sets with alpha equivalent members" $ do
       let (Right s0) = eval (mkS [x ~> x])
       let (Right s1) = eval (mkS [y ~> y])
-
+      traceM (show s0)
+      traceM (show s1)
       s0 @= s1
 
     it "recognizes alpha equivalent church trees containing alpha equivalent expression nodes" $ do

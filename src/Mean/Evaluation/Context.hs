@@ -30,89 +30,44 @@ instance Contextual Expr where
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
-  substitute env e = foldl' (\e' s -> walk (uncurry sub s) e') e (Map.toList env)
+  substitute env e = foldl' (\e' s -> walk (sub s) e') e (Map.toList env)
     where
-      sub :: Var -> Expr -> Expr -> Expr
-      sub v e e' = case e' of
+      sub :: (Var, Expr) -> Expr -> Expr
+      sub (v, e) = \case
         EVar v' | v' == v -> e
-        _ -> e'
-
-walkFreeM :: Monad m => (Expr -> m Expr) -> Expr -> m Expr
-walkFreeM f expr =
-  trace "??" $
-    let go = walkFreeM f
-     in f expr >>= (\e -> do traceM $ "1" ++ show e; return e) >>= \case
-          EApp e0 e1 -> do
-            e0' <- go e0
-            e1' <- go e1
-            pure (EApp e0' e1')
-          ECond x y z -> do
-            x' <- go x
-            y' <- go y
-            z' <- go z
-            pure (ECond x' y' z')
-          EUnOp op e -> do
-            e' <- go e
-            pure (EUnOp op e')
-          EBinOp op e0 e1 -> do
-            e0' <- go e0
-            e1' <- go e1
-            pure (EBinOp op e0' e1')
-          ETree t -> do
-            t' <- mapM go t
-            pure $ ETree t'
-          ELitCase e cs -> do
-            e' <- go e
-            cs' <- mapM (mapM go) cs
-            pure $ ELitCase e' cs'
-          ESet es -> do
-            es' <- mapM go (Set.toList es)
-            pure $ ESet (Set.fromList es')
-          ETup es -> do
-            es' <- mapM go es
-            pure $ ETup es'
-          _ -> pure expr
+        e' -> e'
 
 instance Renamable Expr where
-  rename = trace "?" $
-    walkFreeM $ \e -> trace ("0" ++ show e) $ case e of
-      _ -> do
-        traceM $ "bar?" ++ show e
-        pure (mkEVar "a" ~> (mkEVar "b"))
-      -- binding contexts
-      ELam b e -> do
-        traceM "???"
-        (b', e') <- shiftBV b e
-        traceM (show (b', e'))
-        pure (ELam b' e')
-      ETyCase e cs -> do
-        cs' <- mapM (uncurry shiftBP) cs
-        pure (ETyCase e cs')
-      EFix v e -> do
-        (v', e') <- shift v e
-        pure (EFix v' e')
-      -- base case
-      EVar v -> next v <&> EVar
-      -- nothing to do
-      e -> trace "foo?" $ pure e
+  rename expr = flip walkM expr $ \case
+    -- binding contexts
+    ELam b e -> uncurry ELam <$> shiftBV b e
+    ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
+    EFix v e -> uncurry EFix <$> shift v e
+    -- every fv is renamed
+    EVar v | Set.member v fve -> EVar <$> next v
+    -- nothing to do
+    e -> pure e
     where
+      fve = fv expr
+
       -- simply ignore contexts that already bind v
       safesub :: Var -> Expr -> Expr -> Expr
-      safesub v e' = walk $ \case
+      safesub v e = walk $ \e' -> case e' of
         ELam (Binder bv t) _ | bv == v -> e'
         -- ETyCase e cs -> ETyCase ()
         -- EFix v e ->
-        e -> inEnv v e' e
+        _ -> inEnv v e e'
 
       safesub' :: Expr -> (Var, Expr) -> Expr
       safesub' = flip $ uncurry safesub
 
+      shift :: Var -> Expr -> RenameM (Var, Expr)
       shift v e = do
         v' <- next v
         pure (v', safesub v (EVar v') e)
 
-      shiftBP :: Binder Expr -> Expr -> RenameM (Binder Expr, Expr)
-      shiftBP (Binder p t) e = do
+      shiftBP :: (Binder Expr, Expr) -> RenameM (Binder Expr, Expr)
+      shiftBP (Binder p t, e) = do
         let bv = Set.toList $ fv p
 
         bv' <- mapM ((pure . EVar) <=< next) bv
