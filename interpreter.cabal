@@ -53,6 +53,7 @@ library
       Mean.Syntax.Type
       Mean.Unification
       Mean.Viz
+      Mean.Walk
       Service.API.ConstituencyTrees
       Service.API.Fragments
       Service.App

@@ -7,7 +7,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import Mean.Context
-import Mean.Evaluation.Surface hiding (substitute)
+import Mean.Evaluation.Surface
 import Mean.Evaluation.Type
 import Mean.Inference
 import Mean.Parser
@@ -51,7 +51,7 @@ spec = do
       let env = mkTypeEnv [(yV, tyA)]
       let (Right (_, sub, ty)) = constraintsIn env (fn "x" tyInt x * y)
 
-      substitute sub ty `shouldBe` tyInt
+      inEnv sub ty `shouldBe` tyInt
 
   describe "infer" $ do
     it "infers the type of literal integers" $ do
@@ -82,7 +82,7 @@ spec = do
       let env = mkTypeEnv [(xV, tyA), (yV, tyB)]
       let (Right (_, sub, _)) = constraintsIn env (x === y)
 
-      substitute sub tyA `shouldBe` substitute sub tyB
+      inEnv sub tyA `shouldBe` inEnv sub tyB
 
     it "enforces constraints on ternary conditionals" $ do
       let tyC = mkTv "C"
@@ -90,9 +90,9 @@ spec = do
       let env = mkTypeEnv [(xV, tyA), (yV, tyB), (zV, tyC)]
       let (Right (_, sub, ty)) = constraintsIn env (x ? y > z)
 
-      substitute sub tyA `shouldBe` tyBool
-      substitute sub tyB `shouldBe` ty
-      substitute sub tyC `shouldBe` ty
+      inEnv sub tyA `shouldBe` tyBool
+      inEnv sub tyB `shouldBe` ty
+      inEnv sub tyC `shouldBe` ty
 
     -- it "types the y combinator" $ do
     --   let a = mkTv "A"
@@ -136,12 +136,12 @@ spec = do
       let tB = mkTv "B"
       let env' = Map.union env $ Map.singleton yV tB
       let (Right (_, sub, _)) = constraintsIn env' tyCase
-      substitute sub tB `shouldBe` tyInt
+      inEnv sub tB `shouldBe` tyInt
 
       let tC = mkTv "C"
       let env' = Map.fromList [(xV, tyBool), (wV, tC)]
       let (Right (_, sub, _)) = constraintsIn env' tyCase
-      substitute sub tC `shouldBe` tyBool
+      inEnv sub tC `shouldBe` tyBool
 
     let cases = [(Binder z tyInt, z === zero), (Binder z tyBool, z)]
 
@@ -149,7 +149,7 @@ spec = do
       let env' = extend env (yV, tyInt)
       let (Right (_, sub, _)) = constraintsIn env' (ETyCase (EBinOp Add x y) cases)
 
-      substitute sub tA `shouldBe` tyInt
+      inEnv sub tA `shouldBe` tyInt
 
     it "constrains its argument to be the union of the pattern types of its cases" $ do
       let unionTy = mkTyUnion [tyInt, tyBool]

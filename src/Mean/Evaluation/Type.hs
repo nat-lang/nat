@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Mean.Evaluation.Type where
@@ -43,6 +44,7 @@ import qualified Mean.Syntax.Surface as S
 import Mean.Syntax.Type
 import Mean.Unification
 import Mean.Viz
+import Mean.Walk
 
 -------------------------------------------------------------------------------
 -- Classes
@@ -65,19 +67,9 @@ initConstrain :: ConstraintState
 initConstrain = CState {count = 0}
 
 instance Substitutable Type Type where
-  substitute s t =
-    let sub' = substitute s
-     in case t of
-          TyCon {} -> t
-          TyWild -> TyWild
-          TyVar a -> Map.findWithDefault t a s
-          TyFun t0 t1 -> sub' t0 `TyFun` sub' t1
-          TyUnion ts -> TyUnion $ Set.fromList (sub' <$> Set.toList ts)
-          TyTup ts -> TyTup $ sub' <$> ts
-          TyQuant (Univ as t') -> TyQuant $ Univ as $ substitute s' t'
-            where
-              s' = foldr Map.delete s as
-          _ -> error ("what am i? " ++ show (s, t))
+  substitute v t = walk $ \case
+    TyVar v' | v' == v -> t
+    t' -> t'
 
 instance Contextual Type where
   fv t = case t of
@@ -105,7 +97,7 @@ instantiate :: Type -> TypeConstrain
 instantiate (TyQuant (Univ as t)) = do
   as' <- mapM (const fresh) as
   let e = Map.fromList $ zip as as'
-  return $ substitute e t
+  return $ inEnv e t
 instantiate t = error ("can only instantiate a quantified type, but got " ++ (show t))
 
 normalize :: Type -> Type

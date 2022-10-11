@@ -27,7 +27,7 @@ class Substitutable a a => Unifiable a where
     [] -> pure mempty
     ((a0, a1) : cs') -> do
       u <- unify a0 a1
-      us <- unifyMany (substitute u cs')
+      us <- unifyMany (inEnv u cs')
       pure $ u <.> us
 
   runUnify :: [Pair a] -> Either (UnificationError a) (Env a)

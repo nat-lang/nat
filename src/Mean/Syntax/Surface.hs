@@ -9,7 +9,6 @@ module Mean.Syntax.Surface
   )
 where
 
-import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State
 import Data.Bifunctor (second)
 import Data.List (intercalate)
@@ -20,6 +19,7 @@ import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Type
 import Mean.Viz
+import Mean.Walk
 import Text.Megaparsec.Debug (dbg)
 import Text.PrettyPrint (char, parens, text, (<+>), (<>))
 import Prelude hiding (Eq, GT, LT, (*), (<>))
@@ -57,26 +57,23 @@ data Expr
   | EUndef
   deriving (Prel.Eq, Ord)
 
-walk :: (Expr -> Expr) -> Expr -> Expr
-walk f = runIdentity . walkM (return . f)
-
-walkM :: Monad m => (Expr -> m Expr) -> Expr -> m Expr
-walkM f expr =
-  let go = walkM f
-   in f expr >>= \case
-        EApp e0 e1 -> EApp <$> go e0 <*> go e1
-        ECond x y z -> ECond <$> go x <*> go y <*> go z
-        EUnOp op e -> EUnOp op <$> go e
-        EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
-        ETree t -> ETree <$> mapM go t
-        ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
-        ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
-        ETup es -> ETup <$> mapM go es
-        ELam b e -> ELam b <$> go e
-        -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
-        -- ELet Var Expr Expr
-        EFix v e -> EFix v <$> go e
-        e' -> pure e'
+instance Walkable Expr where
+  preOrderM f expr =
+    let go = preOrderM f
+     in f expr >>= \case
+          EApp e0 e1 -> EApp <$> go e0 <*> go e1
+          ECond x y z -> ECond <$> go x <*> go y <*> go z
+          EUnOp op e -> EUnOp op <$> go e
+          EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
+          ETree t -> ETree <$> mapM go t
+          ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
+          ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
+          ETup es -> ETup <$> mapM go es
+          ELam b e -> ELam b <$> go e
+          -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
+          -- ELet Var Expr Expr
+          EFix v e -> EFix v <$> go e
+          e' -> pure e'
 
 instance Pretty Lit where
   ppr p l = case l of

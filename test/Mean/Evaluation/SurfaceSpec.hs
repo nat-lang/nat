@@ -3,6 +3,7 @@ module Mean.Evaluation.SurfaceSpec where
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import Mean.Context
+import qualified Mean.Context as C
 import Mean.Evaluation.Surface hiding ((*=), (@=))
 import qualified Mean.Evaluation.Surface as E
 import Mean.Parser (parse)
@@ -35,25 +36,38 @@ spec = do
     let zV = mkVar "z"
 
     it "substitutes expressions for variables" $ do
-      substitute (mkEnv zV y) z `shouldBe` y
+      inEnv (mkEnv zV y) z `shouldBe` y
 
     it "does so discriminately" $ do
-      substitute (mkEnv zV y) x `shouldBe` x
+      inEnv (mkEnv zV y) x `shouldBe` x
 
-    it "avoids variable capture" $ do
-      let f1 = EVar $ Var "f0" "f1"
-
-      -- see note in Evaluation.Surface:
-      -- (1)
-      let fV = mkVar "f"
-      substitute (mkEnv fV x) (f ~> f) `shouldBe` f ~> f
-      -- (2)
-      let nV = mkVar "n"
-      substitute (mkEnv nV f) (f ~> (f * n)) `shouldBe` f1 ~> (f1 * f)
+    -- There are two possible conflicts for a substitution e'[e/v]:
+    --  (1) a nested binder conflicts with v, as in
+    --        (λf . f)[x/f]
+    --     in which case we want (λf . f) rather than (λf . x)
+    --  (2) a nested binder conflicts with a free variable in e, as in
+    --        (λf . f n)[f/n]
+    --     in which case we want (λf1 . f1 f) rather than (λf . f f)
+    --
+    -- Substitution anticipates neither of these scenarios; it assumes
+    -- that variables are unique.
+    --
+    let fV = mkVar "f"
+    let nV = mkVar "n"
+    it "allows variable capture in arbitrary contexts" $ do
+      -- (1) fails
+      substitute fV x (f ~> f) `shouldBe` f ~> x
+      -- (2) fails
+      substitute nV f (f ~> (f * n)) `shouldBe` f ~> (f * f)
+    it "avoids variable capture in renamed contexts" $ do
+      -- (1) succeeds
+      substitute fV x (runRename (f ~> f)) `shouldBe` (runRename f ~> f)
+      -- (2) succeeds
+      substitute nV f (runRename (f ~> (f * n))) `shouldBe` (runRename (f ~> (f * n)))
 
   describe "alpha equivalence (@=)" $ do
-    let (@=) e0 e1 = (e0 E.@= e1) @?= True
-    let (!@=) e0 e1 = (e0 E.@= e1) @?= False
+    let (@=) e0 e1 = (e0 C.@= e1) @?= True
+    let (!@=) e0 e1 = (e0 C.@= e1) @?= False
 
     it "recognizes alpha equivalence" $ do
       (x ~> x) @= (y ~> y)
@@ -69,11 +83,7 @@ spec = do
       id @= id
       (x ~> x) @= (x ~> x)
     it "recognizes sets with alpha equivalent members" $ do
-      let (Right s0) = eval (mkS [x ~> x])
-      let (Right s1) = eval (mkS [y ~> y])
-      traceM (show s0)
-      traceM (show s1)
-      s0 @= s1
+      mkS [x ~> x] @= mkS [y ~> y]
 
     it "recognizes alpha equivalent church trees containing alpha equivalent expression nodes" $ do
       let (Right t0) = eval (ETree (Node (x ~> x) Leaf Leaf))

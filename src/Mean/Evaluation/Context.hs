@@ -12,6 +12,7 @@ import Debug.Trace (trace, traceM)
 import Mean.Context
 import Mean.Syntax.Surface
 import Mean.Unification
+import Mean.Walk
 
 instance Contextual Expr where
   fv expr = case expr of
@@ -30,15 +31,12 @@ instance Contextual Expr where
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
-  substitute env e = foldl' (\e' s -> walk (sub s) e') e (Map.toList env)
-    where
-      sub :: (Var, Expr) -> Expr -> Expr
-      sub (v, e) = \case
-        EVar v' | v' == v -> e
-        e' -> e'
+  substitute v e = walk $ \case
+    EVar v' | v' == v -> e
+    e' -> e'
 
 instance Renamable Expr where
-  rename expr = flip walkM expr $ \case
+  rename expr = flip preOrderM expr $ \case
     -- binding contexts
     ELam b e -> uncurry ELam <$> shiftBV b e
     ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
@@ -56,7 +54,7 @@ instance Renamable Expr where
         ELam (Binder bv t) _ | bv == v -> e'
         -- ETyCase e cs -> ETyCase ()
         -- EFix v e ->
-        _ -> inEnv v e e'
+        _ -> substitute v e e'
 
       safesub' :: Expr -> (Var, Expr) -> Expr
       safesub' = flip $ uncurry safesub

@@ -72,14 +72,6 @@ instance Arithmetic Expr where
   (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
   _ - _ = arithOnlyErr
 
--- | There are two possible conflicts for a substitution e'[e/v]:
---  (1) a nested binder conflicts with v, as in
---        (λf . f)[x/f]
---     in which case we want (λf . f) rather than (λf . x)
---  (2) a nested binder conflicts with a free variable in e, as in
---        (λf . f n)[f/n]
---     in which case we want (λf1 . f1 f) rather than (λf . f f)
-
 {-
 instance Substitutable Expr Expr where
   substitute env e = foldl' (\e' s -> walk (sub' s) e') e (Map.toList env)
@@ -142,7 +134,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
     -- (1) leftmost, outermost
     EApp e0 e1 -> case e0 of
       -- (1a) function application, beta reduce
-      ELam (Binder v _) body -> reduce (inEnv v e1 body)
+      ELam (Binder v _) body -> reduce (substitute v e1 body)
       -- (sugar) combinatorially, sets behave like their characteristic functions
       ESet s -> do
         e1' <- reduce e1
@@ -211,7 +203,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
             if unifiable ty ty'
               then case runUnify [(p, b)] of
                 Left e -> throwError $ EUnificationError e
-                Right s -> reduce $ substitute s e
+                Right s -> reduce $ inEnv s e
               else reduce $ ETyCase b cs'
           _ -> throwError $ InexhaustiveCase expr
     ELitCase b cs -> do
@@ -222,7 +214,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
           e' <- reduce e
           reduce $ (b' === c') ? e' > ELitCase b cs'
         _ -> throwError $ InexhaustiveCase expr
-    ELet v e0 e1 -> reduce (inEnv v e0 e1)
+    ELet v e0 e1 -> reduce (substitute v e0 e1)
     EFix v e -> reduce $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
     -- (3) var/literal
@@ -251,29 +243,6 @@ instance Unifiable Expr where
     (_, EVar v) -> pure $ mkEnv v e0
     (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
     _ -> throwError $ NotUnifiable e0 e1
-
-instance AlphaEq [Expr] where
-  alphaEq [] [] = True
-  alphaEq (x0 : xs0) (x1 : xs1) = (x0 `alphaEq` x1) P.&& (xs0 `alphaEq` xs1)
-  alphaEq _ _ = False
-
--- assumes e0 and e1 are in normal form
-instance AlphaEq Expr where
-  alphaEq e0 e1 = case (e0, e1) of
-    (ELam (Binder v0 _) body0, ELam (Binder v1 _) body1) ->
-      inEnv v0 (EVar v1) body0 @= body1 P.|| inEnv v1 (EVar v0) body1 @= body0
-    (EApp e0a e0b, EApp e1a e1b) -> e0a @= e1a P.&& e0b @= e1b
-    (EVar v0, EVar v1) -> v0 == v1
-    (ELit l0, ELit l1) -> l0 == l1
-    (EBinOp op e0a e1a, EBinOp op' e0b e1b) -> (op == op') P.&& (e0a @= e0b) P.&& (e1a @= e1b)
-    (ECond x0 y0 z0, ECond x1 y1 z1) -> (x0 @= x1) P.&& (y0 @= y1) P.&& (z0 @= z1)
-    (ESet s0, ESet s1) -> Set.toAscList s0 `alphaEq` Set.toAscList s1
-    _ -> False
-
-(@=) = alphaEq
-
-(@!=) :: Expr -> Expr -> Bool
-e0 @!= e1 = not (e0 @= e1)
 
 eval :: Expr -> Either ExprEvalError Expr
 eval = runReduce . runRename

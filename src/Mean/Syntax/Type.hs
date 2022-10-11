@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Syntax.Type where
@@ -18,6 +19,7 @@ import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Logic
 import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies, parens)
+import Mean.Walk
 import Text.PrettyPrint
   ( Doc,
     brackets,
@@ -43,6 +45,16 @@ data Type
     -- type annotation. It says "infer my type, please".
     TyNil
   deriving (Prel.Eq, Ord)
+
+instance Walkable Type where
+  preOrderM f t =
+    let go = preOrderM f
+     in f t >>= \case
+          TyFun t0 t1 -> TyFun <$> go t0 <*> go t1
+          TyTup ts -> TyTup <$> mapM go ts
+          TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
+          TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
+          t' -> pure t'
 
 mkTv :: String -> Type
 mkTv = TyVar . mkVar

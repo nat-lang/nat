@@ -28,7 +28,7 @@ instance Reducible Module Module ExprEvalError TypeEnv where
   reduce mod = reduce' mod []
     where
       reduceIn :: Module -> Expr -> Reduction Expr ExprEvalError TypeEnv
-      reduceIn mod = reduce . substitute (Map.fromList [(v, e) | MDecl v e <- mod])
+      reduceIn mod = reduce . inEnv (Map.fromList [(v, e) | MDecl v e <- mod])
 
       reduce' :: Module -> Module -> Reduction Module ExprEvalError TypeEnv
       reduce' mod mod' = case mod of

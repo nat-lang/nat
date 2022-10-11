@@ -7,9 +7,11 @@ module Mean.Context where
 import Control.Monad (replicateM)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT)
+import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Mean.Viz
+import Mean.Walk
 import Text.PrettyPrint
   ( char,
     text,
@@ -48,25 +50,25 @@ mkEnv :: Var -> a -> Env a
 mkEnv = Map.singleton
 
 class Substitutable a b where
-  substitute :: Env a -> b -> b
+  substitute :: Var -> a -> b -> b
 
-  inEnv :: Var -> a -> b -> b
-  inEnv v a = substitute (mkEnv v a)
+  inEnv :: Env a -> b -> b
+  inEnv env e = foldl' (flip $ uncurry substitute) e (Map.toList env)
 
 class Contextual a where
   fv :: a -> Set.Set Var
 
 instance Substitutable a b => Substitutable a (Pair b) where
-  substitute :: Substitutable a b => Env a -> Pair b -> Pair b
-  substitute s (a0, a1) = (substitute s a0, substitute s a1)
+  substitute :: Substitutable a b => Var -> a -> Pair b -> Pair b
+  substitute v a (b0, b1) = (substitute v a b0, substitute v a b1)
 
 instance Substitutable a b => Substitutable a [b] where
-  substitute :: Env a -> [b] -> [b]
-  substitute = map . substitute
+  substitute :: Substitutable a b => Var -> a -> [b] -> [b]
+  substitute v a = map (substitute v a)
 
 instance Substitutable a b => Substitutable a (Env b) where
-  substitute :: Substitutable a b => Env a -> Env b -> Env b
-  substitute s env = Map.map (substitute s) env
+  substitute :: Substitutable a b => Var -> a -> Env b -> Env b
+  substitute v a = Map.map (substitute v a)
 
 instance Contextual a => Contextual (Pair a) where
   fv :: Contextual a => (a, a) -> Set.Set Var
@@ -81,7 +83,7 @@ instance Contextual a => Contextual (Env a) where
   fv env = fv $ Map.elems env
 
 (<.>) :: Substitutable a a => Env a -> Env a -> Env a
-(<.>) e0 e1 = Map.map (substitute e0) e1 `Map.union` e0
+(<.>) e0 e1 = Map.map (inEnv e0) e1 `Map.union` e0
 
 type RenameM a = StateT Int Identity a
 
@@ -95,3 +97,12 @@ class (Contextual a, Substitutable a a) => Renamable a where
   rename :: a -> RenameM a
   runRename :: a -> a
   runRename a = runIdentity $ evalStateT (rename a) 0
+
+  alphaEq :: Eq a => a -> a -> Bool
+  alphaEq e0 e1 = runRename e0 == runRename e1
+
+  (@=) :: Eq a => a -> a -> Bool
+  (@=) = alphaEq
+
+  (@!=) :: Eq a => a -> a -> Bool
+  e0 @!= e1 = not (e0 @= e1)

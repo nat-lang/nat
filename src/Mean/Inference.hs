@@ -51,7 +51,7 @@ class Unifiable a => Inferrable a b s | b -> s where
     case runUnify cs of
       Left e -> throwError $ IUnificationError b e
       Right s -> do
-        pure (substitute s a, cs)
+        pure (inEnv s a, cs)
 
   -- | Run the constraint generation monad
   runConstrain ::
