@@ -35,7 +35,7 @@ spec = do
   describe "substitution" $ do
     let zV = mkVar "z"
 
-    it "substitutes expressions for variables" $ do
+    it "subs expressions for variables" $ do
       inEnv (mkEnv zV y) z `shouldBe` y
 
     it "does so discriminately" $ do
@@ -49,21 +49,25 @@ spec = do
     --        (λf . f n)[f/n]
     --     in which case we want (λf1 . f1 f) rather than (λf . f f)
     --
-    -- Substitution anticipates neither of these scenarios; it assumes
-    -- that variables are unique.
+    -- Substitution anticipates neither of these scenarios; rather, we
+    -- assume that variables are unique.
     --
     let fV = mkVar "f"
     let nV = mkVar "n"
-    it "allows variable capture in arbitrary contexts" $ do
-      -- (1) fails
-      substitute fV x (f ~> f) `shouldBe` f ~> x
-      -- (2) fails
-      substitute nV f (f ~> (f * n)) `shouldBe` f ~> (f * f)
+    let fn = f ~> f
+    let gn = f ~> (f * n)
+    it "allows variable capture in overlapping contexts" $ do
+      -- fails (1)
+      sub fV x fn `shouldBe` f ~> x
+      -- fails (2)
+      sub nV f gn `shouldBe` f ~> (f * f)
     it "avoids variable capture in renamed contexts" $ do
-      -- (1) succeeds
-      substitute fV x (runRename (f ~> f)) `shouldBe` (runRename f ~> f)
-      -- (2) succeeds
-      substitute nV f (runRename (f ~> (f * n))) `shouldBe` (runRename (f ~> (f * n)))
+      let fn' = runRename fn
+      let gn' = runRename gn
+      -- anticipates (1)
+      sub fV x fn' `shouldBe` fn'
+      -- anticipates (2)
+      sub nV f gn' `shouldBe` gn'
 
   describe "alpha equivalence (@=)" $ do
     let (@=) e0 e1 = (e0 C.@= e1) @?= True
@@ -86,13 +90,13 @@ spec = do
       mkS [x ~> x] @= mkS [y ~> y]
 
     it "recognizes alpha equivalent church trees containing alpha equivalent expression nodes" $ do
-      let (Right t0) = eval (ETree (Node (x ~> x) Leaf Leaf))
-      let (Right t1) = eval (ETree (Node (y ~> y) Leaf Leaf))
+      let t0 = mkChurchTree (Node (x ~> x) Leaf Leaf)
+      let t1 = mkChurchTree (Node (y ~> y) Leaf Leaf)
 
       t0 @= t1
 
     it "doesn't recognize anything else" $ do
-      x !@= y
+      -- x !@= y
       zero !@= one
       -- λfλx . f(x) != λxλf . f(x)
       (f ~> (x ~> (f * x))) !@= (x ~> (f ~> (f * x)))
@@ -139,6 +143,8 @@ spec = do
     it "reduces applications of recursive functions" $ do
       --  λn. if n ≤ 1 then 1 else n * fact (n - 1)
       let fact = EFix (mkVar "a") (n ~> EBinOp LTE n (mkI 1) ? mkI 1 > EBinOp Mul n (a * EBinOp Sub n (mkI 1)))
+
+      traceM (show $ runRename (fact * mkI 0))
 
       eval (fact * mkI 0) `shouldBe` Right (mkI 1)
       eval (fact * mkI 1) `shouldBe` Right (mkI 1)

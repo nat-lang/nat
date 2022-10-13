@@ -67,7 +67,7 @@ initConstrain :: ConstraintState
 initConstrain = CState {count = 0}
 
 instance Substitutable Type Type where
-  substitute v t = walk $ \case
+  sub v t = walk $ \case
     TyVar v' | v' == v -> t
     t' -> t'
 
@@ -227,7 +227,7 @@ instance Inferrable Type S.Expr ConstraintState where
       case matchTyCase et cases of
         Nothing -> throwError $ IInexhaustiveCase expr
         Just (S.Binder p _, e') -> do
-          -- substitute the concrete type of the matched expr
+          -- sub the concrete type of the matched expr
           -- for the possibly variable type of the case
           (tv, e'Cs) <- constrainCase (S.Binder p et, e')
 

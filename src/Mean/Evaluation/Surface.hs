@@ -74,7 +74,7 @@ instance Arithmetic Expr where
 
 {-
 instance Substitutable Expr Expr where
-  substitute env e = foldl' (\e' s -> walk (sub' s) e') e (Map.toList env)
+  sub env e = foldl' (\e' s -> walk (sub' s) e') e (Map.toList env)
     where
       sub' :: (Var, Expr) -> Expr -> Expr
       sub' (v, e) e' = case e' of
@@ -130,11 +130,11 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
   runNormalize = runNormalize' mkCEnv
 
   -- cbn
-  reduce expr = case expr of
+  reduce expr = trace ("REDUCE " ++ show expr) $ case expr of
     -- (1) leftmost, outermost
     EApp e0 e1 -> case e0 of
       -- (1a) function application, beta reduce
-      ELam (Binder v _) body -> reduce (substitute v e1 body)
+      ELam (Binder v _) body -> reduce (sub v e1 body)
       -- (sugar) combinatorially, sets behave like their characteristic functions
       ESet s -> do
         e1' <- reduce e1
@@ -214,8 +214,8 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
           e' <- reduce e
           reduce $ (b' === c') ? e' > ELitCase b cs'
         _ -> throwError $ InexhaustiveCase expr
-    ELet v e0 e1 -> reduce (substitute v e0 e1)
-    EFix v e -> reduce $ mkFixPoint v e
+    ELet v e0 e1 -> reduce (sub v e0 e1)
+    EFix v e -> pure $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
     -- (3) var/literal
     _ -> pure expr

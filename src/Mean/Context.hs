@@ -37,7 +37,7 @@ instance Ord Var where
 
 instance Show Var where
   show :: Var -> String
-  show (Var vPub vPri) = vPri
+  show (Var vPub vPri) = vPub ++ vPri
 
 instance Pretty [Var] where
   ppr p (v : vs) = text (show v) <> char ',' <> text (show v)
@@ -50,25 +50,25 @@ mkEnv :: Var -> a -> Env a
 mkEnv = Map.singleton
 
 class Substitutable a b where
-  substitute :: Var -> a -> b -> b
+  sub :: Var -> a -> b -> b
 
   inEnv :: Env a -> b -> b
-  inEnv env e = foldl' (flip $ uncurry substitute) e (Map.toList env)
+  inEnv env e = foldl' (flip $ uncurry sub) e (Map.toList env)
 
 class Contextual a where
   fv :: a -> Set.Set Var
 
 instance Substitutable a b => Substitutable a (Pair b) where
-  substitute :: Substitutable a b => Var -> a -> Pair b -> Pair b
-  substitute v a (b0, b1) = (substitute v a b0, substitute v a b1)
+  sub :: Substitutable a b => Var -> a -> Pair b -> Pair b
+  sub v a (b0, b1) = (sub v a b0, sub v a b1)
 
 instance Substitutable a b => Substitutable a [b] where
-  substitute :: Substitutable a b => Var -> a -> [b] -> [b]
-  substitute v a = map (substitute v a)
+  sub :: Substitutable a b => Var -> a -> [b] -> [b]
+  sub v a = map (sub v a)
 
 instance Substitutable a b => Substitutable a (Env b) where
-  substitute :: Substitutable a b => Var -> a -> Env b -> Env b
-  substitute v a = Map.map (substitute v a)
+  sub :: Substitutable a b => Var -> a -> Env b -> Env b
+  sub v a = Map.map (sub v a)
 
 instance Contextual a => Contextual (Pair a) where
   fv :: Contextual a => (a, a) -> Set.Set Var

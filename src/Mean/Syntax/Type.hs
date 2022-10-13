@@ -47,8 +47,8 @@ data Type
   deriving (Prel.Eq, Ord)
 
 instance Walkable Type where
-  preOrderM f t =
-    let go = preOrderM f
+  walkM' f g t =
+    let go = walkM' f g
      in f t >>= \case
           TyFun t0 t1 -> TyFun <$> go t0 <*> go t1
           TyTup ts -> TyTup <$> mapM go ts

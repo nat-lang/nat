@@ -14,7 +14,7 @@ import Data.Bifunctor (second)
 import Data.List (intercalate)
 import qualified Data.Set as Set
 import qualified Data.Tree.Binary.Preorder as T
-import Debug.Trace (traceM)
+import Debug.Trace (trace, traceM)
 import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Type
@@ -58,22 +58,25 @@ data Expr
   deriving (Prel.Eq, Ord)
 
 instance Walkable Expr where
-  preOrderM f expr =
-    let go = preOrderM f
-     in f expr >>= \case
-          EApp e0 e1 -> EApp <$> go e0 <*> go e1
-          ECond x y z -> ECond <$> go x <*> go y <*> go z
-          EUnOp op e -> EUnOp op <$> go e
-          EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
-          ETree t -> ETree <$> mapM go t
-          ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
-          ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
-          ETup es -> ETup <$> mapM go es
-          ELam b e -> ELam b <$> go e
-          -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
-          -- ELet Var Expr Expr
-          EFix v e -> EFix v <$> go e
-          e' -> pure e'
+  walkM' f g expr =
+    trace (show expr) $
+      let go = walkM' f g
+       in f expr >>= \case
+            EApp e0 e1 -> EApp <$> go e0 <*> go e1
+            ECond x y z -> ECond <$> go x <*> go y <*> go z
+            EUnOp op e -> EUnOp op <$> go e
+            EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
+            ETree t -> ETree <$> mapM go t
+            ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
+            ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
+            ETup es -> ETup <$> mapM go es
+            ELam b e -> ELam b <$> g e
+            -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
+            -- ELet Var Expr Expr
+            EFix v e -> EFix v <$> go e
+            e' -> pure e'
+
+walkFreeCtx f = walk' f id
 
 instance Pretty Lit where
   ppr p l = case l of
@@ -204,7 +207,8 @@ yCombinator =
       tA = mkTv "A"
       tF = TyFun tT tT
       tX = TyFun tA (TyFun tA tT)
-   in (f, tF) +> (((x, tX) +> (f * (x * x))) * ((x, tX) +> (f * (x * x))))
+   in -- in (f, tF) +> (((x, tX) +> (f * (x * x))) * ((x, tX) +> (f * (x * x))))
+      f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
 
 mkFixPoint v e = yCombinator * (EVar v ~> e)
 

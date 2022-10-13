@@ -27,34 +27,38 @@ instance Contextual Expr where
     -- ELitCase Expr [(Expr, Expr)]
     -- ESet (Set Expr)
     -- ELet Var Expr Expr
-    -- EFix Var Expr
+    EFix v e -> fv e Set.\\ Set.singleton v
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
-  substitute v e = walk $ \case
-    EVar v' | v' == v -> e
-    e' -> e'
+  sub v e = walkFreeCtx $ \e' ->
+    trace "?" $
+      case e' of
+        EVar v' | v' == v -> e
+        e' -> e'
 
 instance Renamable Expr where
-  rename expr = flip preOrderM expr $ \case
-    -- binding contexts
-    ELam b e -> uncurry ELam <$> shiftBV b e
-    ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
-    EFix v e -> uncurry EFix <$> shift v e
-    -- every fv is renamed
-    EVar v | Set.member v fve -> EVar <$> next v
-    -- nothing to do
-    e -> pure e
+  rename expr = flip walkM expr $
+    trace "???" $ \e' -> case e' of
+      -- binding contexts
+      ELam b e -> uncurry ELam <$> shiftBV b e
+      ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
+      EFix v e -> rename $ mkFixPoint v e
+      -- every fv is renamed
+      EVar v | Set.member v fve -> EVar <$> next v
+      -- nothing to do
+      e -> pure e
     where
       fve = fv expr
 
       -- simply ignore contexts that already bind v
       safesub :: Var -> Expr -> Expr -> Expr
-      safesub v e = walk $ \e' -> case e' of
-        ELam (Binder bv t) _ | bv == v -> e'
-        -- ETyCase e cs -> ETyCase ()
-        -- EFix v e ->
-        _ -> substitute v e e'
+      safesub v e = walk $ \e' ->
+        trace "??" $
+          case e' of
+            ELam (Binder bv t) _ | bv == v -> e'
+            -- ETyCase e cs -> ETyCase ()
+            _ -> sub v e e'
 
       safesub' :: Expr -> (Var, Expr) -> Expr
       safesub' = flip $ uncurry safesub
