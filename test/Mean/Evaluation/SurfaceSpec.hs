@@ -7,6 +7,7 @@ import qualified Mean.Context as C
 import Mean.Evaluation.Surface hiding ((*=), (@=))
 import qualified Mean.Evaluation.Surface as E
 import Mean.Parser (parse)
+import Mean.Reduction
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
@@ -32,42 +33,15 @@ mkI = ELit . LInt
 
 spec :: Spec
 spec = do
-  describe "substitution" $ do
-    let zV = mkVar "z"
-
-    it "subs expressions for variables" $ do
+  describe "sub" $ do
+    it "substitutes an expression for a variable in an expression" $ do
+      let zV = mkVar "z"
       inEnv (mkEnv zV y) z `shouldBe` y
-
-    it "does so discriminately" $ do
       inEnv (mkEnv zV y) x `shouldBe` x
 
-    -- There are two possible conflicts for a substitution e'[e/v]:
-    --  (1) a nested binder conflicts with v, as in
-    --        (λf . f)[x/f]
-    --     in which case we want (λf . f) rather than (λf . x)
-    --  (2) a nested binder conflicts with a free variable in e, as in
-    --        (λf . f n)[f/n]
-    --     in which case we want (λf1 . f1 f) rather than (λf . f f)
-    --
-    -- Substitution anticipates neither of these scenarios; rather, we
-    -- assume that variables are unique.
-    --
-    let fV = mkVar "f"
-    let nV = mkVar "n"
-    let fn = f ~> f
-    let gn = f ~> (f * n)
-    it "allows variable capture in overlapping contexts" $ do
-      -- fails (1)
-      sub fV x fn `shouldBe` f ~> x
-      -- fails (2)
-      sub nV f gn `shouldBe` f ~> (f * f)
-    it "avoids variable capture in renamed contexts" $ do
-      let fn' = runRename fn
-      let gn' = runRename gn
-      -- anticipates (1)
-      sub fV x fn' `shouldBe` fn'
-      -- anticipates (2)
-      sub nV f gn' `shouldBe` gn'
+    it "ignores expressions that bind the variable" $ do
+      let fV = mkVar "f"
+      sub fV x (f ~> f) `shouldBe` f ~> f
 
   describe "alpha equivalence (@=)" $ do
     let (@=) e0 e1 = (e0 C.@= e1) @?= True
@@ -77,8 +51,8 @@ spec = do
       (x ~> x) @= (y ~> y)
       -- λfλx . f(x) == λfλy . f(y)
       (f ~> (x ~> (f * x))) @= (f ~> (y ~> (f * y)))
-      -- λfλx . x(f) == λfλx . y(f)
-      (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
+    -- λfλx . x(f) == λfλx . y(f)
+    -- (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
     it "recognizes syntactic equivalence" $ do
       -- this is naturally a special case of alpha equivalence,
       -- but probably @= should check for syntactic equivalence
@@ -103,62 +77,63 @@ spec = do
       -- λfλx . f(x) != λfλx . x(f)
       (f ~> (x ~> (f * x))) !@= (f ~> (x ~> (x * f)))
 
-  describe "eval" $ do
+  describe "reduce" $ do
+    let reduce = runReduce :: Expr -> Either ExprEvalError Expr
     let id' y = (x ~> x) * y
 
     it "reduces equality relations between literals" $ do
-      eval (true === false) `shouldBe` Right false
-      eval (zero === one) `shouldBe` Right false
-      eval (zero === zero) `shouldBe` Right true
+      reduce (true === false) `shouldBe` Right false
+      reduce (zero === one) `shouldBe` Right false
+      reduce (zero === zero) `shouldBe` Right true
 
     it "reduces equality relations between terms that reduce to literals" $ do
-      eval (id' true === id' false) `shouldBe` Right false
+      reduce (id' true === id' false) `shouldBe` Right false
 
     it "reduces equality relations between nothing else" $ do
-      eval (x === y) `shouldBe` Right (x === y)
-      eval ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
-      eval ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
+      reduce (x === y) `shouldBe` Right (x === y)
+      reduce ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
+      reduce ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
 
     it "reduces ternary conditionals on booleans" $ do
-      eval (true ? y > z) `shouldBe` Right y
+      reduce (true ? y > z) `shouldBe` Right y
 
     it "reduces ternary conditionals on terms that reduce to booleans" $ do
-      eval ((x ~> x) * true ? (y ~> y) > z) `shouldBe` Right (y ~> y)
+      reduce ((x ~> x) * true ? (y ~> y) > z) `shouldBe` Right (y ~> y)
 
     it "reduces ternary conditionals over nothing else" $ do
-      eval ((f * x) ? (f * y) > (f * z)) `shouldBe` Right ((f * x) ? (f * y) > (f * z))
+      reduce ((f * x) ? (f * y) > (f * z)) `shouldBe` Right ((f * x) ? (f * y) > (f * z))
 
     it "reduces arithmetic on terms that reduce to natural numbers" $ do
-      eval (EBinOp Add ((x ~> x) * one) ((x ~> x) * one)) `shouldBe` Right (ELit $ LInt 2)
+      reduce (EBinOp Add ((x ~> x) * one) ((x ~> x) * one)) `shouldBe` Right (ELit $ LInt 2)
 
     it "reduces truth conditional binary operations between set membership" $ do
       let s = mkS [mkI 0, mkI 1]
 
-      eval ((s * mkI 0) || (s * mkI 2)) `shouldBe` Right true
-      eval ((s * mkI 0) && (s * mkI 2)) `shouldBe` Right false
+      reduce ((s * mkI 0) || (s * mkI 2)) `shouldBe` Right true
+      reduce ((s * mkI 0) && (s * mkI 2)) `shouldBe` Right false
 
-      eval ((s * mkI 0) || (s * mkI 1)) `shouldBe` Right true
-      eval ((s * mkI 0) && (s * mkI 1)) `shouldBe` Right true
+      reduce ((s * mkI 0) || (s * mkI 1)) `shouldBe` Right true
+      reduce ((s * mkI 0) && (s * mkI 1)) `shouldBe` Right true
 
     it "reduces applications of recursive functions" $ do
       --  λn. if n ≤ 1 then 1 else n * fact (n - 1)
       let fact = EFix (mkVar "a") (n ~> EBinOp LTE n (mkI 1) ? mkI 1 > EBinOp Mul n (a * EBinOp Sub n (mkI 1)))
 
-      eval (fact * mkI 0) `shouldBe` Right (mkI 1)
-      eval (fact * mkI 1) `shouldBe` Right (mkI 1)
-      eval (fact * mkI 2) `shouldBe` Right (mkI 2)
-      eval (fact * mkI 3) `shouldBe` Right (mkI 6)
-      eval (fact * mkI 4) `shouldBe` Right (mkI 24)
+      reduce (fact * mkI 0) `shouldBe` Right (mkI 1)
+      reduce (fact * mkI 1) `shouldBe` Right (mkI 1)
+      reduce (fact * mkI 2) `shouldBe` Right (mkI 2)
+      reduce (fact * mkI 3) `shouldBe` Right (mkI 6)
+      reduce (fact * mkI 4) `shouldBe` Right (mkI 24)
 
     it "reduces set expressions to characteristic functions" $ do
       let s = mkS [mkI 0, mkI 1, mkI 2, mkI 3]
 
-      eval (s * mkI 0) `shouldBe` Right true
-      eval (s * mkI 1) `shouldBe` Right true
-      eval (s * mkI 2) `shouldBe` Right true
-      eval (s * mkI 3) `shouldBe` Right true
+      reduce (s * mkI 0) `shouldBe` Right true
+      reduce (s * mkI 1) `shouldBe` Right true
+      reduce (s * mkI 2) `shouldBe` Right true
+      reduce (s * mkI 3) `shouldBe` Right true
 
-      eval (s * mkI 4) `shouldBe` Right false
+      reduce (s * mkI 4) `shouldBe` Right false
 
       let s0 = mkS [mkI 0, mkI 1]
       let s1 = mkS [mkI 2, mkI 3]
@@ -166,64 +141,66 @@ spec = do
       let s3 = mkS [mkI 3, mkI 2, mkI 4]
       let s = mkS [s0, s1]
 
-      eval (s * s0) `shouldBe` Right true
-      eval (s * s1) `shouldBe` Right true
-      eval (s * s2) `shouldBe` Right true
-      eval (s * s3) `shouldBe` Right false
+      reduce (s * s0) `shouldBe` Right true
+      reduce (s * s1) `shouldBe` Right true
+      reduce (s * s2) `shouldBe` Right true
+      reduce (s * s3) `shouldBe` Right false
 
     it "reduces trees to their church encodings" $ do
       let t = ETree (Node f (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
 
-      eval t `shouldBe` eval (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
+      reduce t `shouldBe` reduce (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
 
     it "reduces case expressions on booleans" $ do
-      eval (ELitCase true [(true, x)]) `shouldBe` Right x
-      eval (ELitCase false [(false, y), (true, x), (false, z)]) `shouldBe` Right y
+      reduce (ELitCase true [(true, x)]) `shouldBe` Right x
+      reduce (ELitCase false [(false, y), (true, x), (false, z)]) `shouldBe` Right y
 
     it "reduces case expressions on terms that reduce to booleans" $ do
-      eval (ELitCase one [((x ~> x) * one, one), (zero, x), (one, z)]) `shouldBe` Right one
+      reduce (ELitCase one [((x ~> x) * one, one), (zero, x), (one, z)]) `shouldBe` Right one
 
     let id' y = (x ~> x) * y
 
     it "reduces truth conditional unary operations on booleans" $ do
-      eval (not' true) `shouldBe` Right false
-      eval (not' false) `shouldBe` Right true
+      reduce (not' true) `shouldBe` Right false
+      reduce (not' false) `shouldBe` Right true
 
     it "reduces truth conditional binary operations on booleans" $ do
-      eval (true && false) `shouldBe` Right false
-      eval (true || false) `shouldBe` Right true
+      reduce (true && false) `shouldBe` Right false
+      reduce (true || false) `shouldBe` Right true
 
     it "reduces truth conditional unary operations on terms that reduce to booleans" $ do
-      eval (not' (id' true)) `shouldBe` Right false
-      eval (not' (id' false)) `shouldBe` Right true
+      reduce (not' (id' true)) `shouldBe` Right false
+      reduce (not' (id' false)) `shouldBe` Right true
 
     it "reduces truth conditional binary operations on terms that reduce to booleans" $ do
-      eval (id' true && id' false) `shouldBe` Right false
-      eval (id' true || id' false) `shouldBe` Right true
+      reduce (id' true && id' false) `shouldBe` Right false
+      reduce (id' true || id' false) `shouldBe` Right true
 
     it "reduces inequalities between primitives" $ do
-      eval (true !== false) `shouldBe` Right true
-      eval (x !== y) `shouldBe` Right true
-      eval (zero !== one) `shouldBe` Right true
+      reduce (true !== false) `shouldBe` Right true
+      reduce (x !== y) `shouldBe` Right true
+      reduce (zero !== one) `shouldBe` Right true
 
     it "reduces inequalities between relations" $ do
-      eval ((true && true) !== (false && false)) `shouldBe` Right true
+      reduce ((true && true) !== (false && false)) `shouldBe` Right true
 
     let tup = ETup [id * true, id * false]
 
     it "reduces the elements of tuples" $ do
-      eval tup `shouldBe` Right (ETup [true, false])
+      reduce tup `shouldBe` Right (ETup [true, false])
 
     it "reduces tuple access by index" $ do
-      eval (tup * EIdx 0) `shouldBe` Right true
-      eval (tup * EIdx 1) `shouldBe` Right false
+      reduce (tup * EIdx 0) `shouldBe` Right true
+      reduce (tup * EIdx 1) `shouldBe` Right false
 
-    it "reduces typecase expressions with variable bindings" $ do
+    it "evaluates typecase expressions with variable bindings" $ do
       let iFn = (+>) (n, tyInt)
       let fnA = iFn (EBinOp Add n one)
       let fnB = iFn (EBinOp Eq n one)
 
+      -- λx . tycase x of z:<n,n> -> z 0 | z:<n,t> -> z 1
       let tyCase = x ~> ETyCase x [(Binder z (TyFun tyInt tyInt), z * zero), (Binder z (TyFun tyInt tyBool), z * one)]
+      traceM (show $ runRename (tyCase * fnA))
 
       eval (tyCase * fnA) `shouldBe` Right one
       eval (tyCase * fnB) `shouldBe` Right true
@@ -233,7 +210,7 @@ spec = do
       eval (tyCase * one) `shouldBe` Right (mkI 2)
       eval (tyCase * fnA) `shouldBe` Right (mkI 2)
 
-    it "reduces typecase expressions with complex bindings" $ do
+    it "evaluates typecase expressions with complex bindings" $ do
       let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), EBinOp Mul z one)]
       let tup0 = ETup [zero, one]
       let tup1 = ETup [zero, one, mkI 2]

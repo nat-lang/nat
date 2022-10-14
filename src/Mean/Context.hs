@@ -58,6 +58,9 @@ class Substitutable a b where
 class Contextual a where
   fv :: a -> Set.Set Var
 
+  fvOf :: a -> Var -> Bool
+  fvOf = flip Set.member . fv
+
 instance Substitutable a b => Substitutable a (Pair b) where
   sub :: Substitutable a b => Var -> a -> Pair b -> Pair b
   sub v a (b0, b1) = (sub v a b0, sub v a b1)

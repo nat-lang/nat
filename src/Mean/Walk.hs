@@ -1,5 +1,6 @@
 module Mean.Walk where
 
+import Control.Monad ((<=<))
 import Control.Monad.Identity
 
 class Walkable a where
@@ -12,7 +13,7 @@ class Walkable a where
   walkC f = walkC' f
 
   walkM' :: Monad m => (a -> m a) -> a -> m a
-  walkM' f = walkMC' (\e c -> f e)
+  walkM' f = walkMC' (\e c -> (c <=< f) e)
 
   walkM :: Monad m => (a -> m a) -> a -> m a
   walkM f = walkM' f
