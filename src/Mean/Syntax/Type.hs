@@ -47,14 +47,15 @@ data Type
   deriving (Prel.Eq, Ord)
 
 instance Walkable Type where
-  walkM' f g t =
-    let go = walkM' f g
-     in f t >>= \case
-          TyFun t0 t1 -> TyFun <$> go t0 <*> go t1
-          TyTup ts -> TyTup <$> mapM go ts
-          TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
-          TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
-          t' -> pure t'
+  walkMC' f t = f t ctn
+    where
+      go = walkMC' f
+      ctn = \case
+        TyFun t0 t1 -> TyFun <$> go t0 <*> go t1
+        TyTup ts -> TyTup <$> mapM go ts
+        TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
+        TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
+        t' -> pure t'
 
 mkTv :: String -> Type
 mkTv = TyVar . mkVar

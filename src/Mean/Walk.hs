@@ -3,13 +3,22 @@ module Mean.Walk where
 import Control.Monad.Identity
 
 class Walkable a where
-  walkM' :: Monad m => (a -> m a) -> (a -> m a) -> a -> m a
+  walkMC' :: Monad m => (a -> (a -> m a) -> m a) -> a -> m a
+
+  walkC' :: (a -> (a -> a) -> a) -> a -> a
+  walkC' f = runIdentity . walkMC' (\e c -> pure $ f e (runIdentity . c))
+
+  walkC :: (a -> (a -> a) -> a) -> a -> a
+  walkC f = walkC' f
+
+  walkM' :: Monad m => (a -> m a) -> a -> m a
+  walkM' f = walkMC' (\e c -> f e)
 
   walkM :: Monad m => (a -> m a) -> a -> m a
-  walkM f = walkM' f f
+  walkM f = walkM' f
 
-  walk' :: (a -> a) -> (a -> a) -> a -> a
-  walk' f g = runIdentity . walkM' (pure . f) (pure . g)
+  walk' :: (a -> a) -> a -> a
+  walk' f = runIdentity . walkM' (pure . f)
 
   walk :: (a -> a) -> a -> a
-  walk f = walk' f f
+  walk f = walk' f

@@ -72,49 +72,41 @@ instance Arithmetic Expr where
   (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
   _ - _ = arithOnlyErr
 
-{-
-instance Substitutable Expr Expr where
-  sub env e = foldl' (\e' s -> walk (sub' s) e') e (Map.toList env)
-    where
-      sub' :: (Var, Expr) -> Expr -> Expr
-      sub' (v, e) e' = case e' of
+-- e'[e/v]
+sub'' :: Var -> Expr -> Expr -> Expr
+sub'' v e e' =
+  let sub' = sub'' v e
+   in case e' of
+        -- relevant base case
         EVar v' | v' == v -> e
+        -- induction
+        EApp e0 e1 -> sub' e0 * sub' e1
+        ECond x y z -> sub' x ? sub' y > sub' z
+        EUnOp op e -> EUnOp op (sub' e)
+        EBinOp op e0 e1 -> EBinOp op (sub' e0) (sub' e1)
+        ETyCase b cs ->
+          let (ts, es) = unzip cs
+           in ETyCase (sub' b) (zip ts (sub' <$> es))
+        ETree t -> ETree $ fromList $ sub' <$> toList t
+        -- todo: capture of v needs to be avoided
+        EFix v e -> EFix v (sub' e)
+        -- ELitCase Expr [(Expr, Expr)]
+        -- ESet (Set Expr)
+        -- ELet Var Expr Expr
+        -- induction, but rename binder if it conflicts with fv(e).
+        ELam b@(Binder v' t) body
+          | v /= v' ->
+            let fvE = fv e
+                fvB = fv body
+             in if v' `Set.member` fvE
+                  then
+                    let v'' = fresh v' v (fvE `Set.union` fvB)
+                        body' = sub' $ sub'' v' body (EVar v'')
+                     in ELam (Binder v'' t) body'
+                  else ELam b (sub' body)
+        -- irrelevent base cases
         _ -> e'
-      -- e'[e/v]
-      sub :: Expr -> Var -> Expr -> Expr
-      sub e' v e =
-        let sub' e' = sub e' v e
-         in case e' of
-              -- relevant base case
-              EVar v' | v' == v -> e
-              -- induction
-              EApp e0 e1 -> sub' e0 * sub' e1
-              ECond x y z -> sub' x ? sub' y > sub' z
-              EUnOp op e -> EUnOp op (sub' e)
-              EBinOp op e0 e1 -> EBinOp op (sub' e0) (sub' e1)
-              ETyCase b cs ->
-                let (ts, es) = unzip cs
-                 in ETyCase (sub' b) (zip ts (sub' <$> es))
-              ETree t -> ETree $ fromList $ sub' <$> toList t
-              -- todo: capture of v needs to be avoided
-              EFix v e -> EFix v (sub' e)
-              -- ELitCase Expr [(Expr, Expr)]
-              -- ESet (Set Expr)
-              -- ELet Var Expr Expr
-              -- induction, but rename binder if it conflicts with fv(e).
-              ELam b@(Binder v' t) body
-                | v /= v' ->
-                  let fvE = fv e
-                      fvB = fv body
-                   in if v' `Set.member` fvE
-                        then
-                          let v'' = fresh v' v (fvE `Set.union` fvB)
-                              body' = sub' $ sub body v' (EVar v'')
-                           in ELam (Binder v'' t) body'
-                        else ELam b (sub' body)
-              -- irrelevent base cases
-              _ -> e'
--}
+
 isIdx e = case e of EIdx {} -> True; _ -> False
 
 idxOf (EIdx i) = i
@@ -130,11 +122,12 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
   runNormalize = runNormalize' mkCEnv
 
   -- cbn
-  reduce expr = trace ("REDUCE " ++ show expr) $ case expr of
+  reduce expr = trace ("0 REDUCE: " ++ show expr) $ case expr of
     -- (1) leftmost, outermost
-    EApp e0 e1 -> case e0 of
+    -- λf[λx[f(x(x))](λx[f(x(x))])] (λaλn[if n <= 1 then 1 else n * a(n - 1)])
+    EApp e0 e1 -> trace ("1 REDUCE APP: " ++ show expr) $ case e0 of
       -- (1a) function application, beta reduce
-      ELam (Binder v _) body -> reduce (sub v e1 body)
+      ELam (Binder v _) body -> trace ("1.1 REDUCE LAM: " ++ show e0) $ reduce (sub v e1 body)
       -- (sugar) combinatorially, sets behave like their characteristic functions
       ESet s -> do
         e1' <- reduce e1
@@ -145,11 +138,11 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
       -- to terms, in which case they simply abstract a free variable.
       EBind b -> reduce (ELam b e1)
       -- (1c) normal form for lhs, goto rhs
-      _ | not (reducible e0) -> do
+      _ | not (reducible e0) -> trace ("1.1 REDUCE _ (not reducible): " ++ show e0) $ do
         e1' <- reduce e1
         pure (e0 * e1')
       -- (1d) lhs can be reduced
-      _ -> do
+      _ -> trace ("1.1 REDUCE _ (reducible): " ++ show e0) $ do
         e0' <- reduce e0
         case e0' of
           -- (1d.1) normal form for lhs (app), goto rhs
@@ -214,8 +207,8 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
           e' <- reduce e
           reduce $ (b' === c') ? e' > ELitCase b cs'
         _ -> throwError $ InexhaustiveCase expr
-    ELet v e0 e1 -> reduce (sub v e0 e1)
-    EFix v e -> pure $ mkFixPoint v e
+    ELet v e0 e1 -> reduce (sub'' v e0 e1)
+    EFix v e -> reduce $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
     -- (3) var/literal
     _ -> pure expr
@@ -243,6 +236,9 @@ instance Unifiable Expr where
     (_, EVar v) -> pure $ mkEnv v e0
     (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
     _ -> throwError $ NotUnifiable e0 e1
+
+eval' :: Expr -> Either ExprEvalError Expr
+eval' = runReduce
 
 eval :: Expr -> Either ExprEvalError Expr
 eval = runReduce . runRename

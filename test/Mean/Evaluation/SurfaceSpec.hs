@@ -144,8 +144,6 @@ spec = do
       --  λn. if n ≤ 1 then 1 else n * fact (n - 1)
       let fact = EFix (mkVar "a") (n ~> EBinOp LTE n (mkI 1) ? mkI 1 > EBinOp Mul n (a * EBinOp Sub n (mkI 1)))
 
-      traceM (show $ runRename (fact * mkI 0))
-
       eval (fact * mkI 0) `shouldBe` Right (mkI 1)
       eval (fact * mkI 1) `shouldBe` Right (mkI 1)
       eval (fact * mkI 2) `shouldBe` Right (mkI 2)

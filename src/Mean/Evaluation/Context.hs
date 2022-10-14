@@ -31,42 +31,36 @@ instance Contextual Expr where
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
-  sub v e = walkFreeCtx $ \e' ->
-    trace "?" $
-      case e' of
-        EVar v' | v' == v -> e
-        e' -> e'
+  sub v e = walkC $ \e' c -> trace "??" $
+    case e' of
+      -- base
+      EVar v' | v' == v -> e
+      -- ignore contexts that already bind v
+      ELam (Binder bv t) _ | bv == v -> e'
+      -- ETyCase e cs -> ETyCase ()
+      -- otherwise continue the walk
+      _ -> c e'
 
 instance Renamable Expr where
-  rename expr = flip walkM expr $
-    trace "???" $ \e' -> case e' of
-      -- binding contexts
-      ELam b e -> uncurry ELam <$> shiftBV b e
-      ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
-      EFix v e -> rename $ mkFixPoint v e
-      -- every fv is renamed
-      EVar v | Set.member v fve -> EVar <$> next v
-      -- nothing to do
-      e -> pure e
+  rename expr = flip walkM expr $ \case
+    -- binding contexts
+    ELam b e -> uncurry ELam <$> shiftBV b e
+    ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
+    EFix v e -> rename $ mkFixPoint v e
+    -- every fv is renamed
+    EVar v | Set.member v fve -> EVar <$> next v
+    -- nothing to do
+    e -> pure e
     where
       fve = fv expr
 
-      -- simply ignore contexts that already bind v
-      safesub :: Var -> Expr -> Expr -> Expr
-      safesub v e = walk $ \e' ->
-        trace "??" $
-          case e' of
-            ELam (Binder bv t) _ | bv == v -> e'
-            -- ETyCase e cs -> ETyCase ()
-            _ -> sub v e e'
-
-      safesub' :: Expr -> (Var, Expr) -> Expr
-      safesub' = flip $ uncurry safesub
+      sub' :: Expr -> (Var, Expr) -> Expr
+      sub' = flip $ uncurry sub
 
       shift :: Var -> Expr -> RenameM (Var, Expr)
       shift v e = do
         v' <- next v
-        pure (v', safesub v (EVar v') e)
+        pure (v', sub v (EVar v') e)
 
       shiftBP :: (Binder Expr, Expr) -> RenameM (Binder Expr, Expr)
       shiftBP (Binder p t, e) = do
@@ -75,8 +69,8 @@ instance Renamable Expr where
         bv' <- mapM ((pure . EVar) <=< next) bv
 
         let s = zip bv bv'
-        let p' = foldl' safesub' p s
-        let e' = foldl' safesub' e s
+        let p' = foldl' sub' p s
+        let e' = foldl' sub' e s
 
         pure (Binder p' t, e')
 

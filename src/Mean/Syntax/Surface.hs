@@ -22,7 +22,7 @@ import Mean.Viz
 import Mean.Walk
 import Text.Megaparsec.Debug (dbg)
 import Text.PrettyPrint (char, parens, text, (<+>), (<>))
-import Prelude hiding (Eq, GT, LT, (*), (<>))
+import Prelude hiding (Eq, GT, LT, (*), (<>), (>))
 import qualified Prelude as Prel
 
 data Lit
@@ -58,25 +58,23 @@ data Expr
   deriving (Prel.Eq, Ord)
 
 instance Walkable Expr where
-  walkM' f g expr =
-    trace (show expr) $
-      let go = walkM' f g
-       in f expr >>= \case
-            EApp e0 e1 -> EApp <$> go e0 <*> go e1
-            ECond x y z -> ECond <$> go x <*> go y <*> go z
-            EUnOp op e -> EUnOp op <$> go e
-            EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
-            ETree t -> ETree <$> mapM go t
-            ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
-            ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
-            ETup es -> ETup <$> mapM go es
-            ELam b e -> ELam b <$> g e
-            -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
-            -- ELet Var Expr Expr
-            EFix v e -> EFix v <$> go e
-            e' -> pure e'
-
-walkFreeCtx f = walk' f id
+  walkMC' f expr = f expr ctn
+    where
+      go = walkMC' f
+      ctn = \case
+        EApp e0 e1 -> EApp <$> go e0 <*> go e1
+        ECond x y z -> ECond <$> go x <*> go y <*> go z
+        EUnOp op e -> EUnOp op <$> go e
+        EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
+        ETree t -> ETree <$> mapM go t
+        ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
+        ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
+        ETup es -> ETup <$> mapM go es
+        ELam b e -> ELam b <$> go e
+        -- ETyCase e cs -> ETyCase <$> go e <*> fmap (second go) cs
+        -- ELet Var Expr Expr
+        EFix v e -> EFix v <$> go e
+        e' -> pure e'
 
 instance Pretty Lit where
   ppr p l = case l of
@@ -199,7 +197,7 @@ mkTypedChurchTree ty t = case t of
 mkChurchTree :: T.Tree Expr -> Expr
 mkChurchTree = mkTypedChurchTree TyNil
 
--- λf:<T,T>. (λx:<A,TT> . f (x x)) (λx:<A,TT> . f (x x))
+-- λf. (λx. f (x x)) (λx . f (x x))
 yCombinator =
   let f = mkEVar "f"
       x = mkEVar "x"
@@ -209,6 +207,17 @@ yCombinator =
       tX = TyFun tA (TyFun tA tT)
    in -- in (f, tF) +> (((x, tX) +> (f * (x * x))) * ((x, tX) +> (f * (x * x))))
       f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+
+foo =
+  let f = mkEVar "f"
+      x = mkEVar "x"
+   in (x ~> (f * (x * x))) * (x ~> (f * (x * x)))
+
+fact =
+  let mkI = ELit . LInt
+      a = mkEVar "a"
+      n = mkEVar "n"
+   in EFix (mkVar "a") (n ~> EBinOp LTE n (mkI 1) ? mkI 1 > EBinOp Mul n (a * EBinOp Sub n (mkI 1)))
 
 mkFixPoint v e = yCombinator * (EVar v ~> e)
 
