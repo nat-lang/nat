@@ -27,10 +27,6 @@ import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
 
--- Equality up to renaming of free variables.
-class AlphaEq a where
-  alphaEq :: a -> a -> Bool
-
 -- Evaluative equality is the kind we recognize during evaluation.
 class EvalEq a where
   (=*=) :: a -> a -> Bool

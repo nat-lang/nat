@@ -24,22 +24,32 @@ data ModuleEvalError
   | MTypeError TypeEnv Expr (InferenceError Type Expr)
   deriving (Eq, Show)
 
-instance Reducible Module Module ExprEvalError TypeEnv where
-  reduce mod = reduce' mod []
+type ModuleExprReduction = Reduction ModuleExpr ExprEvalError (TypeEnv, ModuleEnv)
+
+type ModuleEnv = Map.Map Var Expr
+
+merge mod env = Map.union env $ case mod of
+  MDecl v e -> Map.singleton v e
+  _ -> Map.empty
+
+instance Reducible Module Module ExprEvalError (TypeEnv, ModuleEnv) where
+  reduce = mapM reduceM
     where
-      reduceIn :: Module -> Expr -> Reduction Expr ExprEvalError TypeEnv
-      reduceIn mod = reduce . inEnv (Map.fromList [(v, e) | MDecl v e <- mod])
+      reduce' expr tyEnv modEnv =
+        let expr' = runReduce' tyEnv (inEnv modEnv expr)
+         in case expr' of
+              Left err -> throwError $ MExprEvalError err
+              Right expr'' -> expr''
 
-      reduce' :: Module -> Module -> Reduction Module ExprEvalError TypeEnv
-      reduce' mod mod' = case mod of
-        [] -> pure mod'
-        (expr : exprs) ->
-          let next m = reduce' exprs (mod' ++ [m])
-           in case expr of
-                MDecl v e -> next <=< (pure . MDecl v) <=< reduceIn mod' $ e
-                MExec e -> next <=< (pure . MExec) <=< reduceIn mod' $ e
+      reduceM :: ModuleExpr -> ModuleExprReduction
+      reduceM expr = do
+        (tyEnv, modEnv) <- ask
+        expr' <- case expr of
+          MDecl v e -> MDecl v <$> reduce' tyEnv modEnv e
+          MExec e -> MExec <$> reduce' tyEnv modEnv e
+        put (tyEnv, merge expr' modEnv)
+        expr'
 
--- todo: freshness state needs to be passed too!
 typeModule :: TypeEnv -> Module -> Either ModuleEvalError TypeEnv
 typeModule env mod = case mod of
   [] -> Right env
@@ -52,7 +62,6 @@ typeModule env mod = case mod of
 eval :: Module -> Either ModuleEvalError Module
 eval m = case typeModule mkCEnv m of
   Left err -> Left err
-  Right env ->
-    trace ("ENV --->" ++ show env) $ case runIdentity $ runExceptT $ runReaderT (reduce m) env of
-      Left err -> Left $ MExprEvalError err
-      Right m -> Right m
+  Right tyEnv -> case runReduce' (tyEnv, Map.empty) of
+    Left err -> Left $ MExprEvalError err
+    Right m -> Right m
