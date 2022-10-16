@@ -23,21 +23,6 @@ source-repository head
 
 library
   exposed-modules:
-      Compiler.Core.Fresh
-      Compiler.Core.Inference
-      Compiler.Core.Lexer
-      Compiler.Core.Parser
-      Compiler.Core.Pretty
-      Compiler.Core.Syntax
-      Compiler.Core.TypeEnv
-      Compiler.Tree.Lexer
-      Compiler.Tree.Parser
-      Compiler.Tree.Syntax
-      Interpreter.Compose
-      Interpreter.Composition
-      Interpreter.CompositionTest
-      Interpreter.Evaluation
-      Interpreter.Fragment
       Mean.Cmd
       Mean.Context
       Mean.Evaluation.Context
@@ -54,13 +39,6 @@ library
       Mean.Unification
       Mean.Viz
       Mean.Walk
-      Service.API.ConstituencyTrees
-      Service.API.Fragments
-      Service.App
-      Service.Ctx
-      Service.Logger
-      Service.Serializers
-      Service.Settings
       Utils
   other-modules:
       Paths_interpreter

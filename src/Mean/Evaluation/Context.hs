@@ -31,20 +31,16 @@ instance Contextual Expr where
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
-  sub v e = walkC $ \e' ctn ->
-    case e' of
-      -- base
-      EVar v' | v' == v -> e
-      -- ignore contexts that already bind v
-      ELam (Binder bv t) _ | bv == v -> e'
-      ETyCase c cs -> trace ("subbing " ++ show e ++ " for " ++ show v ++ " in " ++ show c) $ ETyCase (ctn c) (fmap ctn' cs)
-        where
-          ctn' c@(Binder b t, e) =
-            if fvOf b v
-              then c
-              else (Binder b t, ctn e)
-      -- otherwise continue the walk
-      _ -> ctn e'
+  sub v e = walkC $ \e' ctn -> case e' of
+    -- base
+    EVar v' | v' == v -> e
+    -- ignore contexts that already bind v
+    ELam (Binder bv t) _ | bv == v -> e'
+    ETyCase c cs -> ETyCase (ctn c) (fmap ctn' cs)
+      where
+        ctn' p@(Binder b t, e) = if fvOf b v then p else (Binder b t, ctn e)
+    -- otherwise continue the walk
+    _ -> ctn e'
 
 instance Renamable Expr where
   rename expr = flip walkM expr $ \case

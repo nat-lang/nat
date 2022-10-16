@@ -167,7 +167,7 @@ matchTyCase t = find (match t)
 --   (2) constrain the pattern under these tvars
 --   (3) constrain the expr under these tvars
 --   (4) return the type of the expr and constrain
---       the principal type of the pattern to equal its tycase,
+--       the principal type of the pattern to equal its tycase
 --       alongside any constraints incurred along the way
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
@@ -180,8 +180,8 @@ constrainCase (S.Binder p t, expr) = do
   return (tv, (pT, t) : pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
-  inferIn env = infer' env initConstrain
-  infer = inferIn mkCEnv
+  runInferenceIn env = runInference' env initConstrain
+  runInference = runInferenceIn mkCEnv
 
   constraintsIn env = constraintsIn' env initConstrain
   constraints = constraintsIn mkCEnv
@@ -227,15 +227,11 @@ instance Inferrable Type S.Expr ConstraintState where
       case matchTyCase et cases of
         Nothing -> throwError $ IInexhaustiveCase expr
         Just (S.Binder p _, e') -> do
-          -- sub the concrete type of the matched expr
-          -- for the possibly variable type of the case
+          -- sub the principal type of the matched expr
+          -- for the abstract type of the case
           (tv, e'Cs) <- constrainCase (S.Binder p et, e')
 
-          let cs =
-                [ [(et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))],
-                  eCs,
-                  e'Cs
-                ]
+          let cs = [[(et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))], eCs, e'Cs]
 
           return (tv, concat cs)
     S.ETree t -> do

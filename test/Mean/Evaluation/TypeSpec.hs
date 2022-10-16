@@ -46,6 +46,9 @@ one = ELit $ LInt 1
 
 spec :: Spec
 spec = do
+  let infer = runInference
+  let inferIn = runInferenceIn
+
   describe "constraintsOn" $ do
     it "enforces constraints on type variables" $ do
       let env = mkTypeEnv [(yV, tyA)]

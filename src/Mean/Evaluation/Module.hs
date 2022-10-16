@@ -45,12 +45,10 @@ typeModule env mod = case mod of
   [] -> Right env
   (mExpr : mExprs) -> case mExpr of
     MExec {} -> Right env
-    MDecl v e -> case inferIn env e of
+    MDecl v e -> case runInferenceIn env e of
       Left err -> Left $ MTypeError env e err
       Right ty -> typeModule (extend env (v, ty)) mExprs
 
--- (1) rename every private variable such that every variable is uniquely named
--- ()
 eval :: Module -> Either ModuleEvalError Module
 eval m = case typeModule mkCEnv m of
   Left err -> Left err

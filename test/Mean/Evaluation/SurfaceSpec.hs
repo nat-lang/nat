@@ -34,14 +34,23 @@ mkI = ELit . LInt
 spec :: Spec
 spec = do
   describe "sub" $ do
-    it "substitutes an expression for a variable in an expression" $ do
-      let zV = mkVar "z"
-      inEnv (mkEnv zV y) z `shouldBe` y
-      inEnv (mkEnv zV y) x `shouldBe` x
+    let zV = mkVar "z"
 
-    it "ignores expressions that bind the variable" $ do
+    it "substitutes an expression for a variable in an expression" $ do
+      sub zV y z `shouldBe` y
+      sub zV y x `shouldBe` x
+
+    it "ignores expressions that already bind the variable" $ do
+      -- such as
+      -- (1) lambda abstractions
       let fV = mkVar "f"
       sub fV x (f ~> f) `shouldBe` f ~> f
+
+      -- (2) typecase patterns
+      -- tycase x of z:<n> -> z + 1 | y:<t> -> !z(y)
+      let tyCase0 = ETyCase x [(Binder z tyInt, EBinOp Add z one), (Binder y tyBool, EUnOp Neg (EApp z y))]
+      let tyCase1 = ETyCase x [(Binder z tyInt, EBinOp Add z one), (Binder y tyBool, EUnOp Neg (EApp (f ~> f) y))]
+      sub zV (f ~> f) tyCase0 `shouldBe` tyCase1
 
   describe "alpha equivalence (@=)" $ do
     let (@=) e0 e1 = (e0 C.@= e1) @?= True
@@ -51,8 +60,8 @@ spec = do
       (x ~> x) @= (y ~> y)
       -- λfλx . f(x) == λfλy . f(y)
       (f ~> (x ~> (f * x))) @= (f ~> (y ~> (f * y)))
-    -- λfλx . x(f) == λfλx . y(f)
-    -- (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
+      -- λfλx . x(f) == λfλy . y(f)
+      (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
     it "recognizes syntactic equivalence" $ do
       -- this is naturally a special case of alpha equivalence,
       -- but probably @= should check for syntactic equivalence
@@ -70,7 +79,6 @@ spec = do
       t0 @= t1
 
     it "doesn't recognize anything else" $ do
-      -- x !@= y
       zero !@= one
       -- λfλx . f(x) != λxλf . f(x)
       (f ~> (x ~> (f * x))) !@= (x ~> (f ~> (f * x)))
@@ -94,10 +102,10 @@ spec = do
       reduce ((x * x) === (x * x)) `shouldBe` Right ((x * x) === (x * x))
       reduce ((x ~> x) === (x ~> x)) `shouldBe` Right ((x ~> x) === (x ~> x))
 
-    it "reduces ternary conditionals on booleans" $ do
+    it "reduces ternary conditionals over booleans" $ do
       reduce (true ? y > z) `shouldBe` Right y
 
-    it "reduces ternary conditionals on terms that reduce to booleans" $ do
+    it "reduces ternary conditionals over terms that reduce to booleans" $ do
       reduce ((x ~> x) * true ? (y ~> y) > z) `shouldBe` Right (y ~> y)
 
     it "reduces ternary conditionals over nothing else" $ do
@@ -181,7 +189,7 @@ spec = do
       reduce (x !== y) `shouldBe` Right true
       reduce (zero !== one) `shouldBe` Right true
 
-    it "reduces inequalities between relations" $ do
+    it "reduces inequalities between terms that reduce to primitives" $ do
       reduce ((true && true) !== (false && false)) `shouldBe` Right true
 
     let tup = ETup [id * true, id * false]
@@ -193,30 +201,31 @@ spec = do
       reduce (tup * EIdx 0) `shouldBe` Right true
       reduce (tup * EIdx 1) `shouldBe` Right false
 
-    it "evaluates typecase expressions with variable bindings" $ do
+    it "reduces typecase expressions with variable bindings" $ do
       let iFn = (+>) (n, tyInt)
       let fnA = iFn (EBinOp Add n one)
       let fnB = iFn (EBinOp Eq n one)
 
       -- λx . tycase x of z:<n,n> -> z 0 | z:<n,t> -> z 1
       let tyCase = x ~> ETyCase x [(Binder z (TyFun tyInt tyInt), z * zero), (Binder z (TyFun tyInt tyBool), z * one)]
-      traceM (show $ runRename (tyCase * fnA))
 
-      eval (tyCase * fnA) `shouldBe` Right one
-      eval (tyCase * fnB) `shouldBe` Right true
+      reduce (tyCase * fnA) `shouldBe` Right one
+      reduce (tyCase * fnB) `shouldBe` Right true
 
       let tyCase = x ~> ETyCase x [(Binder z tyInt, EBinOp Add z one), (Binder z (TyFun tyInt tyInt), z * one)]
 
-      eval (tyCase * one) `shouldBe` Right (mkI 2)
-      eval (tyCase * fnA) `shouldBe` Right (mkI 2)
+      reduce (tyCase * one) `shouldBe` Right (mkI 2)
+      reduce (tyCase * fnA) `shouldBe` Right (mkI 2)
 
-    it "evaluates typecase expressions with complex bindings" $ do
-      let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), EBinOp Mul z one)]
+    it "reduces typecase expressions with complex bindings" $ do
       let tup0 = ETup [zero, one]
       let tup1 = ETup [zero, one, mkI 2]
 
-      eval (tyCase * tup0) `shouldBe` Right (mkI 2)
-      eval (tyCase * tup1) `shouldBe` Right (mkI 2)
+      -- λx . tycase x of (y,z):<n + n> -> z + 1 | (x,y,z):<n + n + n> -> z * 1
+      let tyCase = x ~> ETyCase x [(Binder (ETup [y, z]) (TyTup [tyInt, tyInt]), EBinOp Add z one), (Binder (ETup [x, y, z]) (TyTup [tyInt, tyInt, tyInt]), EBinOp Mul z one)]
+
+      reduce (tyCase * tup0) `shouldBe` Right (mkI 2)
+      reduce (tyCase * tup1) `shouldBe` Right (mkI 2)
 
   describe "confluence (*=)" $ do
     let (*=) e0 e1 = (e0 E.*= e1) @?= True

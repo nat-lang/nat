@@ -9,6 +9,7 @@ module Mean.Syntax.Surface
   )
 where
 
+import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State
 import Data.Bifunctor (second)
 import Data.List (intercalate)
@@ -58,11 +59,9 @@ data Expr
   deriving (Prel.Eq, Ord)
 
 instance Walkable Expr where
-  walkMC' f expr = ctn
-    where
-      go = walkMC' f
-      ctn =
-        f expr $ \case
+  walkMC' f expr =
+    let go = walkMC' f
+     in f expr $ \case
           EApp e0 e1 -> EApp <$> go e0 <*> go e1
           ECond x y z -> ECond <$> go x <*> go y <*> go z
           EUnOp op e -> EUnOp op <$> go e
@@ -75,7 +74,7 @@ instance Walkable Expr where
           ETyCase e cs -> ETyCase <$> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
           -- ELet Var Expr Expr
           EFix v e -> EFix v <$> go e
-          e' -> pure e'
+          e' -> f e' pure
 
 instance Pretty Lit where
   ppr p l = case l of

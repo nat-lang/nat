@@ -13,7 +13,6 @@ import Text.Megaparsec.Debug (dbg)
 data ModuleExpr
   = MDecl Var Expr
   | MExec Expr
-  | MOut [Expr]
   deriving (Eq, Show, Ord)
 
 type Module = [ModuleExpr]

@@ -39,6 +39,7 @@ data ExprEvalError
   = InexhaustiveCase Expr
   | EUnificationError (UnificationError Expr)
   | RuntimeTypeError (InferenceError Type Expr)
+  | CompilationTypeError (InferenceError Type Expr)
   deriving (P.Eq, Show)
 
 incrVarId :: Var -> Var
@@ -89,7 +90,6 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
   -- cbn
   reduce expr = case expr of
     -- (1) leftmost, outermost
-    -- λf[λx[f(x(x))](λx[f(x(x))])] (λaλn[if n <= 1 then 1 else n * a(n - 1)])
     EApp e0 e1 -> case e0 of
       -- (1a) function application, beta reduce
       ELam (Binder v _) body -> reduce (sub v e1 body)
@@ -154,7 +154,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
     ETyCase b cs -> do
       b' <- reduce b
       env <- ask
-      case inferIn env b' of
+      case runInferenceIn env b' of
         Left e -> throwError $ RuntimeTypeError e
         Right ty -> case cs of
           ((Binder p ty', e) : cs') ->
@@ -193,7 +193,6 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
         pure $ EBinOp op e0' e1'
       expr' -> pure expr'
 
--- (x,y) (1,2)
 instance Unifiable Expr where
   unify e0 e1 = case (e0, e1) of
     (EVar v0, EVar v1) | v0 == v1 -> pure mempty
@@ -201,9 +200,6 @@ instance Unifiable Expr where
     (_, EVar v) -> pure $ mkEnv v e0
     (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
     _ -> throwError $ NotUnifiable e0 e1
-
-eval :: Expr -> Either ExprEvalError Expr
-eval = runReduce . runRename
 
 type Normalization = Either ExprEvalError Expr
 
@@ -215,3 +211,10 @@ confluent e0 e1 = case (runNormalize e0 :: Normalization, runNormalize e1 :: Nor
 e0 *= e1 = confluent e0 e1
 
 e0 *!= e1 = not (e0 *= e1)
+
+eval :: Expr -> Either ExprEvalError Expr
+eval expr = case signify expr' of
+  Left err -> throwError $ CompilationTypeError err
+  Right env -> runReduce' env expr'
+  where
+    expr' = runRename expr

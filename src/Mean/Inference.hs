@@ -88,18 +88,24 @@ class Unifiable a => Inferrable a b s | b -> s where
       (InferenceError a b)
       ([Constraint a], ConstraintEnv a, a)
 
-  -- | Infer with given state and environment
-  infer' ::
+  -- | Return the type signature an inference produces
+  signify :: b -> Either (InferenceError a b) (ConstraintEnv a)
+  signify b = case constraints b of
+    Left err -> Left err
+    Right (_, env, _) -> Right env
+
+  -- | Infer with given environment and state
+  runInference' ::
     ConstraintEnv a ->
     s ->
     b ->
     Either (InferenceError a b) a
-  infer' env s expr = case runConstrain env s (principal expr) of
+  runInference' env s expr = case runConstrain env s (principal expr) of
     Left err -> Left err
     Right (a, _) -> pure a
 
   -- | Infer with given environment
-  inferIn :: ConstraintEnv a -> b -> Either (InferenceError a b) a
+  runInferenceIn :: ConstraintEnv a -> b -> Either (InferenceError a b) a
 
   -- | Infer
-  infer :: b -> Either (InferenceError a b) a
+  runInference :: b -> Either (InferenceError a b) a
