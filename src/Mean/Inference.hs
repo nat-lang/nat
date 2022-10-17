@@ -16,7 +16,7 @@ import Mean.Unification
 data InferenceError a b
   = IUnconstrainable b
   | IUnboundVariable Var (ConstraintEnv a)
-  | IUnificationError b (UnificationError a)
+  | IUnificationError (UnificationError a)
   | IInexhaustiveCase b
   deriving (Eq, Show)
 
@@ -55,7 +55,7 @@ class Unifiable a => Inferrable a b s | b -> s where
   principal b = do
     (a, cs) <- constrain b
     case runUnify cs of
-      Left e -> throwError $ IUnificationError b e
+      Left e -> throwError $ IUnificationError e
       Right s -> pure (inEnv s a, cs)
 
   -- | Run the inference monad
@@ -79,16 +79,22 @@ class Unifiable a => Inferrable a b s | b -> s where
   infer :: b -> Either (InferenceError a b) a
   infer = inferIn mkCEnv
 
+  runConstrain ::
+    Constrain a b s ->
+    ConstraintEnv a ->
+    Either (InferenceError a b) ([Constraint a], ConstraintEnv a, a)
+  runConstrain m env = case runInference env m of
+    Left err -> Left err
+    Right (t, cs) -> case runUnify cs of
+      Left err -> Left $ IUnificationError err
+      Right sub -> Right (cs, sub, t)
+
   -- | Return the constraints used to make an inference in a given state and environment
   constraintsIn ::
     ConstraintEnv a ->
     b ->
     Either (InferenceError a b) ([Constraint a], ConstraintEnv a, a)
-  constraintsIn env expr = case runInference env (constrain expr) of
-    Left err -> Left err
-    Right (c, cs) -> case runUnify cs of
-      Left err -> Left $ IUnificationError expr err
-      Right sub -> Right (cs, sub, c)
+  constraintsIn env expr = runConstrain (principal expr) env
 
   -- | Return the constraints used to make an inference
   constraints ::
@@ -98,8 +104,13 @@ class Unifiable a => Inferrable a b s | b -> s where
       ([Constraint a], ConstraintEnv a, a)
   constraints = constraintsIn mkCEnv
 
+  runSignify ::
+    Constrain a b s ->
+    Either (InferenceError a b) (ConstraintEnv a)
+  runSignify = unwrapSignature . flip runConstrain mkCEnv
+
   signifyIn :: ConstraintEnv a -> b -> Either (InferenceError a b) (ConstraintEnv a)
-  signifyIn env b = unwrapSignature $ constraintsIn env b
+  signifyIn env = unwrapSignature . constraintsIn env
 
   -- | Return the type signature an inference produces
   signify :: b -> Either (InferenceError a b) (ConstraintEnv a)

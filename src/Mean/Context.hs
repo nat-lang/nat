@@ -96,7 +96,7 @@ next (Var vPub _) = do
   put (s + 1)
   pure $ Var vPub (show s)
 
-class (Contextual a, Substitutable a a) => Renamable a where
+class Renamable a where
   rename :: a -> RenameM a
   runRename :: a -> a
   runRename a = runIdentity $ evalStateT (rename a) 0

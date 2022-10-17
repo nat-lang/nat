@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Syntax.Module where
@@ -8,6 +11,7 @@ import Debug.Trace (traceM)
 import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Surface
+import Mean.Walk
 import Text.Megaparsec.Debug (dbg)
 
 data ModuleExpr

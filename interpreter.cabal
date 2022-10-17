@@ -25,6 +25,7 @@ library
   exposed-modules:
       Mean.Cmd
       Mean.Context
+      Mean.Control
       Mean.Evaluation.Context
       Mean.Evaluation.Module
       Mean.Evaluation.Surface

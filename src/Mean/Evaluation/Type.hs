@@ -59,6 +59,8 @@ type TypeConstrain = TypeConstrainT Type
 
 type TypeEnv = ConstraintEnv Type
 
+mkCState = CState {count = 0}
+
 letters :: [String]
 letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
 
@@ -119,7 +121,7 @@ extend :: TypeEnv -> (Var, Type) -> TypeEnv
 extend env (v, t) = Map.insert v t env
 
 inTypeEnv :: (Var, Type) -> TypeConstrainT a -> TypeConstrainT a
-inTypeEnv (v, t) = local (\e -> Map.delete v e `extend` (v, t))
+inTypeEnv t = local (`extend` t)
 
 -- | Lookup type in the environment
 checkTy :: Var -> TypeConstrain
@@ -176,7 +178,7 @@ constrainCase (S.Binder p t, expr) = do
   return (tv, (pT, t) : pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
-  runInference = runInference' (CState {count = 0})
+  runInference = runInference' mkCState
 
   constrain expr = case expr of
     S.ELit (S.LInt _) -> return (tyInt, [])
@@ -188,6 +190,11 @@ instance Inferrable Type S.Expr ConstraintState where
       t' <- freshIfNil t
       (t'', cs) <- constrainWith e v t'
       return (t' `TyFun` t'', cs)
+    -- S.ELet v e e' -> do
+    --   tv <- fresh
+    --   (et, cs) <- constrain e
+    --   (e't, cs') <- constrainWith e' v et
+    --   return (tv, cs ++ cs' ++ (tv, e't))
     S.EFix v e -> do
       tv <- fresh
       constrainWith e v (TyFun tv tv)
