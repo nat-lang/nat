@@ -62,10 +62,6 @@ type TypeEnv = ConstraintEnv Type
 letters :: [String]
 letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
 
--- | Counter for fresh variables
-initConstrain :: ConstraintState
-initConstrain = CState {count = 0}
-
 instance Substitutable Type Type where
   sub v t = walk $ \case
     TyVar v' | v' == v -> t
@@ -180,11 +176,7 @@ constrainCase (S.Binder p t, expr) = do
   return (tv, (pT, t) : pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
-  runInferenceIn env = runInference' env initConstrain
-  runInference = runInferenceIn mkCEnv
-
-  constraintsIn env = constraintsIn' env initConstrain
-  constraints = constraintsIn mkCEnv
+  runInference = runInference' (CState {count = 0})
 
   constrain expr = case expr of
     S.ELit (S.LInt _) -> return (tyInt, [])

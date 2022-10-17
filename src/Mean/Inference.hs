@@ -1,4 +1,5 @@
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Mean.Inference where
@@ -6,6 +7,7 @@ module Mean.Inference where
 import Control.Monad.Except (Except, MonadError (throwError), runExcept)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (MonadState (get), StateT, evalStateT)
+import Data.Either (fromLeft)
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
 import Mean.Context
@@ -40,6 +42,10 @@ type ConstrainT a b s r =
 
 type Constrain a b s = ConstrainT a b s (a, [Constraint a])
 
+unwrapSignature = \case
+  Left err -> Left err
+  Right (_, env, _) -> Right env
+
 -- | Infer a from b in state s.
 class Unifiable a => Inferrable a b s | b -> s where
   constrain :: b -> Constrain a b s
@@ -50,36 +56,39 @@ class Unifiable a => Inferrable a b s | b -> s where
     (a, cs) <- constrain b
     case runUnify cs of
       Left e -> throwError $ IUnificationError b e
-      Right s -> do
-        pure (inEnv s a, cs)
+      Right s -> pure (inEnv s a, cs)
 
-  -- | Run the constraint generation monad
-  runConstrain ::
-    ConstraintEnv a ->
+  -- | Run the inference monad
+  runInference' ::
     s ->
+    ConstraintEnv a ->
     Constrain a b s ->
     Either (InferenceError a b) (a, [Constraint a])
-  runConstrain env s m = runExcept $ evalStateT (runReaderT m env) s
+  runInference' s env m = runExcept $ evalStateT (runReaderT m env) s
+
+  runInference ::
+    ConstraintEnv a ->
+    Constrain a b s ->
+    Either (InferenceError a b) (a, [Constraint a])
+
+  inferIn :: ConstraintEnv a -> b -> Either (InferenceError a b) a
+  inferIn env b = case runInference env (principal b) of
+    Left e -> Left e
+    Right (a, _) -> Right a
+
+  infer :: b -> Either (InferenceError a b) a
+  infer = inferIn mkCEnv
 
   -- | Return the constraints used to make an inference in a given state and environment
-  constraintsIn' ::
+  constraintsIn ::
     ConstraintEnv a ->
-    s ->
     b ->
     Either (InferenceError a b) ([Constraint a], ConstraintEnv a, a)
-  constraintsIn' env s expr = case runConstrain env s (constrain expr) of
+  constraintsIn env expr = case runInference env (constrain expr) of
     Left err -> Left err
     Right (c, cs) -> case runUnify cs of
       Left err -> Left $ IUnificationError expr err
       Right sub -> Right (cs, sub, c)
-
-  -- | Return the constraints used to make an inference in a given environment
-  constraintsIn ::
-    ConstraintEnv a ->
-    b ->
-    Either
-      (InferenceError a b)
-      ([Constraint a], ConstraintEnv a, a)
 
   -- | Return the constraints used to make an inference
   constraints ::
@@ -87,25 +96,11 @@ class Unifiable a => Inferrable a b s | b -> s where
     Either
       (InferenceError a b)
       ([Constraint a], ConstraintEnv a, a)
+  constraints = constraintsIn mkCEnv
+
+  signifyIn :: ConstraintEnv a -> b -> Either (InferenceError a b) (ConstraintEnv a)
+  signifyIn env b = unwrapSignature $ constraintsIn env b
 
   -- | Return the type signature an inference produces
   signify :: b -> Either (InferenceError a b) (ConstraintEnv a)
-  signify b = case constraints b of
-    Left err -> Left err
-    Right (_, env, _) -> Right env
-
-  -- | Infer with given environment and state
-  runInference' ::
-    ConstraintEnv a ->
-    s ->
-    b ->
-    Either (InferenceError a b) a
-  runInference' env s expr = case runConstrain env s (principal expr) of
-    Left err -> Left err
-    Right (a, _) -> pure a
-
-  -- | Infer with given environment
-  runInferenceIn :: ConstraintEnv a -> b -> Either (InferenceError a b) a
-
-  -- | Infer
-  runInference :: b -> Either (InferenceError a b) a
+  signify = unwrapSignature . constraints

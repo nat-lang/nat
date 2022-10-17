@@ -150,7 +150,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
     ETyCase b cs -> do
       b' <- reduce b
       env <- ask
-      case runInferenceIn env b' of
+      case inferIn env b' of
         Left e -> throwError $ RuntimeTypeError e
         Right ty -> case cs of
           ((Binder p ty', e) : cs') ->

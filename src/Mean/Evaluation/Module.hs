@@ -48,7 +48,9 @@ instance Reducible Module Module ExprEvalError (TypeEnv, ModuleEnv) where
           MDecl v e -> MDecl v <$> reduce' tyEnv modEnv e
           MExec e -> MExec <$> reduce' tyEnv modEnv e
         put (tyEnv, merge expr' modEnv)
-        expr'
+        pure expr'
+
+tyMod = runInference . mapM principal
 
 typeModule :: TypeEnv -> Module -> Either ModuleEvalError TypeEnv
 typeModule env mod = case mod of
