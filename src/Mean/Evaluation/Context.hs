@@ -18,17 +18,26 @@ instance Contextual Expr where
   fv expr = case expr of
     EVar v -> Set.singleton v
     ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
+    ETyCase e cs ->
+      let fvCs = foldl1 Set.union (map (\(Binder p _, e) -> fv e Set.\\ fv p) cs)
+       in fv e `Set.union` fvCs
+    EFix v e -> fv e Set.\\ Set.singleton v
     EApp e0 e1 -> fv [e0, e1]
     ECond x y z -> fv [x, y, z]
     EUnOp _ e -> fv e
     EBinOp _ e0 e1 -> fv [e0, e1]
     ETree t -> fv (toList t)
     ETup es -> fv es
-    -- ELitCase Expr [(Expr, Expr)]
-    -- ESet (Set Expr)
+    ELitCase e es -> fv e `Set.union` fv es
+    ESet es -> fv (toList es)
     -- ELet Var Expr Expr
-    EFix v e -> fv e Set.\\ Set.singleton v
     _ -> Set.empty
+
+-- bv expr = case expr of
+--   ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
+--   ETyCase e cs -> fv e Set.union (fv $ map snd cs)
+--   EFix v e -> fv e Set.\\ Set.singleton v
+--   _ -> Set.emp
 
 instance Substitutable Expr Expr where
   sub v e = walkC $ \e' ctn -> case e' of
@@ -43,37 +52,36 @@ instance Substitutable Expr Expr where
     _ -> ctn e'
 
 instance Renamable Expr where
-  rename expr = flip walkM expr $ \case
+  rename' vs expr = flip walkM expr $ \case
     -- binding contexts
     ELam b e -> uncurry ELam <$> shiftBV b e
     ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
     EFix v e -> rename $ mkFixPoint v e
     -- every fv is renamed
-    EVar v | fvOf expr v -> EVar <$> next v
+    EVar v | Set.member v vs -> EVar <$> next v
     -- nothing to do
     e -> pure e
-    where
-      sub' :: Expr -> (Var, Expr) -> Expr
-      sub' = flip $ uncurry sub
 
-      shift :: Var -> Expr -> RenameM (Var, Expr)
-      shift v e = do
-        v' <- next v
-        pure (v', sub v (EVar v') e)
+sub' :: Expr -> (Var, Expr) -> Expr
+sub' = flip $ uncurry sub
 
-      shiftBP :: (Binder Expr, Expr) -> RenameM (Binder Expr, Expr)
-      shiftBP (Binder p t, e) = do
-        let bv = Set.toList $ fv p
+shift :: Var -> Expr -> RenameM (Var, Expr)
+shift v e = do
+  v' <- next v
+  pure (v', sub v (EVar v') e)
 
-        bv' <- mapM ((pure . EVar) <=< next) bv
+shiftBP :: (Binder Expr, Expr) -> RenameM (Binder Expr, Expr)
+shiftBP (Binder p t, e) = do
+  let bv = Set.toList $ fv p
 
-        let s = zip bv bv'
-        let p' = foldl' sub' p s
-        let e' = foldl' sub' e s
+  bv' <- mapM ((pure . EVar) <=< next) bv
 
-        pure (Binder p' t, e')
+  let s = zip bv bv'
+  let [p', e'] = flip (foldl' sub') s <$> [p, e]
 
-      shiftBV :: Binder Var -> Expr -> RenameM (Binder Var, Expr)
-      shiftBV (Binder v t) e = do
-        (v', e') <- shift v e
-        pure (Binder v' t, e')
+  pure (Binder p' t, e')
+
+shiftBV :: Binder Var -> Expr -> RenameM (Binder Var, Expr)
+shiftBV (Binder v t) e = do
+  (v', e') <- shift v e
+  pure (Binder v' t, e')

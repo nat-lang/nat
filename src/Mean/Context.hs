@@ -49,6 +49,9 @@ mkVar v = Var v v
 mkEnv :: Var -> a -> Env a
 mkEnv = Map.singleton
 
+reset :: Var -> Var
+reset (Var vPre _) = Var vPre vPre
+
 class Substitutable a b where
   sub :: Var -> a -> b -> b
 
@@ -57,7 +60,7 @@ class Substitutable a b where
 
 class Contextual a where
   fv :: a -> Set.Set Var
-
+  bv :: a -> Set.Set Var
   fvOf :: a -> Var -> Bool
   fvOf = flip Set.member . fv
 
@@ -81,6 +84,9 @@ instance Contextual a => Contextual [a] where
   fv :: [a] -> Set.Set Var
   fv = foldr (Set.union . fv) Set.empty
 
+  bv :: Contextual a => [a] -> Set.Set Var
+  bv = foldr (Set.union . bv) Set.empty
+
 instance Contextual a => Contextual (Env a) where
   fv :: Contextual a => Env a -> Set.Set Var
   fv env = fv $ Map.elems env
@@ -96,8 +102,11 @@ next (Var vPub _) = do
   put (s + 1)
   pure $ Var vPub (show s)
 
-class Renamable a where
+class Contextual a => Renamable a where
+  rename' :: Set.Set Var -> a -> RenameM a
+
   rename :: a -> RenameM a
+  rename expr = rename' (fv expr) expr
   runRename :: a -> a
   runRename a = runIdentity $ evalStateT (rename a) 0
 
