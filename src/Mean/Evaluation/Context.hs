@@ -54,16 +54,17 @@ instance Substitutable Expr Expr where
 instance Renamable Expr where
   rename' vs expr = flip walkM expr $ \case
     -- binding contexts
-    ELam b e -> uncurry ELam <$> shiftBV b e
+    ELam (Binder v t) e -> do
+      (v', e') <- shift v e
+      pure (ELam (Binder v' t) e')
     ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
-    EFix v e -> rename $ mkFixPoint v e
+    EFix v e -> do
+      (v', e') <- shift v e
+      pure (EFix v' e')
     -- every fv is renamed
     EVar v | Set.member v vs -> EVar <$> next v
     -- nothing to do
     e -> pure e
-
-sub' :: Expr -> (Var, Expr) -> Expr
-sub' = flip $ uncurry sub
 
 shift :: Var -> Expr -> RenameM (Var, Expr)
 shift v e = do
@@ -76,12 +77,7 @@ shiftBP (Binder p t, e) = do
 
   bv' <- mapM ((pure . EVar) <=< next) bv
 
-  let s = zip bv bv'
-  let [p', e'] = flip (foldl' sub') s <$> [p, e]
+  let s = Map.fromList $ zip bv bv'
+  let [p', e'] = inEnv s <$> [p, e]
 
   pure (Binder p' t, e')
-
-shiftBV :: Binder Var -> Expr -> RenameM (Binder Var, Expr)
-shiftBV (Binder v t) e = do
-  (v', e') <- shift v e
-  pure (Binder v' t, e')

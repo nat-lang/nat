@@ -1,6 +1,4 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Syntax.Module where
@@ -16,6 +14,7 @@ import Text.Megaparsec.Debug (dbg)
 
 data ModuleExpr
   = MDecl Var Expr
+  | MLetRec Var Expr
   | MExec Expr
   deriving (Eq, Show, Ord)
 
@@ -25,27 +24,24 @@ type Module = [ModuleExpr]
 -- Parsing
 -------------------------------------------------------------------------------
 
-pMLetRecDecl :: P.Parser ModuleExpr
-pMLetRecDecl = do
+pMLetRec :: P.Parser ModuleExpr
+pMLetRec = do
   P.reserved "letrec"
   v <- pVar
   P.symbol "="
-  MDecl v . EFix v <$> pExpr
+  MLetRec v <$> pExpr
 
-pMLetDecl :: P.Parser ModuleExpr
-pMLetDecl = do
+pMDecl :: P.Parser ModuleExpr
+pMDecl = do
   P.reserved "let"
   v <- pVar
   P.symbol "="
   MDecl v <$> pExpr
 
-pMDecl :: P.Parser ModuleExpr
-pMDecl = P.choice [pMLetRecDecl, pMLetDecl]
-
 pMExec :: P.Parser ModuleExpr
 pMExec = MExec <$> pExpr
 
-pMExpr = P.choice [pMExec, pMDecl]
+pMExpr = P.choice [pMExec, pMLetRec, pMDecl]
 
 pModule :: P.Parser Module
 pModule = pMExpr `P.sepEndBy` P.delimiter

@@ -209,8 +209,8 @@ e0 *= e1 = confluent e0 e1
 e0 *!= e1 = not (e0 *= e1)
 
 eval :: Expr -> Either ExprEvalError Expr
-eval expr = case signify expr' of
-  Left err -> throwError $ CompilationTypeError err
+eval expr = case runSignify expr' of
+  Left err -> Left $ CompilationTypeError err
   Right env -> runReduce' env expr'
   where
     expr' = runRename expr

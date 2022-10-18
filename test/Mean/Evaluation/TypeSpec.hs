@@ -10,6 +10,7 @@ import Mean.Context
 import Mean.Evaluation.Surface
 import Mean.Evaluation.Type
 import Mean.Inference
+import Mean.Inference (Inferrable (runSignifyIn))
 import Mean.Parser
 import Mean.Syntax.Surface hiding (fromList)
 import Mean.Syntax.Type
@@ -46,13 +47,6 @@ one = ELit $ LInt 1
 
 spec :: Spec
 spec = do
-  describe "constraintsOn" $ do
-    it "enforces constraints on type variables" $ do
-      let env = mkTypeEnv [(yV, tyA)]
-      let (Right (_, sub, ty)) = constraintsIn env (fn "x" tyInt x * y)
-
-      inEnv sub ty `shouldBe` tyInt
-
   describe "infer" $ do
     it "infers the type of literal integers" $ do
       infer (ELit $ LInt 0) `shouldBe` Right tyInt
@@ -78,9 +72,15 @@ spec = do
       infer (true === true) `shouldBe` Right tb
       infer (true === false) `shouldBe` Right tb
 
+    it "enforces constraints on type variables" $ do
+      let env = mkTypeEnv [(yV, tyA)]
+      let (Right ty) = inferIn env (fn "x" tyInt x * y)
+
+      ty `shouldBe` tyInt
+
     it "enforces constraints on equalities" $ do
       let env = mkTypeEnv [(xV, tyA), (yV, tyB)]
-      let (Right (_, sub, _)) = constraintsIn env (x === y)
+      let (Right sub) = runSignifyIn env (x === y)
 
       inEnv sub tyA `shouldBe` inEnv sub tyB
 
@@ -105,8 +105,8 @@ spec = do
       -- y = λf. (λx . f (x x)) (λx . f (x x))
       -- y * (λfλn. if n ≤ 1 then 1 else n * f (n - 1))
       let fact = EFix (mkVar "f") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (f * EBinOp Sub n (iE 1)))
-
-      infer (fact * one) `shouldBe` Right tyInt
+      -- let fact = EFix (mkVar "f") (n ~> ECond (EBinOp LTE n (iE 1)) (iE 1) (EBinOp Mul n (EApp f (EBinOp Sub n (iE 1)))))
+      infer fact `shouldBe` Right (TyFun tyInt tyInt)
 
     it "types the domains of the functional branches of trees with polymorphic nodes as union types" $ do
       let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"

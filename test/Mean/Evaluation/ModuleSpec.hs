@@ -29,9 +29,7 @@ mod0 =
         | (l',r'):(<A>, <A,B>) -> r'(l')
         | _ -> x
 
-     let compose = \t.\op. t(unit)(op)
-
-     compose(tree)(FA)(0)
+     tree(unit)(FA)
 |]
 
 mkI = ELit . LInt

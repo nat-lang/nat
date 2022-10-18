@@ -4,7 +4,7 @@
 
 module Mean.Inference where
 
-import Control.Monad.Except (Except, MonadError (throwError), runExcept)
+import Control.Monad.Except (Except, MonadError (throwError), liftEither, runExcept)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (MonadState (get), StateT, evalStateT)
 import Data.Either (fromLeft)
@@ -16,7 +16,7 @@ import Mean.Unification
 data InferenceError a b
   = IUnconstrainable b
   | IUnboundVariable Var (ConstraintEnv a)
-  | IUnificationError (UnificationError a)
+  | IUnificationError b (UnificationError a)
   | IInexhaustiveCase b
   deriving (Eq, Show)
 
@@ -50,13 +50,23 @@ unwrapSignature = \case
 class Unifiable a => Inferrable a b s | b -> s where
   constrain :: b -> Constrain a b s
 
+  unify' :: [Constraint a] -> b -> Either (InferenceError a b) (ConstraintEnv a)
+  unify' cs b = case runUnify cs of
+    Left e -> Left $ IUnificationError b e
+    Right s -> Right s
+
   -- | Calculate incremental principal types
   principal :: b -> Constrain a b s
   principal b = do
     (a, cs) <- constrain b
-    case runUnify cs of
-      Left e -> throwError $ IUnificationError e
-      Right s -> pure (inEnv s a, cs)
+    s <- liftEither (unify' cs b)
+    pure (inEnv s a, cs)
+
+  signify :: b -> ConstrainT a b s (a, ConstraintEnv a)
+  signify b = do
+    (a, cs) <- principal b
+    s <- liftEither (unify' cs b)
+    pure (inEnv s a, s)
 
   -- | Run the inference monad
   runInference' ::
@@ -79,22 +89,15 @@ class Unifiable a => Inferrable a b s | b -> s where
   infer :: b -> Either (InferenceError a b) a
   infer = inferIn mkCEnv
 
-  runConstrain ::
-    Constrain a b s ->
-    ConstraintEnv a ->
-    Either (InferenceError a b) ([Constraint a], ConstraintEnv a, a)
-  runConstrain m env = case runInference env m of
-    Left err -> Left err
-    Right (t, cs) -> case runUnify cs of
-      Left err -> Left $ IUnificationError err
-      Right sub -> Right (cs, sub, t)
-
   -- | Return the constraints used to make an inference in a given state and environment
   constraintsIn ::
     ConstraintEnv a ->
     b ->
     Either (InferenceError a b) ([Constraint a], ConstraintEnv a, a)
-  constraintsIn env expr = runConstrain (principal expr) env
+  constraintsIn env expr = do
+    (t, cs) <- liftEither (runInference env (principal expr))
+    s <- unify' cs expr
+    pure (cs, s, t)
 
   -- | Return the constraints used to make an inference
   constraints ::
@@ -104,14 +107,9 @@ class Unifiable a => Inferrable a b s | b -> s where
       ([Constraint a], ConstraintEnv a, a)
   constraints = constraintsIn mkCEnv
 
-  runSignify ::
-    Constrain a b s ->
-    Either (InferenceError a b) (ConstraintEnv a)
-  runSignify = unwrapSignature . flip runConstrain mkCEnv
-
-  signifyIn :: ConstraintEnv a -> b -> Either (InferenceError a b) (ConstraintEnv a)
-  signifyIn env = unwrapSignature . constraintsIn env
+  runSignifyIn :: ConstraintEnv a -> b -> Either (InferenceError a b) (ConstraintEnv a)
+  runSignifyIn env = unwrapSignature . constraintsIn env
 
   -- | Return the type signature an inference produces
-  signify :: b -> Either (InferenceError a b) (ConstraintEnv a)
-  signify = unwrapSignature . constraints
+  runSignify :: b -> Either (InferenceError a b) (ConstraintEnv a)
+  runSignify = unwrapSignature . constraints
