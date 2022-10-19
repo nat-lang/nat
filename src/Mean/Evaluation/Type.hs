@@ -227,19 +227,26 @@ instance Inferrable Type S.Expr ConstraintState where
         Nothing -> throwError $ IInexhaustiveCase expr
         Just (S.Binder p _, e') -> do
           -- sub the principal type of the matched expr
-          -- for the abstract type of the case
+          -- for the (possibly) abstract type of the case
           (tv, e'Cs) <- constrainCase (S.Binder p et, e')
 
           let cs = [[(et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))], eCs, e'Cs]
+
+          traceM ("\nCONSTRAINTS: " ++ (show cs))
 
           return (tv, concat cs)
     S.ETree t -> do
       eTs <- mapM principal (toList t)
       let (tEs, cEs) = unzip eTs
-      let t' = S.mkTypedChurchTree (TyUnion $ Set.fromList tEs) t
+      tv <- fresh
+      let bTy = TyFun (if allEq tEs then head tEs else TyUnion $ Set.fromList tEs) tv
+      let t' = S.mkTypedChurchTree bTy t
       (tv, cs) <- principal t'
       return (tv, concat $ cs : cEs)
+    S.EUndef -> pure (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
+
+allEq xs = all (== head xs) (tail xs)
 
 -------------------------------------------------------------------------------
 -- Unification

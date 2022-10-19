@@ -195,6 +195,9 @@ instance Unifiable Expr where
     (EVar v, _) -> pure $ mkEnv v e1
     (_, EVar v) -> pure $ mkEnv v e0
     (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
+    (EWildcard, _) -> pure mempty
+    (_, EWildcard) -> pure mempty
+    (EUndef, EUndef) -> pure mempty
     _ -> throwError $ NotUnifiable e0 e1
 
 type Normalization = Either ExprEvalError Expr

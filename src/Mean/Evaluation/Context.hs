@@ -33,12 +33,6 @@ instance Contextual Expr where
     -- ELet Var Expr Expr
     _ -> Set.empty
 
--- bv expr = case expr of
---   ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
---   ETyCase e cs -> fv e Set.union (fv $ map snd cs)
---   EFix v e -> fv e Set.\\ Set.singleton v
---   _ -> Set.emp
-
 instance Substitutable Expr Expr where
   sub v e = walkC $ \e' ctn -> case e' of
     -- base

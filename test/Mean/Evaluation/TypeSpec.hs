@@ -108,8 +108,20 @@ spec = do
       -- let fact = EFix (mkVar "f") (n ~> ECond (EBinOp LTE n (iE 1)) (iE 1) (EBinOp Mul n (EApp f (EBinOp Sub n (iE 1)))))
       infer fact `shouldBe` Right (TyFun tyInt tyInt)
 
-    it "types the domains of the functional branches of trees with polymorphic nodes as union types" $ do
+    -- it "types trees" $ do
+    --   let (Right t) = parse pExpr "[0 [1] [2]]"
+    --   let (Right ty) = infer t
+
+    it "types folds over trees" $ do
+      let (Right t) = parse pExpr "[0 [1] [0]]"
+      let (Right f) = parse pExpr "\\x.\\l.\\r. x + l + r"
+      let ty = infer (t * zero * f)
+
+      ty `shouldBe` Right tyInt
+
+    it "types the domains of the branches of church trees with polymorphic nodes as union types" $ do
       let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"
+      -- <unit, <
       let (Right (TyFun _ (TyFun ty _))) = infer t
       let tA = mkTv "A"
       ty `shouldBe` TyUnion (Set.fromList [tyBool, TyFun tA tA, tyInt])

@@ -75,6 +75,7 @@ instance Pretty Type where
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p (TyQuant (Univ tvs ty)) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
   ppr p TyNil = text "TyNil"
+  ppr p TyUndef = text "TyUndef"
 
 instance Show Type where
   show = show . ppr 0
@@ -91,6 +92,7 @@ pTyTerm =
     [ P.angles pType,
       P.reserved "t" >> pure tyBool,
       P.reserved "n" >> pure tyInt,
+      P.reserved "undef" >> pure TyUndef,
       P.titularIdentifier <&> mkTv,
       P.identifier <&> TyCon,
       P.parens $ P.commaSep pTyTerm <&> TyTup

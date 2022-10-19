@@ -112,8 +112,8 @@ typeMod mod = run (foldM typeMod' mkCEnv mod)
     typeMod' :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr ConstraintState TypeEnv
     typeMod' env mExpr = local (Map.union env) $ do
       traceM ("\nTyping " ++ show mExpr)
-      traceM ("\nTyEnv:\n" ++ show env)
       (t, env') <- signify (toExpr mExpr)
+      traceM ("\nHas Type: " ++ show t)
       pure $ Map.unions [toEnv t mExpr, env', env]
 
 reduceMod :: Module -> TypeEnv -> Either ExprEvalError (ModuleEnv, Module)

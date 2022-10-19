@@ -17,19 +17,22 @@ import Mean.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
 
--- λeb . e
--- λxlreb . b(x)(l e b)(r e b)
--- λeλb[b(0)(b(0)(b(succ)(e)(e))(b(0)(e)(e)))(b(succ)(e)(e))]
+-- λeλb . b 0 (b 0 e e) (b (λx.x+1) e e)
 mod0 =
   [r|let succ = \x:<n> . x + 1
-     let tree = [0 [0 [succ] [0]] [succ]]
-     let unit = \e.\b. e
-     letrec FA = \x.\l.\r.\z. tycase (FA l, FA r) of
-          (l',r'):(<A,B>, <A>) -> l'(r')
-        | (l',r'):(<A>, <A,B>) -> r'(l')
-        | _ -> x
+     let tree = [undef [undef [succ] [0]] [succ]]
+     let FA = \l.\r. tycase (l, r) of
+        (l',r'):(<A>, <A,B>) -> r'(l')
+      | (l',r'):(<A,B>, <A>) -> l'(r')
+      | _ -> undef
 
-     tree(unit)(FA)
+     let walk = \op.\x.\l.\r. tycase x of
+        undef:<undef> -> op l r
+      | _ -> x
+
+     let compose = \tree.\op. tree(undef)(walk op)
+
+     compose(tree)(FA)
 |]
 
 mkI = ELit . LInt
@@ -40,5 +43,5 @@ spec = do
     it "evaluates each expr within an accumulated environment" $ do
       let (Right mod0') = parse pModule mod0
       case eval mod0' of
-        Left e -> traceM (show e)
-        Right mod0'' -> last mod0'' `shouldBe` MExec (mkEVar "z" ~> mkI 2)
+        Right mod0'' -> last mod0'' `shouldBe` MExec (mkI 2)
+        Left err -> traceM (show err)

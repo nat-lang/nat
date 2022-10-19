@@ -123,6 +123,7 @@ instance Pretty Expr where
     ETup es -> parens $ text (intercalate ", " (show <$> es))
     EIdx i -> brackets (text $ show i)
     EWildcard -> text "_"
+    EUndef -> text "undef"
 
 instance Show Expr where
   show = show . ppr 0
@@ -348,7 +349,8 @@ terms =
     pELitCase,
     pETyCase,
     pESet,
-    pETup
+    pETup,
+    P.reserved "undef" >> pure EUndef
   ]
 
 pTerm :: ExprParser
