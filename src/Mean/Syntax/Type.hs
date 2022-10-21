@@ -38,12 +38,13 @@ data Type
   | TyFun Type Type
   | TyTup [Type]
   | TyUnion (Set.Set Type)
-  | TyUndef
   | TyQuant (QExpr Type)
-  | TyWild
+  | TyTyCase Type [(Type, Type)]
   | -- TyNil is a placeholder left by the parser in lieu of an explicit
     -- type annotation. It says "infer my type, please".
     TyNil
+  | TyUndef
+  | TyWild
   deriving (Prel.Eq, Ord)
 
 instance Walkable Type where
@@ -55,7 +56,7 @@ instance Walkable Type where
         TyTup ts -> TyTup <$> mapM go ts
         TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
         TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
-        t' -> pure t'
+        t' -> f t' pure
 
 mkTv :: String -> Type
 mkTv = TyVar . mkVar

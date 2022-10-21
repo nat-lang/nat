@@ -142,17 +142,15 @@ spec = do
 
       inferIn env (ETyCase x cases) `shouldBe` Right tyBool
 
-    it "propagates the constraints of its matched case body" $ do
+    it "propagates the constraints of its case bodies" $ do
       let tyCase = ETyCase x [(Binder z tyInt, EBinOp Add z y), (Binder z tyBool, EBinOp Eq z w ? one > zero)]
 
       let tB = mkTv "B"
-      let env' = Map.union env $ Map.singleton yV tB
-      let (Right (_, sub, _)) = constraintsIn env' tyCase
-      inEnv sub tB `shouldBe` tyInt
-
       let tC = mkTv "C"
-      let env' = Map.fromList [(xV, tyBool), (wV, tC)]
+      let env' = Map.union env $ Map.fromList [(yV, tB), (wV, tC)]
       let (Right (_, sub, _)) = constraintsIn env' tyCase
+
+      inEnv sub tB `shouldBe` tyInt
       inEnv sub tC `shouldBe` tyBool
 
     let cases = [(Binder z tyInt, z === zero), (Binder z tyBool, z)]

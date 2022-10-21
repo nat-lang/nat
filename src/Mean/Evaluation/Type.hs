@@ -65,9 +65,12 @@ letters :: [String]
 letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
 
 instance Substitutable Type Type where
-  sub v t = walk $ \case
+  sub v t = walk $ \t' -> case t' of
     TyVar v' | v' == v -> t
-    t' -> t'
+    TyTyCase (TyVar v') ts
+      | v' == v ->
+        maybe t' snd (find (unifiable t . fst) ts)
+    _ -> t'
 
 instance Contextual Type where
   fv t = case t of
@@ -156,17 +159,13 @@ constrainWith e v t = inTypeEnv (v, t) (principal e)
 
 type Case = (S.Binder S.Expr, S.Expr)
 
-matchTyCase :: Type -> [Case] -> Maybe Case
-matchTyCase t = find (match t)
-  where
-    match ty (S.Binder _ ty', _) = ty <=> ty'
-
 -- | (1) mint fresh tvars for the vars in the pattern
 --   (2) constrain the pattern under these tvars
 --   (3) constrain the expr under these tvars
 --   (4) return the type of the expr and constrain
 --       the principal type of the pattern to equal its tycase
 --       alongside any constraints incurred along the way
+constrainCase :: (S.Binder S.Expr, S.Expr) -> ConstrainT Type S.Expr ConstraintState ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
   tvs <- mapM (const fresh) vs
@@ -175,7 +174,7 @@ constrainCase (S.Binder p t, expr) = do
   (pT, pCs) <- local (Map.union env) (principal p)
   (tv, cs) <- local (Map.union env) (principal expr)
 
-  return (tv, (pT, t) : pCs ++ cs)
+  return ((pT, tv), (pT, t) : pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
   runInference = runInference' mkCState
@@ -221,20 +220,14 @@ instance Inferrable Type S.Expr ConstraintState where
       return (tv, (tv, TyTup ts) : concat cs')
     S.EWildcard -> return (TyWild, [])
     S.ETyCase e cases -> do
+      tv <- fresh
       (et, eCs) <- principal e
+      cTs <- mapM constrainCase cases
 
-      case matchTyCase et cases of
-        Nothing -> throwError $ IInexhaustiveCase expr
-        Just (S.Binder p _, e') -> do
-          -- sub the principal type of the matched expr
-          -- for the (possibly) abstract type of the case
-          (tv, e'Cs) <- constrainCase (S.Binder p et, e')
+      let (cTs', cCs) = unzip cTs
+      let cs = [(et, tv), (et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))]
 
-          let cs = [[(et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))], eCs, e'Cs]
-
-          traceM ("\nCONSTRAINTS: " ++ (show cs))
-
-          return (tv, concat cs)
+      return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
     S.ETree t -> do
       eTs <- mapM principal (toList t)
       let (tEs, cEs) = unzip eTs

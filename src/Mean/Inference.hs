@@ -17,7 +17,7 @@ data InferenceError a b
   = IUnconstrainable b
   | IUnboundVariable Var (ConstraintEnv a)
   | IUnificationError b (UnificationError a)
-  | IInexhaustiveCase b
+  | IInexhaustiveCase [a]
   deriving (Eq, Show)
 
 type Constraint a = (a, a)
