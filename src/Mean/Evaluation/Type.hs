@@ -171,9 +171,7 @@ type Case = (S.Binder S.Expr, S.Expr)
 -- | (1) mint fresh tvars for the vars in the pattern
 --   (2) constrain the pattern under these tvars
 --   (3) constrain the expr under these tvars
---   (4) return the type of the expr and constrain
---       the principal type of the pattern to equal its tycase
---       alongside any constraints incurred along the way
+--   (4) return the type of the expr any constraints incurred along the way
 constrainCase :: (S.Binder S.Expr, S.Expr) -> ConstrainT Type S.Expr ConstraintState ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
@@ -190,6 +188,14 @@ constrainCase (S.Binder p t, expr) = do
   traceM ("T of Case: " ++ show (t, tv) ++ " with CS:\n" ++ show (pp ((pT, t) : pCs ++ cs)))
 
   return ((t, tv), pCs ++ cs)
+
+instantiateTyCases :: TypeEnv -> ConstrainT Type S.Expr ConstraintState TypeEnv
+instantiateTyCases env = (Map.fromList . fmap go . Map.toList) env
+  where
+    go t@(TyTyCase (TyVar v) ts) = case Map.lookup v env of
+      Nothing -> throwError $ IUnboundVariable v env
+      Just t' -> do
+        let p = find (unifiable t' . fst) ts
 
 instance Inferrable Type S.Expr ConstraintState where
   runInference = runInference' mkCState
