@@ -42,6 +42,5 @@ spec = do
   describe "eval" $ do
     it "evaluates each expr within an accumulated environment" $ do
       let (Right mod0') = parse pModule mod0
-      case eval mod0' of
-        Right mod0'' -> last mod0'' `shouldBe` MExec (mkI 2)
-        Left err -> traceM (show err)
+      let (Right mod0'') = eval mod0'
+      last mod0'' `shouldBe` MExec (mkI 2)

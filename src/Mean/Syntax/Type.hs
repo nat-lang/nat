@@ -57,9 +57,10 @@ instance Walkable Type where
         TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
         TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
         TyTyCase v ts -> do
+          v' <- go v
           let (tsL, tsR) = unzip ts
           tsR' <- mapM go tsR
-          pure $ TyTyCase v (zip tsL tsR')
+          pure $ TyTyCase v' (zip tsL tsR')
         t' -> f t' pure
 
 mkTv :: String -> Type

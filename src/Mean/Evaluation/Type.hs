@@ -10,6 +10,7 @@ import Control.Monad.Except
   ( Except,
     ExceptT,
     MonadError (throwError),
+    liftEither,
     replicateM,
     runExcept,
     runExceptT,
@@ -74,11 +75,6 @@ letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
 instance Substitutable Type Type where
   sub v t = walk $ \t' -> case t' of
     TyVar v' | v' == v -> t
-    TyTyCase (TyVar v') ts
-      | v' == v ->
-        trace (show ts) $
-          trace ("MATCH: " ++ show v ++ " == " ++ show v' ++ " : " ++ show ((find (unifiable t . fst) ts))) $
-            maybe t' snd (find (unifiable t . fst) ts)
     _ -> t'
 
 instance Contextual Type where
@@ -171,41 +167,38 @@ type Case = (S.Binder S.Expr, S.Expr)
 -- | (1) mint fresh tvars for the vars in the pattern
 --   (2) constrain the pattern under these tvars
 --   (3) constrain the expr under these tvars
---   (4) return the type of the expr any constraints incurred along the way
+--   (4) constrain the inferred type of the pattern
+--       the pattern's type to be equal
+--   (5) return the sum of the pattern and body's types +
+--       constraints incurred along the way
 constrainCase :: (S.Binder S.Expr, S.Expr) -> ConstrainT Type S.Expr ConstraintState ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
   tvs <- mapM (const fresh) vs
   let env = Map.fromList (zip vs tvs)
 
-  traceM ("CONSTRAINING CASE: " ++ show (S.Binder p t, expr))
-
   (pT, pCs) <- local (Map.union env) (principal p)
   (tv, cs) <- local (Map.union env) (principal expr)
 
-  traceM ("T of Pattern: " ++ show pT ++ " with CS:\n" ++ show (pp pCs))
-  traceM ("T of Body: " ++ show tv ++ " with CS:\n" ++ show (pp cs))
-  traceM ("T of Case: " ++ show (t, tv) ++ " with CS:\n" ++ show (pp ((pT, t) : pCs ++ cs)))
-
-  return ((t, tv), pCs ++ cs)
+  return ((t, tv), (pT, t) : pCs ++ cs)
 
 isVar = \case TyVar {} -> True; _ -> False
 
 instance Inferrable Type S.Expr ConstraintState where
   runInference = runInference' mkCState
 
+  -- ETyCases get special treatment
   principal e = case e of
-    TyTyCase v ts -> do
+    S.ETyCase {} -> do
       (t, cs) <- principal' e
-      env <- ask
-      case Map.lookup v env of
-        Nothing -> throwError $ IUnboundVariable v env
-        Just t' | isVar t' -> (t, cs)
-        Just t' -> case find (unifiable t' . fst) ts of
+      let (TyTyCase bT ts) = t
+      if isVar bT
+        then pure (t, cs)
+        else case find (unifiable bT . fst) ts of
           Nothing -> throwError $ IInexhaustiveCase t
           Just (pT, eT) -> do
-            s <- liftEither (unify' ((pT, t') : cs) e)
-            pure (inEnv s t, cs')
+            s <- liftEither (unify' ((pT, bT) : cs) e)
+            pure (inEnv s eT, cs)
     _ -> principal' e
 
   constrain expr = case expr of
@@ -256,21 +249,21 @@ instance Inferrable Type S.Expr ConstraintState where
       let (cTs', cCs) = unzip cTs
       let cs = [(et, tv), (et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))]
 
-      traceM ("T of TyCase: " ++ show (TyTyCase tv cTs') ++ " with CS:\n" ++ show (pp (concat [cs, eCs, concat cCs])))
-
       return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
     S.ETree t -> do
       eTs <- mapM principal (toList t)
       let (tEs, cEs) = unzip eTs
       tv <- fresh
-      let bTy = TyFun (if allEq tEs then head tEs else TyUnion $ Set.fromList tEs) tv
+      let bTy = TyFun (refine tEs) tv
       let t' = S.mkTypedChurchTree bTy t
       (tv, cs) <- principal t'
       return (tv, concat $ cs : cEs)
     S.EUndef -> pure (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
 
-allEq xs = all (== head xs) (tail xs)
+refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
+  where
+    uniform xs = all (== head xs) (tail xs)
 
 -------------------------------------------------------------------------------
 -- Unification
