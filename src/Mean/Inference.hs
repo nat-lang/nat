@@ -19,7 +19,7 @@ data InferenceError a b
   = IUnconstrainable b
   | IUnboundVariable Var (ConstraintEnv a)
   | IUnificationError b (UnificationError a)
-  | IInexhaustiveCase [a]
+  | IInexhaustiveCase a
   deriving (Eq, Show)
 
 type Constraint a = (a, a)
@@ -58,11 +58,14 @@ class Unifiable a => Inferrable a b s | b -> s where
     Right s -> Right s
 
   -- | Calculate incremental principal types
-  principal :: b -> Constrain a b s
-  principal b = do
+  principal' :: b -> Constrain a b s
+  principal' b = do
     (a, cs) <- constrain b
     s <- liftEither (unify' cs b)
     pure (inEnv s a, cs)
+
+  principal :: b -> Constrain a b s
+  principal = principal'
 
   signify :: b -> ConstrainT a b s (a, ConstraintEnv a)
   signify b = do

@@ -169,7 +169,7 @@ spec = do
 
     it "types tuple patterns" $ do
       let [l@(EVar lV), r@(EVar rV)] = mkEVar <$> ["l", "r"]
-      let (Right tyCase) = parse pExpr "tycase (l, r) of (l',r'):(<A,B>, <A>) -> l'(r') | (l',r'):(<A>, <A,B>) -> r'(l') | _ -> (l,r)"
+      let (Right tyCase) = parse pExpr "tycase (l, r) of (l',r'):(<X,Y>, <X>) -> l'(r') | (l',r'):(<X>, <X,Y>) -> r'(l') | _ -> (l,r)"
 
       let env = Map.fromList [(lV, TyFun tyInt tyBool), (rV, tyInt)]
       inferIn env tyCase `shouldBe` Right tyBool

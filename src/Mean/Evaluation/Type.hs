@@ -189,16 +189,24 @@ constrainCase (S.Binder p t, expr) = do
 
   return ((t, tv), pCs ++ cs)
 
-instantiateTyCases :: TypeEnv -> ConstrainT Type S.Expr ConstraintState TypeEnv
-instantiateTyCases env = (Map.fromList . fmap go . Map.toList) env
-  where
-    go t@(TyTyCase (TyVar v) ts) = case Map.lookup v env of
-      Nothing -> throwError $ IUnboundVariable v env
-      Just t' -> do
-        let p = find (unifiable t' . fst) ts
+isVar = \case TyVar {} -> True; _ -> False
 
 instance Inferrable Type S.Expr ConstraintState where
   runInference = runInference' mkCState
+
+  principal e = case e of
+    TyTyCase v ts -> do
+      (t, cs) <- principal' e
+      env <- ask
+      case Map.lookup v env of
+        Nothing -> throwError $ IUnboundVariable v env
+        Just t' | isVar t' -> (t, cs)
+        Just t' -> case find (unifiable t' . fst) ts of
+          Nothing -> throwError $ IInexhaustiveCase t
+          Just (pT, eT) -> do
+            s <- liftEither (unify' ((pT, t') : cs) e)
+            pure (inEnv s t, cs')
+    _ -> principal' e
 
   constrain expr = case expr of
     S.ELit (S.LInt _) -> return (tyInt, [])
