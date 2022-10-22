@@ -45,6 +45,7 @@ import Mean.Syntax.Type
 import Mean.Unification
 import Mean.Viz
 import Mean.Walk
+import Text.PrettyPrint (vcat, (<+>))
 
 -------------------------------------------------------------------------------
 -- Classes
@@ -59,6 +60,12 @@ type TypeConstrain = TypeConstrainT Type
 
 type TypeEnv = ConstraintEnv Type
 
+instance Pretty (Constraint Type) where
+  ppr p (a0, a1) = ppr p a0 <+> text "=" <+> ppr p a1
+
+instance Pretty [Constraint Type] where
+  ppr p cs = vcat $ fmap ((text "\t" <>) . ppr p) cs
+
 mkCState = CState {count = 0}
 
 letters :: [String]
@@ -69,7 +76,9 @@ instance Substitutable Type Type where
     TyVar v' | v' == v -> t
     TyTyCase (TyVar v') ts
       | v' == v ->
-        maybe t' snd (find (unifiable t . fst) ts)
+        trace (show ts) $
+          trace ("MATCH: " ++ show v ++ " == " ++ show v' ++ " : " ++ show ((find (unifiable t . fst) ts))) $
+            maybe t' snd (find (unifiable t . fst) ts)
     _ -> t'
 
 instance Contextual Type where
@@ -171,10 +180,16 @@ constrainCase (S.Binder p t, expr) = do
   tvs <- mapM (const fresh) vs
   let env = Map.fromList (zip vs tvs)
 
+  traceM ("CONSTRAINING CASE: " ++ show (S.Binder p t, expr))
+
   (pT, pCs) <- local (Map.union env) (principal p)
   (tv, cs) <- local (Map.union env) (principal expr)
 
-  return ((pT, tv), (pT, t) : pCs ++ cs)
+  traceM ("T of Pattern: " ++ show pT ++ " with CS:\n" ++ show (pp pCs))
+  traceM ("T of Body: " ++ show tv ++ " with CS:\n" ++ show (pp cs))
+  traceM ("T of Case: " ++ show (t, tv) ++ " with CS:\n" ++ show (pp ((pT, t) : pCs ++ cs)))
+
+  return ((t, tv), pCs ++ cs)
 
 instance Inferrable Type S.Expr ConstraintState where
   runInference = runInference' mkCState
@@ -226,6 +241,8 @@ instance Inferrable Type S.Expr ConstraintState where
 
       let (cTs', cCs) = unzip cTs
       let cs = [(et, tv), (et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))]
+
+      traceM ("T of TyCase: " ++ show (TyTyCase tv cTs') ++ " with CS:\n" ++ show (pp (concat [cs, eCs, concat cCs])))
 
       return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
     S.ETree t -> do

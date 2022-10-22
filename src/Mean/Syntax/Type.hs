@@ -56,6 +56,10 @@ instance Walkable Type where
         TyTup ts -> TyTup <$> mapM go ts
         TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
         TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
+        TyTyCase v ts -> do
+          let (tsL, tsR) = unzip ts
+          tsR' <- mapM go tsR
+          pure $ TyTyCase v (zip tsL tsR')
         t' -> f t' pure
 
 mkTv :: String -> Type
@@ -68,15 +72,16 @@ tyInt = TyCon "n"
 tyBool = TyCon "t"
 
 instance Pretty Type where
-  ppr p (TyCon t) = anglesIf (p == 0) $ text t
-  ppr p TyWild = anglesIf (p == 0) $ text "_"
-  ppr p (TyVar v) = anglesIf (p == 0) $ text (show v)
-  ppr p (TyFun a b) = angles $ ppr (p + 1) a <> char ',' <> ppr (p + 1) b
+  ppr p (TyCon t) = text t
+  ppr p TyWild = text "_"
+  ppr p (TyVar v) = text (show v)
+  ppr p (TyFun a b) = ppr (p + 1) a <> text "->" <> ppr (p + 1) b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p (TyQuant (Univ tvs ty)) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
   ppr p TyNil = text "TyNil"
   ppr p TyUndef = text "TyUndef"
+  ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
 
 instance Show Type where
   show = show . ppr 0

@@ -37,7 +37,7 @@ instance Ord Var where
 
 instance Show Var where
   show :: Var -> String
-  show (Var vPub vPri) = vPub ++ vPri
+  show (Var vPub vPri) = vPub
 
 instance Pretty [Var] where
   ppr p (v : vs) = text (show v) <> char ',' <> text (show v)
