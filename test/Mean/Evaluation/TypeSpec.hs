@@ -114,8 +114,9 @@ spec = do
 
     it "types folds over trees" $ do
       let (Right t) = parse pExpr "[0 [1] [0]]"
-      let (Right f) = parse pExpr "\\x.\\l.\\r. x + l + r"
-      let ty = infer (t * zero * f)
+      let (Right f) = parse pExpr "\\x:<X>.\\l:<L>.\\r:<R>. x + l + r"
+      traceM $ "\n" ++ show (t * zero * f)
+      let ty = infer $ renameETypes (t * zero * f)
 
       ty `shouldBe` Right tyInt
 

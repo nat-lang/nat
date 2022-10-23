@@ -40,15 +40,12 @@ data Type
   | TyUnion (Set.Set Type)
   | TyQuant (QExpr Type)
   | TyTyCase Type [(Type, Type)]
-  | -- TyNil is a placeholder left by the parser in lieu of an explicit
-    -- type annotation. It says "infer my type, please".
-    TyNil
   | TyUndef
   | TyWild
   deriving (Prel.Eq, Ord)
 
 instance Walkable Type where
-  walkMC' f t = f t ctn
+  walkMC' f ty = f ty ctn
     where
       go = walkMC' f
       ctn = \case
@@ -57,10 +54,11 @@ instance Walkable Type where
         TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
         TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
         TyTyCase v ts -> do
-          v' <- go v
           let (tsL, tsR) = unzip ts
+          tsL' <- mapM go tsL
           tsR' <- mapM go tsR
-          pure $ TyTyCase v' (zip tsL tsR')
+          v' <- go v
+          pure $ TyTyCase v' (zip tsL' tsR')
         t' -> f t' pure
 
 mkTv :: String -> Type
@@ -80,7 +78,6 @@ instance Pretty Type where
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p (TyQuant (Univ tvs ty)) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
-  ppr p TyNil = text "TyNil"
   ppr p TyUndef = text "TyUndef"
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
 
@@ -88,7 +85,7 @@ instance Show Type where
   show = show . ppr 0
 
 -------------------------------------------------------------------------------
--- Parsing (Types)
+-- Parsing
 -------------------------------------------------------------------------------
 
 type TyParser = P.Parser Type
@@ -105,9 +102,6 @@ pTyTerm =
       P.parens $ P.commaSep pTyTerm <&> TyTup
     ]
 
-tyNil :: TyParser
-tyNil = pure TyNil
-
 pType :: TyParser
 pType = P.makeExprParser pTyTerm tyOps
   where
@@ -116,7 +110,7 @@ pType = P.makeExprParser pTyTerm tyOps
       ]
 
 pTypeAssignment :: TyParser
-pTypeAssignment = (P.reserved ":" >> pType) P.<|> tyNil
+pTypeAssignment = P.reserved ":" >> pType
 
 pOptionalType :: TyParser
-pOptionalType = pTypeAssignment P.<|> tyNil
+pOptionalType = pTypeAssignment P.<|> pure (mkTv "A")

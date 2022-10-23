@@ -80,7 +80,7 @@ instance Contextual a => Contextual (Pair a) where
   fv :: Contextual a => (a, a) -> Set.Set Var
   fv (t0, t1) = fv t0 `Set.union` fv t1
 
-instance Contextual a => Contextual [a] where
+instance {-# OVERLAPPABLE #-} Contextual a => Contextual [a] where
   fv :: [a] -> Set.Set Var
   fv = foldr (Set.union . fv) Set.empty
 
@@ -107,8 +107,12 @@ class Contextual a => Renamable a where
 
   rename :: a -> RenameM a
   rename expr = rename' (fv expr) expr
+
+  runRename' :: RenameM a -> a
+  runRename' m = runIdentity $ evalStateT m 0
+
   runRename :: a -> a
-  runRename a = runIdentity $ evalStateT (rename a) 0
+  runRename a = runRename' (rename a)
 
   alphaEq :: Eq a => a -> a -> Bool
   alphaEq e0 e1 = runRename e0 == runRename e1

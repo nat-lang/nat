@@ -55,6 +55,11 @@ instance Contextual ModuleExpr where
     MLetRec v _ -> Set.singleton v
     _ -> Set.empty
 
+instance {-# OVERLAPPING #-} Contextual Module where
+  fv mod = fv' mod Set.\\ bv mod
+    where
+      fv' = foldr (Set.union . fv) Set.empty
+
 instance Substitutable Expr ModuleExpr where
   sub v expr mExpr =
     let sub' = sub v expr
@@ -70,35 +75,37 @@ instance Renamable ModuleExpr where
     MLetRec v e -> MLetRec v <$> rename' vs e
     MExec e -> MExec <$> rename' vs e
 
-merge modExpr modEnv = Map.union modEnv $ case modExpr of
-  MDecl v e -> Map.singleton v e
-  MLetRec v e -> Map.singleton v e
-  _ -> Map.empty
+instance Renamable Module where
+  rename' vs mod = (thdPass <=< sndPass <=< fstPass) mod
+    where
+      reBndEnv mod = Map.fromList $ [(reset v, EVar v) | v <- Set.toList $ bv mod]
 
-renameMod :: Module -> Module
-renameMod mod = run $ (thdPass <=< sndPass <=< fstPass) mod
+      -- rename topmost let vars
+      fstPass :: Module -> RenameM Module
+      fstPass mod = forM mod $ \case
+        MDecl v e -> MDecl <$> next v <*> pure e
+        MLetRec v e -> MLetRec <$> next v <*> pure e
+        mExpr -> pure mExpr
+
+      -- update topmost let vars bound in every expr
+      sndPass :: Module -> RenameM Module
+      sndPass mod = pure $ inEnv (reBndEnv mod) <$> mod
+
+      -- now rename each expr, ignoring the bound let vars
+      thdPass :: Module -> RenameM Module
+      thdPass mod =
+        let rename e = rename' vs e
+         in mapM rename mod
+
+runRenameTypes = runRename' . m
   where
-    run m = runIdentity $ evalStateT m 0
+    rn = walkETypesM rename
+    m mod = forM mod $ \case
+      MDecl v e -> MDecl v <$> rn e
+      MLetRec v e -> MLetRec v <$> rn e
+      MExec e -> MExec <$> rn e
 
-    bvPre = bv mod
-    bndEnv mod = Map.fromList $ [(reset v, EVar v) | v <- Set.toList $ bv mod]
-
-    -- rename topmost let vars
-    fstPass :: Module -> RenameM Module
-    fstPass mod = forM mod $ \case
-      MDecl v e -> MDecl <$> next v <*> pure e
-      MLetRec v e -> MLetRec <$> next v <*> pure e
-      mExpr -> pure mExpr
-
-    -- update topmost let vars bound in every expr
-    sndPass :: Module -> RenameM Module
-    sndPass mod = pure $ inEnv (bndEnv mod) <$> mod
-
-    -- now rename each expr, ignoring the bound let vars
-    thdPass :: Module -> RenameM Module
-    thdPass mod =
-      let rename e = rename' (fv e Set.\\ bv mod) e
-       in mapM rename mod
+renameMod = runRenameTypes . runRename
 
 toEnv t = \case
   MDecl v _ -> Map.singleton v t
@@ -111,24 +118,28 @@ typeMod mod = run (foldM typeMod' mkCEnv mod)
     run m = runExcept $ evalStateT (runReaderT m mkCEnv) mkCState
     typeMod' :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr ConstraintState TypeEnv
     typeMod' env mExpr = local (Map.union env) $ do
-      traceM ("\nTyping " ++ show mExpr)
       (t, env') <- signify (toExpr mExpr)
-      traceM ("\nHas Type: " ++ show t)
       pure $ Map.unions [toEnv t mExpr, env', env]
 
 reduceMod :: Module -> TypeEnv -> Either ExprEvalError (ModuleEnv, Module)
 reduceMod mod tyEnv = run (mapAccumM accumModM Map.empty mod)
   where
     run m = runIdentity $ runExceptT (runReaderT m tyEnv)
+    merge modExpr modEnv = Map.union modEnv $ case modExpr of
+      MDecl v e -> Map.singleton v e
+      MLetRec v e -> Map.singleton v e
+      _ -> Map.empty
     accumModM env expr = do
       expr' <- reduce (inEnv env expr)
       pure (merge expr' env, expr')
 
 eval :: Module -> Either ModuleEvalError Module
-eval mod =
-  let mod' = renameMod mod
-   in trace ("\nMOD:\n" ++ show mod') $ case typeMod mod' of
-        Left err -> Left $ MTypeError err
-        Right tyEnv -> trace ("\nTyEnv:\n" ++ show tyEnv) $ case reduceMod mod' tyEnv of
-          Left err -> Left $ MExprEvalError err
-          Right (_, mod'') -> Right mod''
+eval mod = runExcept $ (reduceMod' <=< typeMod') mod
+  where
+    mod' = renameMod mod
+    typeMod' mod = case typeMod mod of
+      Left err -> throwError $ MTypeError err
+      Right tyEnv -> pure tyEnv
+    reduceMod' tyEnv = case reduceMod mod' tyEnv of
+      Left err -> throwError $ MExprEvalError err
+      Right (_, mod) -> pure mod

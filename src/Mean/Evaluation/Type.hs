@@ -84,45 +84,17 @@ instance Contextual Type where
     TyVar a -> Set.singleton a
     TyFun t0 t1 -> fv t0 `Set.union` fv t1
     TyUnion ts -> foldMap fv ts
+    TyTyCase b cs -> let (csL, csR) = unzip cs in Set.unions [fv b, fv csL, fv csR]
     TyQuant (Univ vs t) -> fv t `Set.difference` Set.fromList vs
+
+instance Renamable Type where
+  rename' vs t = flip walkM t $ \case
+    TyVar v | Set.member v vs -> TyVar <$> next v
+    t' -> pure t'
 
 -------------------------------------------------------------------------------
 -- Inference
 -------------------------------------------------------------------------------
-
--- | Generalize a type over its free variables
-closeOver :: Type -> Type
-closeOver = normalize . generalize mkCEnv
-
-generalize :: TypeEnv -> Type -> Type
-generalize env t = TyQuant $ Univ as t
-  where
-    as = Set.toList $ fv t `Set.difference` fv env
-
-instantiate :: Type -> TypeConstrain
-instantiate (TyQuant (Univ as t)) = do
-  as' <- mapM (const fresh) as
-  let e = Map.fromList $ zip as as'
-  return $ inEnv e t
-instantiate t = error ("can only instantiate a quantified type, but got " ++ (show t))
-
-normalize :: Type -> Type
-normalize (TyQuant (Univ _ body)) = TyQuant $ Univ (map snd ord) (normtype body)
-  where
-    ord = zip (nub $ fvs body) (map mkVar letters)
-    fvs = Set.toList . fv
-    normtypes = fmap normtype
-
-    normtype (TyVar a) =
-      case Prelude.lookup a ord of
-        Just x -> TyVar x
-        Nothing -> error "type variable not in signature"
-    normtype (TyCon a) = TyCon a
-    normtype (TyFun a b) = TyFun (normtype a) (normtype b)
-    normtype (TyTup ts) = TyTup (normtypes ts)
-    normtype (TyUnion ts) = TyUnion (Set.fromList $ normtypes $ Set.toList ts)
-    normtype TyNil = error "missing type annotation"
-normalize _ = error "can only normalize quantified types"
 
 -- | Extend type environment
 extend :: TypeEnv -> (Var, Type) -> TypeEnv
@@ -137,14 +109,7 @@ checkTy x = do
   env <- ask
   case Map.lookup x env of
     Nothing -> throwError $ IUnboundVariable x env
-    Just t -> case t of
-      TyQuant {} -> instantiate t
-      _ -> pure t
-
-freshIfNil :: Type -> TypeConstrain
-freshIfNil t = case t of
-  TyNil -> fresh
-  _ -> pure t
+    Just t -> pure t
 
 fresh :: TypeConstrain
 fresh = do
@@ -208,14 +173,8 @@ instance Inferrable Type S.Expr ConstraintState where
       t <- checkTy v
       return (t, [])
     S.ELam (S.Binder v t) e -> do
-      t' <- freshIfNil t
-      (t'', cs) <- constrainWith e v t'
-      return (t' `TyFun` t'', cs)
-    -- S.ELet v e e' -> do
-    --   tv <- fresh
-    --   (et, cs) <- constrain e
-    --   (e't, cs') <- constrainWith e' v et
-    --   return (tv, cs ++ cs' ++ (tv, e't))
+      (t', cs) <- constrainWith e v t
+      return (t `TyFun` t', cs)
     S.EFix v e -> do
       tv <- fresh
       constrainWith e v (TyFun tv tv)

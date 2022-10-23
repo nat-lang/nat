@@ -35,7 +35,7 @@ instance Contextual Expr where
 
 instance Substitutable Expr Expr where
   sub v e = walkC $ \e' ctn -> case e' of
-    -- base
+    -- base case
     EVar v' | v' == v -> e
     -- ignore contexts that already bind v
     ELam (Binder bv t) _ | bv == v -> e'
@@ -47,16 +47,14 @@ instance Substitutable Expr Expr where
 
 instance Renamable Expr where
   rename' vs expr = flip walkM expr $ \case
+    -- base case
+    EVar v | Set.member v vs -> EVar <$> next v
     -- binding contexts
     ELam (Binder v t) e -> do
       (v', e') <- shift v e
       pure (ELam (Binder v' t) e')
     ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
-    EFix v e -> do
-      (v', e') <- shift v e
-      pure (EFix v' e')
-    -- every fv is renamed
-    EVar v | Set.member v vs -> EVar <$> next v
+    EFix v e -> uncurry EFix <$> shift v e
     -- nothing to do
     e -> pure e
 

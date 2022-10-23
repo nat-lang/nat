@@ -211,9 +211,12 @@ e0 *= e1 = confluent e0 e1
 
 e0 *!= e1 = not (e0 *= e1)
 
+renameETypes = runRename' . walkETypesM rename
+
 eval :: Expr -> Either ExprEvalError Expr
 eval expr = case runSignify expr' of
   Left err -> Left $ CompilationTypeError err
   Right env -> runReduce' env expr'
   where
-    expr' = runRename expr
+    rn = renameETypes . runRename
+    expr' = rn expr

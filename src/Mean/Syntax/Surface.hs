@@ -59,22 +59,33 @@ data Expr
   deriving (Prel.Eq, Ord)
 
 instance Walkable Expr where
-  walkMC' f expr =
-    let go = walkMC' f
-     in f expr $ \case
-          EApp e0 e1 -> EApp <$> go e0 <*> go e1
-          ECond x y z -> ECond <$> go x <*> go y <*> go z
-          EUnOp op e -> EUnOp op <$> go e
-          EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
-          ETree t -> ETree <$> mapM go t
-          ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
-          ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
-          ETup es -> ETup <$> mapM go es
-          ELam b e -> ELam b <$> go e
-          ETyCase e cs -> ETyCase <$> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
-          -- ELet Var Expr Expr
-          EFix v e -> EFix v <$> go e
-          e' -> f e' pure
+  walkMC' f expr = f expr ctn
+    where
+      go = walkMC' f
+      ctn = \case
+        EApp e0 e1 -> EApp <$> go e0 <*> go e1
+        ECond x y z -> ECond <$> go x <*> go y <*> go z
+        EUnOp op e -> EUnOp op <$> go e
+        EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
+        ETree t -> ETree <$> mapM go t
+        ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
+        ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
+        ETup es -> ETup <$> mapM go es
+        ELam b e -> ELam b <$> go e
+        ETyCase e cs -> ETyCase <$> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
+        EFix v e -> EFix v <$> go e
+        e' -> f e' pure
+
+walkETypesM m = walkM $ \case
+  ELam (Binder b t) e -> do
+    t' <- m t
+    pure $ ELam (Binder b t') e
+  ETyCase c cs -> ETyCase c <$> mapM m' cs
+    where
+      m' (Binder p t, e') = do
+        t' <- m t
+        pure (Binder p t', e')
+  e' -> pure e'
 
 instance Pretty Lit where
   ppr p l = case l of
@@ -129,7 +140,7 @@ instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder b t) = char 'λ' <> text (show b)
+  ppr p (Binder b t) = char 'λ' <> text (show b) <> angles (ppr p t)
 
 instance Show b => Show (Binder b) where
   show = show . ppr 0
@@ -148,7 +159,7 @@ mkEVar = EVar . mkVar
 (+>) (e, t) = ELam $ (&>) (e, t)
 
 (~>) :: Expr -> Expr -> Expr
-(~>) e = (+>) (e, TyNil)
+(~>) e = (+>) (e, mkTv "A")
 
 infixl 9 *
 
@@ -188,7 +199,7 @@ typedChurchBranch ty =
   let [e, b@(EVar bV), x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
    in x ~> (l ~> (r ~> (e ~> ELam (Binder bV ty) (b * x * (l * e * b) * (r * e * b)))))
 
-churchBranch = typedChurchBranch TyNil
+churchBranch = typedChurchBranch (mkTv "A")
 
 mkTypedChurchTree :: Type -> T.Tree Expr -> Expr
 mkTypedChurchTree ty t = case t of
@@ -196,7 +207,7 @@ mkTypedChurchTree ty t = case t of
   T.Node e l r -> typedChurchBranch ty * e * mkTypedChurchTree ty l * mkTypedChurchTree ty r
 
 mkChurchTree :: T.Tree Expr -> Expr
-mkChurchTree = mkTypedChurchTree TyNil
+mkChurchTree = mkTypedChurchTree (mkTv "A")
 
 -- λf. (λx. f (x x)) (λx . f (x x))
 yCombinator =
