@@ -6,7 +6,7 @@ module Mean.Context where
 
 import Control.Monad (replicateM)
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State (MonadState (get, put), StateT, evalStateT)
+import Control.Monad.State (MonadState (get, put), StateT, evalStateT, state)
 import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -94,21 +94,23 @@ instance Contextual a => Contextual (Env a) where
 (<.>) :: Substitutable a a => Env a -> Env a -> Env a
 (<.>) e0 e1 = Map.map (inEnv e0) e1 `Map.union` e0
 
-type RenameM a = StateT Int Identity a
+type FreshT m = StateT Int m
 
-next :: Var -> RenameM Var
-next (Var vPub _) = do
-  s <- get
-  put (s + 1)
-  pure $ Var vPub (show s)
+type FreshM a = FreshT Identity a
+
+fresh :: FreshM Int
+fresh = state (\s -> (s + 1, s + 1))
+
+next :: Var -> FreshM Var
+next (Var vPub _) = Var vPub . show <$> fresh
 
 class Contextual a => Renamable a where
-  rename' :: Set.Set Var -> a -> RenameM a
+  rename' :: Set.Set Var -> a -> FreshM a
 
-  rename :: a -> RenameM a
+  rename :: a -> FreshM a
   rename expr = rename' (fv expr) expr
 
-  runRename' :: RenameM a -> a
+  runRename' :: FreshM a -> a
   runRename' m = runIdentity $ evalStateT m 0
 
   runRename :: a -> a

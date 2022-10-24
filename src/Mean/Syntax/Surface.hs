@@ -159,7 +159,7 @@ mkEVar = EVar . mkVar
 (+>) (e, t) = ELam $ (&>) (e, t)
 
 (~>) :: Expr -> Expr -> Expr
-(~>) e = (+>) (e, mkTv "A")
+(~>) e = (+>) (e, TyNil)
 
 infixl 9 *
 
@@ -199,7 +199,7 @@ typedChurchBranch ty =
   let [e, b@(EVar bV), x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
    in x ~> (l ~> (r ~> (e ~> ELam (Binder bV ty) (b * x * (l * e * b) * (r * e * b)))))
 
-churchBranch = typedChurchBranch (mkTv "A")
+churchBranch = typedChurchBranch TyNil
 
 mkTypedChurchTree :: Type -> T.Tree Expr -> Expr
 mkTypedChurchTree ty t = case t of
@@ -207,7 +207,7 @@ mkTypedChurchTree ty t = case t of
   T.Node e l r -> typedChurchBranch ty * e * mkTypedChurchTree ty l * mkTypedChurchTree ty r
 
 mkChurchTree :: T.Tree Expr -> Expr
-mkChurchTree = mkTypedChurchTree (mkTv "A")
+mkChurchTree = mkTypedChurchTree TyNil
 
 -- λf. (λx. f (x x)) (λx . f (x x))
 yCombinator =

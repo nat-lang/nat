@@ -90,7 +90,16 @@ instance Contextual Type where
 instance Renamable Type where
   rename' vs t = flip walkM t $ \case
     TyVar v | Set.member v vs -> TyVar <$> next v
+    TyNil -> freshTv
     t' -> pure t'
+
+freshTv :: RenameM Type
+freshTv = do
+  v <- next
+  pure $ TyVar (Var v v)
+  where
+    next = ord <$> incr
+    incr = state (\i -> let i' = i + 1 in if i' == 91 then 65 else i')
 
 -------------------------------------------------------------------------------
 -- Inference
@@ -111,18 +120,6 @@ checkTy x = do
     Nothing -> throwError $ IUnboundVariable x env
     Just t -> pure t
 
-fresh :: TypeConstrain
-fresh = do
-  s <- get
-  let tv = mkTv $ letters !! count s
-  put s {count = count s + 1}
-  isStale <- asks (isIn tv)
-  if isStale
-    then fresh
-    else pure tv
-  where
-    isIn ty = elem ty . map snd . Map.toList
-
 tyOp op = case op of S.Add -> tyInt; S.Sub -> tyInt; S.Mul -> tyInt; _ -> tyBool
 
 constrainWith e v t = inTypeEnv (v, t) (principal e)
@@ -139,7 +136,7 @@ type Case = (S.Binder S.Expr, S.Expr)
 constrainCase :: (S.Binder S.Expr, S.Expr) -> ConstrainT Type S.Expr ConstraintState ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
-  tvs <- mapM (const fresh) vs
+  tvs <- mapM (const freshTv) vs
   let env = Map.fromList (zip vs tvs)
 
   (pT, pCs) <- local (Map.union env) (principal p)
@@ -176,32 +173,32 @@ instance Inferrable Type S.Expr ConstraintState where
       (t', cs) <- constrainWith e v t
       return (t `TyFun` t', cs)
     S.EFix v e -> do
-      tv <- fresh
+      tv <- freshTv
       constrainWith e v (TyFun tv tv)
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
-      tv <- fresh
+      tv <- freshTv
       return (tv, c0 ++ c1 ++ [(t0, t1 `TyFun` tv)])
     S.EBinOp op e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
-      tv <- fresh
+      tv <- freshTv
       return (tv, c0 ++ c1 ++ [(t0, t1), (tyOp op, tv)])
     S.ECond x y z -> do
       (tX, cX) <- principal x
       (tY, cY) <- principal y
       (tZ, cZ) <- principal z
-      tv <- fresh
+      tv <- freshTv
       return (tv, cX ++ cY ++ cZ ++ [(tX, tyBool), (tY, tv), (tZ, tv)])
     S.ETup es -> do
-      tv <- fresh
+      tv <- freshTv
       cs <- mapM principal es
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
     S.EWildcard -> return (TyWild, [])
     S.ETyCase e cases -> do
-      tv <- fresh
+      tv <- freshTv
       (et, eCs) <- principal e
       cTs <- mapM constrainCase cases
 
@@ -212,7 +209,7 @@ instance Inferrable Type S.Expr ConstraintState where
     S.ETree t -> do
       eTs <- mapM principal (toList t)
       let (tEs, cEs) = unzip eTs
-      tv <- fresh
+      tv <- freshTv
       let bTy = TyFun (refine tEs) tv
       let t' = S.mkTypedChurchTree bTy t
       (tv, cs) <- principal t'
@@ -244,6 +241,4 @@ instance Unifiable Type where
           (TyUnion ts, t) | some t ts -> pure mempty
           (t, TyUnion ts) | some t ts -> pure mempty
           (TyTup ts, TyTup ts') | length ts == length ts' -> unifyMany (zip ts ts')
-          -- (TyQuant (Univ vs t), t) ->
-          -- (t, TyQuant (Univ vs t)) ->
           _ -> throwError $ NotUnifiable t0 t1

@@ -40,6 +40,9 @@ data Type
   | TyUnion (Set.Set Type)
   | TyQuant (QExpr Type)
   | TyTyCase Type [(Type, Type)]
+  | -- TyNil is a placeholder left by the parser and factory functions in
+    -- lieu of an explicit type annotation. It says "make me a fresh tv"
+    TyNil
   | TyUndef
   | TyWild
   deriving (Prel.Eq, Ord)
@@ -80,6 +83,7 @@ instance Pretty Type where
   ppr p (TyQuant (Univ tvs ty)) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
   ppr p TyUndef = text "TyUndef"
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
+  ppr p TyNil = text "TyNil"
 
 instance Show Type where
   show = show . ppr 0
@@ -102,6 +106,9 @@ pTyTerm =
       P.parens $ P.commaSep pTyTerm <&> TyTup
     ]
 
+tyNil :: TyParser
+tyNil = pure TyNil
+
 pType :: TyParser
 pType = P.makeExprParser pTyTerm tyOps
   where
@@ -113,4 +120,4 @@ pTypeAssignment :: TyParser
 pTypeAssignment = P.reserved ":" >> pType
 
 pOptionalType :: TyParser
-pOptionalType = pTypeAssignment P.<|> pure (mkTv "A")
+pOptionalType = pTypeAssignment P.<|> tyNil

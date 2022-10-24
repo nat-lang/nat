@@ -29,12 +29,11 @@ type ConstraintEnv a = Map.Map Var a
 mkCEnv :: Map.Map k a
 mkCEnv = Map.empty
 
--- | Constraint generation monad stack
+-- | Inference stack
 type ConstrainT a b s r =
   ( ReaderT
       (ConstraintEnv a) -- environment parameterized over a
-      ( StateT
-          s -- arbitrary state
+      ( FreshT -- name supply
           ( Except
               (InferenceError a b) -- errors
           )
