@@ -46,9 +46,11 @@ instance Substitutable Expr Expr where
     _ -> ctn e'
 
 instance Renamable Expr where
+  next (Var vPub _) = EVar <$> (Var vPub . show <$> fresh)
+
   rename' vs expr = flip walkM expr $ \case
     -- base case
-    EVar v | Set.member v vs -> EVar <$> next v
+    EVar v | Set.member v vs -> next v
     -- binding contexts
     ELam (Binder v t) e -> do
       (v', e') <- shift v e
@@ -58,16 +60,17 @@ instance Renamable Expr where
     -- nothing to do
     e -> pure e
 
-shift :: Var -> Expr -> RenameM (Var, Expr)
+shift :: Var -> Expr -> FreshM (Var, Expr)
 shift v e = do
-  v' <- next v
-  pure (v', sub v (EVar v') e)
+  ev' <- next v
+  let (EVar v') = ev'
+  pure (v', sub v ev' e)
 
-shiftBP :: (Binder Expr, Expr) -> RenameM (Binder Expr, Expr)
+shiftBP :: (Binder Expr, Expr) -> FreshM (Binder Expr, Expr)
 shiftBP (Binder p t, e) = do
   let bv = Set.toList $ fv p
 
-  bv' <- mapM ((pure . EVar) <=< next) bv
+  bv' <- mapM (next :: Var -> FreshM Expr) bv
 
   let s = Map.fromList $ zip bv bv'
   let [p', e'] = inEnv s <$> [p, e]

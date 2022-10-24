@@ -1,8 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Mean.Inference where
 
@@ -30,7 +28,7 @@ mkCEnv :: Map.Map k a
 mkCEnv = Map.empty
 
 -- | Inference stack
-type ConstrainT a b s r =
+type ConstrainT a b r =
   ( ReaderT
       (ConstraintEnv a) -- environment parameterized over a
       ( FreshT -- name supply
@@ -41,15 +39,15 @@ type ConstrainT a b s r =
       r -- result
   )
 
-type Constrain a b s = ConstrainT a b s (a, [Constraint a])
+type Constrain a b = ConstrainT a b (a, [Constraint a])
 
 unwrapSignature = \case
   Left err -> Left err
   Right (_, env, _) -> Right env
 
--- | Infer a from b in state s.
-class Unifiable a => Inferrable a b s | b -> s where
-  constrain :: b -> Constrain a b s
+-- | Infer a from b
+class Unifiable a => Inferrable a b where
+  constrain :: b -> Constrain a b
 
   unify' :: [Constraint a] -> b -> Either (InferenceError a b) (ConstraintEnv a)
   unify' cs b = case runUnify cs of
@@ -57,16 +55,16 @@ class Unifiable a => Inferrable a b s | b -> s where
     Right s -> Right s
 
   -- | Calculate incremental principal types
-  principal' :: b -> Constrain a b s
+  principal' :: b -> Constrain a b
   principal' b = do
     (a, cs) <- constrain b
     s <- liftEither (unify' cs b)
     pure (inEnv s a, cs)
 
-  principal :: b -> Constrain a b s
+  principal :: b -> Constrain a b
   principal = principal'
 
-  signify :: b -> ConstrainT a b s (a, ConstraintEnv a)
+  signify :: b -> ConstrainT a b (a, ConstraintEnv a)
   signify b = do
     (a, cs) <- principal b
     s <- liftEither (unify' cs b)
@@ -74,15 +72,15 @@ class Unifiable a => Inferrable a b s | b -> s where
 
   -- | Run the inference monad
   runInference' ::
-    s ->
+    Int ->
     ConstraintEnv a ->
-    Constrain a b s ->
+    Constrain a b ->
     Either (InferenceError a b) (a, [Constraint a])
   runInference' s env m = runExcept $ evalStateT (runReaderT m env) s
 
   runInference ::
     ConstraintEnv a ->
-    Constrain a b s ->
+    Constrain a b ->
     Either (InferenceError a b) (a, [Constraint a])
 
   inferIn :: ConstraintEnv a -> b -> Either (InferenceError a b) a
@@ -117,3 +115,5 @@ class Unifiable a => Inferrable a b s | b -> s where
   -- | Return the type signature an inference produces
   runSignify :: b -> Either (InferenceError a b) (ConstraintEnv a)
   runSignify = unwrapSignature . constraints
+
+  fresh :: 

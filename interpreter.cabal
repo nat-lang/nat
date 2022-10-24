@@ -26,6 +26,7 @@ library
       Mean.Cmd
       Mean.Context
       Mean.Control
+      Mean.Data
       Mean.Evaluation.Context
       Mean.Evaluation.Module
       Mean.Evaluation.Surface

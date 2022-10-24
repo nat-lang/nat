@@ -218,5 +218,5 @@ eval expr = case runSignify expr' of
   Left err -> Left $ CompilationTypeError err
   Right env -> runReduce' env expr'
   where
-    rn = renameETypes . runRename
-    expr' = rn expr
+    rename = renameETypes . runRename
+    expr' = rename expr

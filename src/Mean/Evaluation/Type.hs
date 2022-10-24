@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Evaluation.Type where
 
@@ -52,10 +53,7 @@ import Text.PrettyPrint (vcat, (<+>))
 -- Classes
 -------------------------------------------------------------------------------
 
--- | Constraint generation state
-newtype ConstraintState = CState {count :: Int} deriving (Show)
-
-type TypeConstrainT a = ConstrainT Type S.Expr ConstraintState a
+type TypeConstrainT r = ConstrainT Type S.Expr r
 
 type TypeConstrain = TypeConstrainT Type
 
@@ -66,11 +64,6 @@ instance Pretty (Constraint Type) where
 
 instance Pretty [Constraint Type] where
   ppr p cs = vcat $ fmap ((text "\t" <>) . ppr p) cs
-
-mkCState = CState {count = 0}
-
-letters :: [String]
-letters = [1 ..] >>= flip replicateM ['A' .. 'Z']
 
 instance Substitutable Type Type where
   sub v t = walk $ \t' -> case t' of
@@ -87,19 +80,24 @@ instance Contextual Type where
     TyTyCase b cs -> let (csL, csR) = unzip cs in Set.unions [fv b, fv csL, fv csR]
     TyQuant (Univ vs t) -> fv t `Set.difference` Set.fromList vs
 
+freshTv :: Monad m => FreshT m Type
+freshTv = do
+  i <- fresh
+  let c = 'A' : show i
+  pure $ TyVar (Var c c)
+
+freshTv' :: TypeConstrainT Type
+freshTv' = do
+  tv <- lift freshTv
+  pure tv
+
 instance Renamable Type where
+  next (Var vPub _) = TyVar <$> (Var vPub . show <$> fresh)
+
   rename' vs t = flip walkM t $ \case
-    TyVar v | Set.member v vs -> TyVar <$> next v
+    TyVar v | Set.member v vs -> next v
     TyNil -> freshTv
     t' -> pure t'
-
-freshTv :: RenameM Type
-freshTv = do
-  v <- next
-  pure $ TyVar (Var v v)
-  where
-    next = ord <$> incr
-    incr = state (\i -> let i' = i + 1 in if i' == 91 then 65 else i')
 
 -------------------------------------------------------------------------------
 -- Inference
@@ -133,7 +131,9 @@ type Case = (S.Binder S.Expr, S.Expr)
 --       the pattern's type to be equal
 --   (5) return the sum of the pattern and body's types +
 --       constraints incurred along the way
-constrainCase :: (S.Binder S.Expr, S.Expr) -> ConstrainT Type S.Expr ConstraintState ((Type, Type), [Constraint Type])
+constrainCase ::
+  (S.Binder S.Expr, S.Expr) ->
+  ConstrainT Type S.Expr ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
   tvs <- mapM (const freshTv) vs
@@ -146,9 +146,7 @@ constrainCase (S.Binder p t, expr) = do
 
 isVar = \case TyVar {} -> True; _ -> False
 
-instance Inferrable Type S.Expr ConstraintState where
-  runInference = runInference' mkCState
-
+instance Inferrable Type S.Expr where
   -- ETyCases get special treatment
   principal e = case e of
     S.ETyCase {} -> do
@@ -173,7 +171,7 @@ instance Inferrable Type S.Expr ConstraintState where
       (t', cs) <- constrainWith e v t
       return (t `TyFun` t', cs)
     S.EFix v e -> do
-      tv <- freshTv
+      tv <- freshTv'
       constrainWith e v (TyFun tv tv)
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
