@@ -41,7 +41,12 @@ library
       Mean.Unification
       Mean.Viz
       Mean.Walk
+      Nat.Cata
+      Nat.Context
+      Nat.Evaluation.Core
+      Nat.Reduction
       Nat.Syntax.Core
+      Nat.Syntax.Type
       Utils
   other-modules:
       Paths_interpreter
@@ -143,6 +148,7 @@ test-suite spec
       Mean.Syntax.ModuleSpec
       Mean.Syntax.SurfaceSpec
       Mean.Syntax.TypeSpec
+      Nat.Evaluation.Core
       Paths_interpreter
   hs-source-dirs:
       test
