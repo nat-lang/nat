@@ -120,4 +120,4 @@ pTypeAssignment :: TyParser
 pTypeAssignment = P.reserved ":" >> pType
 
 pOptionalType :: TyParser
-pOptionalType = pTypeAssignment P.<|> tyNil
+pOptionalType = P.try pTypeAssignment P.<|> tyNil

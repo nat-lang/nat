@@ -30,7 +30,7 @@ mkI = ELit . LInt
 
 mkS = ESet . Set.fromList
 
-mkEBind (EVar x) = EBind (Binder x (mkTv "A"))
+mkEBind (EVar x) = EBind (Binder x TyNil)
 
 spec :: Spec
 spec = do

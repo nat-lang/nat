@@ -213,12 +213,7 @@ mkChurchTree = mkTypedChurchTree TyNil
 yCombinator =
   let f = mkEVar "f"
       x = mkEVar "x"
-      tT = mkTv "T"
-      tA = mkTv "A"
-      tF = TyFun tT tT
-      tX = TyFun tA (TyFun tA tT)
-   in -- in (f, tF) +> (((x, tX) +> (f * (x * x))) * ((x, tX) +> (f * (x * x))))
-      f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
+   in f ~> ((x ~> (f * (x * x))) * (x ~> (f * (x * x))))
 
 mkFixPoint v e = yCombinator * (EVar v ~> e)
 

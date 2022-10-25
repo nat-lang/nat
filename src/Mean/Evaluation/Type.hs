@@ -30,6 +30,7 @@ import Control.Monad.State
     modify,
     state,
   )
+import Control.Monad.Trans (lift)
 import Data.Either (isRight)
 import Data.Foldable (toList)
 import Data.List (find, foldl', nub)
@@ -38,7 +39,8 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Context
+import Mean.Context hiding (fresh, fresh')
+import qualified Mean.Context as C
 import Mean.Evaluation.Context
 import Mean.Inference
 import Mean.Syntax.Logic
@@ -55,8 +57,6 @@ import Text.PrettyPrint (vcat, (<+>))
 
 type TypeConstrainT r = ConstrainT Type S.Expr r
 
-type TypeConstrain = TypeConstrainT Type
-
 type TypeEnv = ConstraintEnv Type
 
 instance Pretty (Constraint Type) where
@@ -64,40 +64,6 @@ instance Pretty (Constraint Type) where
 
 instance Pretty [Constraint Type] where
   ppr p cs = vcat $ fmap ((text "\t" <>) . ppr p) cs
-
-instance Substitutable Type Type where
-  sub v t = walk $ \t' -> case t' of
-    TyVar v' | v' == v -> t
-    _ -> t'
-
-instance Contextual Type where
-  fv t = case t of
-    TyCon {} -> Set.empty
-    TyWild -> Set.empty
-    TyVar a -> Set.singleton a
-    TyFun t0 t1 -> fv t0 `Set.union` fv t1
-    TyUnion ts -> foldMap fv ts
-    TyTyCase b cs -> let (csL, csR) = unzip cs in Set.unions [fv b, fv csL, fv csR]
-    TyQuant (Univ vs t) -> fv t `Set.difference` Set.fromList vs
-
-freshTv :: Monad m => FreshT m Type
-freshTv = do
-  i <- fresh
-  let c = 'A' : show i
-  pure $ TyVar (Var c c)
-
-freshTv' :: TypeConstrainT Type
-freshTv' = do
-  tv <- lift freshTv
-  pure tv
-
-instance Renamable Type where
-  next (Var vPub _) = TyVar <$> (Var vPub . show <$> fresh)
-
-  rename' vs t = flip walkM t $ \case
-    TyVar v | Set.member v vs -> next v
-    TyNil -> freshTv
-    t' -> pure t'
 
 -------------------------------------------------------------------------------
 -- Inference
@@ -111,7 +77,7 @@ inTypeEnv :: (Var, Type) -> TypeConstrainT a -> TypeConstrainT a
 inTypeEnv t = local (`extend` t)
 
 -- | Lookup type in the environment
-checkTy :: Var -> TypeConstrain
+checkTy :: Var -> TypeConstrainT Type
 checkTy x = do
   env <- ask
   case Map.lookup x env of
@@ -136,7 +102,7 @@ constrainCase ::
   ConstrainT Type S.Expr ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
-  tvs <- mapM (const freshTv) vs
+  tvs <- mapM (const fresh) vs
   let env = Map.fromList (zip vs tvs)
 
   (pT, pCs) <- local (Map.union env) (principal p)
@@ -146,7 +112,18 @@ constrainCase (S.Binder p t, expr) = do
 
 isVar = \case TyVar {} -> True; _ -> False
 
+mkChurchTree bTy t = do
+  let t' = S.mkTypedChurchTree bTy t
+  state (flip runFreshT $ renameETypesM t')
+
+freshIfNil :: Type -> TypeConstrainT Type
+freshIfNil t = case t of
+  TyNil -> fresh
+  _ -> pure t
+
 instance Inferrable Type S.Expr where
+  fresh = mkTv' <$> fresh'
+
   -- ETyCases get special treatment
   principal e = case e of
     S.ETyCase {} -> do
@@ -168,35 +145,36 @@ instance Inferrable Type S.Expr where
       t <- checkTy v
       return (t, [])
     S.ELam (S.Binder v t) e -> do
+      t <- freshIfNil t
       (t', cs) <- constrainWith e v t
       return (t `TyFun` t', cs)
     S.EFix v e -> do
-      tv <- freshTv'
+      tv <- fresh
       constrainWith e v (TyFun tv tv)
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
-      tv <- freshTv
+      tv <- fresh
       return (tv, c0 ++ c1 ++ [(t0, t1 `TyFun` tv)])
     S.EBinOp op e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
-      tv <- freshTv
+      tv <- fresh
       return (tv, c0 ++ c1 ++ [(t0, t1), (tyOp op, tv)])
     S.ECond x y z -> do
       (tX, cX) <- principal x
       (tY, cY) <- principal y
       (tZ, cZ) <- principal z
-      tv <- freshTv
+      tv <- fresh
       return (tv, cX ++ cY ++ cZ ++ [(tX, tyBool), (tY, tv), (tZ, tv)])
     S.ETup es -> do
-      tv <- freshTv
+      tv <- fresh
       cs <- mapM principal es
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
     S.EWildcard -> return (TyWild, [])
     S.ETyCase e cases -> do
-      tv <- freshTv
+      tv <- fresh
       (et, eCs) <- principal e
       cTs <- mapM constrainCase cases
 
@@ -207,9 +185,9 @@ instance Inferrable Type S.Expr where
     S.ETree t -> do
       eTs <- mapM principal (toList t)
       let (tEs, cEs) = unzip eTs
-      tv <- freshTv
+      tv <- fresh
       let bTy = TyFun (refine tEs) tv
-      let t' = S.mkTypedChurchTree bTy t
+      t' <- mkChurchTree bTy t
       (tv, cs) <- principal t'
       return (tv, concat $ cs : cEs)
     S.EUndef -> pure (TyUndef, [])

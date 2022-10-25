@@ -17,7 +17,7 @@ import Data.Tree.Binary.Preorder (Tree)
 import Debug.Trace (trace, traceM)
 import Mean.Context
 import Mean.Evaluation.Context
-import Mean.Evaluation.Type hiding (fresh, normalize)
+import Mean.Evaluation.Type hiding (fresh, mkChurchTree, normalize)
 import Mean.Inference
 import Mean.Reduction
 import Mean.Syntax.Surface
@@ -37,16 +37,6 @@ data ExprEvalError
   | RuntimeTypeError (InferenceError Type Expr)
   | CompilationTypeError (InferenceError Type Expr)
   deriving (P.Eq, Show)
-
-incrVarId :: Var -> Var
-incrVarId (Var vPub vPri) = Var vPub $ init vPri ++ show (digitToInt (last vPri) P.+ 1)
-
-fresh :: Var -> Var -> Set.Set Var -> Var
-fresh v0 v1 fv =
-  let v0' = incrVarId v0
-   in if v0' == v1 P.|| Set.member v0' fv
-        then fresh v0' v1 fv
-        else v0'
 
 bool :: Expr -> Bool
 bool e = case e of
@@ -192,12 +182,12 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
 instance Unifiable Expr where
   unify e0 e1 = case (e0, e1) of
     (EVar v0, EVar v1) | v0 == v1 -> pure mempty
+    (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
+    (EUndef, EUndef) -> pure mempty
     (EVar v, _) -> pure $ mkEnv v e1
     (_, EVar v) -> pure $ mkEnv v e0
-    (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
     (EWildcard, _) -> pure mempty
     (_, EWildcard) -> pure mempty
-    (EUndef, EUndef) -> pure mempty
     _ -> throwError $ NotUnifiable e0 e1
 
 type Normalization = Either ExprEvalError Expr
@@ -211,12 +201,9 @@ e0 *= e1 = confluent e0 e1
 
 e0 *!= e1 = not (e0 *= e1)
 
-renameETypes = runRename' . walkETypesM rename
-
 eval :: Expr -> Either ExprEvalError Expr
 eval expr = case runSignify expr' of
   Left err -> Left $ CompilationTypeError err
   Right env -> runReduce' env expr'
   where
-    rename = renameETypes . runRename
-    expr' = rename expr
+    expr' = evalRename expr

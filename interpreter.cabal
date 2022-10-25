@@ -41,6 +41,7 @@ library
       Mean.Unification
       Mean.Viz
       Mean.Walk
+      Nat.Syntax.Core
       Utils
   other-modules:
       Paths_interpreter

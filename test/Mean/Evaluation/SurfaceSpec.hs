@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Mean.Evaluation.SurfaceSpec where
 
 import qualified Data.Set as Set
@@ -329,6 +331,6 @@ spec = do
 
       -- PA composition, l(r)
       let paLR = faLR
-      let t = ETree (Node f (Node (EBind (Binder (mkVar "y") (mkTv "A"))) Leaf Leaf) (Node (x ~> x) Leaf Leaf))
+      let t = ETree (Node f (Node (EBind (Binder (mkVar "y") TyNil)) Leaf Leaf) (Node (x ~> x) Leaf Leaf))
 
       (t * churchLeaf * paLR) *= (z ~> (y ~> (x ~> x)))

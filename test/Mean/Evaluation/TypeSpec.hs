@@ -80,7 +80,7 @@ spec = do
 
     it "enforces constraints on equalities" $ do
       let env = mkTypeEnv [(xV, tyA), (yV, tyB)]
-      let (Right sub) = runSignifyIn env (x === y)
+      let (Right sub) = runSignifyIn (x === y) env
 
       inEnv sub tyA `shouldBe` inEnv sub tyB
 
@@ -88,15 +88,11 @@ spec = do
       let tyC = mkTv "C"
 
       let env = mkTypeEnv [(xV, tyA), (yV, tyB), (zV, tyC)]
-      let (Right (_, sub, ty)) = constraintsIn env (x ? y > z)
+      let (Right (_, sub, ty)) = constraintsIn (x ? y > z) env
 
       inEnv sub tyA `shouldBe` tyBool
       inEnv sub tyB `shouldBe` ty
       inEnv sub tyC `shouldBe` ty
-
-    -- it "types the y combinator" $ do
-    --   let a = mkTv "A"
-    --   infer yCombinator `shouldBe` Right (TyFun (TyFun a a) a)
 
     it "types recursive functions" $ do
       let iE = ELit . LInt
@@ -105,26 +101,21 @@ spec = do
       -- y = λf. (λx . f (x x)) (λx . f (x x))
       -- y * (λfλn. if n ≤ 1 then 1 else n * f (n - 1))
       let fact = EFix (mkVar "f") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (f * EBinOp Sub n (iE 1)))
-      -- let fact = EFix (mkVar "f") (n ~> ECond (EBinOp LTE n (iE 1)) (iE 1) (EBinOp Mul n (EApp f (EBinOp Sub n (iE 1)))))
       infer fact `shouldBe` Right (TyFun tyInt tyInt)
-
-    -- it "types trees" $ do
-    --   let (Right t) = parse pExpr "[0 [1] [2]]"
-    --   let (Right ty) = infer t
 
     it "types folds over trees" $ do
       let (Right t) = parse pExpr "[0 [1] [0]]"
       let (Right f) = parse pExpr "\\x:<X>.\\l:<L>.\\r:<R>. x + l + r"
-      traceM $ "\n" ++ show (t * zero * f)
-      let ty = infer $ renameETypes (t * zero * f)
+
+      let ty = infer (t * zero * f)
 
       ty `shouldBe` Right tyInt
 
-    it "types the domains of the branches of church trees with polymorphic nodes as union types" $ do
-      let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"
-      -- <unit, <
-      let (Right (TyFun _ (TyFun ty _))) = infer t
-      let tA = mkTv "A"
+    it "infers the domain of the branches of a church tree with polymorphic nodes to be a union type" $ do
+      let (Right t) = parse pExpr "[\\x.x [True] [0]]"
+
+      let (Right (TyFun _ (TyFun (TyFun ty _) _))) = infer t
+      let tA = mkTv "A1"
       ty `shouldBe` TyUnion (Set.fromList [tyBool, TyFun tA tA, tyInt])
 
     it "types parametric polymorphic functions" $ do
@@ -135,7 +126,6 @@ spec = do
   describe "the typecase expression" $ do
     -- these tests can be less circuitous when we have type
     -- annotations for terms other than binders
-    let tA = mkTv "A"
     let env = Map.fromList [(xV, tyInt)]
 
     it "has the type of its matched case body" $ do
@@ -149,7 +139,7 @@ spec = do
       let tB = mkTv "B"
       let tC = mkTv "C"
       let env' = Map.union env $ Map.fromList [(yV, tB), (wV, tC)]
-      let (Right (_, sub, _)) = constraintsIn env' tyCase
+      let (Right (_, sub, _)) = constraintsIn tyCase env'
 
       inEnv sub tB `shouldBe` tyInt
       inEnv sub tC `shouldBe` tyBool
@@ -157,8 +147,9 @@ spec = do
     let cases = [(Binder z tyInt, z === zero), (Binder z tyBool, z)]
 
     it "propagates the constraints of its argument" $ do
-      let env' = extend env (yV, tyInt)
-      let (Right (_, sub, _)) = constraintsIn env' (ETyCase (EBinOp Add x y) cases)
+      let tA = mkTv "A"
+      let env' = extend env (yV, tA)
+      let (Right (cs, sub, t)) = constraintsIn (ETyCase (EBinOp Add x y) cases) env'
 
       inEnv sub tA `shouldBe` tyInt
 

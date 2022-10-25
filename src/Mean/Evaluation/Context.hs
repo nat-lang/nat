@@ -1,18 +1,56 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Mean.Evaluation.Context where
 
-import Control.Monad (liftM, (<=<))
+import Control.Monad (forM, liftM, (<=<))
 import Data.Foldable (foldl', toList)
 import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
 import Mean.Context
+import Mean.Syntax.Logic
+import Mean.Syntax.Module
 import Mean.Syntax.Surface
+import Mean.Syntax.Type
 import Mean.Unification
 import Mean.Walk
+
+-------------------------------------------------------------------------------
+-- Type contexts
+-------------------------------------------------------------------------------
+
+instance Substitutable Type Type where
+  sub v t = walk $ \t' -> case t' of
+    TyVar v' | v' == v -> t
+    _ -> t'
+
+instance Contextual Type where
+  fv t = case t of
+    TyCon {} -> Set.empty
+    TyWild -> Set.empty
+    TyVar a -> Set.singleton a
+    TyFun t0 t1 -> fv t0 `Set.union` fv t1
+    TyUnion ts -> foldMap fv ts
+    TyTyCase b cs -> let (csL, csR) = unzip cs in Set.unions [fv b, fv csL, fv csR]
+    TyQuant (Univ vs t) -> fv t `Set.difference` Set.fromList vs
+    TyNil -> Set.empty
+
+mkTv' i = let c = 'A' : show i in TyVar (Var c c)
+
+instance Renamable Type where
+  next v = TyVar <$> next' v
+
+  rename' vs t = flip walkM t $ \case
+    TyVar v | Set.member v vs -> next v
+    TyNil -> mkTv' <$> fresh
+    t' -> pure t'
+
+-------------------------------------------------------------------------------
+-- Expression contexts
+-------------------------------------------------------------------------------
 
 instance Contextual Expr where
   fv expr = case expr of
@@ -30,7 +68,6 @@ instance Contextual Expr where
     ETup es -> fv es
     ELitCase e es -> fv e `Set.union` fv es
     ESet es -> fv (toList es)
-    -- ELet Var Expr Expr
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
@@ -44,21 +81,6 @@ instance Substitutable Expr Expr where
         ctn' p@(Binder b t, e) = if fvOf b v then p else (Binder b t, ctn e)
     -- otherwise continue the walk
     _ -> ctn e'
-
-instance Renamable Expr where
-  next (Var vPub _) = EVar <$> (Var vPub . show <$> fresh)
-
-  rename' vs expr = flip walkM expr $ \case
-    -- base case
-    EVar v | Set.member v vs -> next v
-    -- binding contexts
-    ELam (Binder v t) e -> do
-      (v', e') <- shift v e
-      pure (ELam (Binder v' t) e')
-    ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
-    EFix v e -> uncurry EFix <$> shift v e
-    -- nothing to do
-    e -> pure e
 
 shift :: Var -> Expr -> FreshM (Var, Expr)
 shift v e = do
@@ -76,3 +98,86 @@ shiftBP (Binder p t, e) = do
   let [p', e'] = inEnv s <$> [p, e]
 
   pure (Binder p' t, e')
+
+renameETypesM = walkETypesM rename
+
+instance Renamable Expr where
+  next v = EVar <$> next' v
+
+  rename' vs expr = flip walkM expr $ \case
+    -- base case
+    EVar v | Set.member v vs -> next v
+    -- binding contexts
+    ELam (Binder v t) e -> do
+      (v', e') <- shift v e
+      pure (ELam (Binder v' t) e')
+    ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
+    EFix v e -> uncurry EFix <$> shift v e
+    -- nothing to do
+    e -> pure e
+
+  evalRename = evalRename' . renameETypesM . evalRename' . rename
+
+-------------------------------------------------------------------------------
+-- Module contexts
+-------------------------------------------------------------------------------
+
+instance Contextual ModuleExpr where
+  fv = \case
+    MDecl _ e -> fv e
+    MLetRec v e -> fv e Set.\\ Set.singleton v
+    MExec e -> fv e
+  bv = \case
+    MDecl v _ -> Set.singleton v
+    MLetRec v _ -> Set.singleton v
+    _ -> Set.empty
+
+instance {-# OVERLAPPING #-} Contextual Module where
+  fv mod = fv' mod Set.\\ bv mod
+    where
+      fv' = foldr (Set.union . fv) Set.empty
+
+instance Substitutable Expr ModuleExpr where
+  sub v expr mExpr =
+    let sub' = sub v expr
+     in case mExpr of
+          MDecl v e -> MDecl v (sub' e)
+          MLetRec v' e | v /= v' -> MLetRec v' (sub' e)
+          MExec e -> MExec (sub' e)
+          _ -> mExpr
+
+instance Renamable ModuleExpr where
+  rename' vs mExpr = case mExpr of
+    MDecl v e -> MDecl v <$> rename' vs e
+    MLetRec v e -> MLetRec v <$> rename' vs e
+    MExec e -> MExec <$> rename' vs e
+
+instance Renamable Module where
+  rename' vs mod = (thdPass <=< sndPass <=< fstPass) mod
+    where
+      reBoundEnv mod = Map.fromList $ [(reset v, EVar v) | v <- Set.toList $ bv mod]
+
+      -- rename topmost let vars
+      fstPass :: Module -> FreshM Module
+      fstPass mod = forM mod $ \case
+        MDecl v e -> MDecl <$> next' v <*> pure e
+        MLetRec v e -> MLetRec <$> next' v <*> pure e
+        mExpr -> pure mExpr
+
+      -- update topmost let vars bound in every expr
+      sndPass :: Module -> FreshM Module
+      sndPass mod = pure $ inEnv (reBoundEnv mod) <$> mod
+
+      -- now rename each expr, ignoring the bound let vars
+      thdPass :: Module -> FreshM Module
+      thdPass mod =
+        let rename e = rename' vs e
+         in mapM rename mod
+
+  evalRename = evalRename' . m . evalRename' . rename
+    where
+      r = walkETypesM rename
+      m mod = forM mod $ \case
+        MDecl v e -> MDecl v <$> r e
+        MLetRec v e -> MLetRec v <$> r e
+        MExec e -> MExec <$> r e
