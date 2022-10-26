@@ -51,3 +51,10 @@ class Functor f => Substitutable f where
 
   sub :: Var -> Mu f -> Mu f -> Mu f
   sub v e = ana (out . sub' v e)
+
+{-
+bus :: Var -> f (Mu f) -> Mu f -> (Mu f -> r) -> r
+bus v e = anaC (bus' v e)
+
+bus' :: Var -> f (Mu f) -> Mu f -> (f (Mu f) -> r) -> r
+-}

@@ -32,10 +32,14 @@ instance Substitutable AExpr where
     In (EVar v') | v' == v -> e
     e' -> e'
 
-alg a v e = \case
-  In (EVar v') | v' == v -> e
-  In (ELam v' e') | v' == v -> a e'
-  e' -> e'
+sub'' :: Var -> Expr -> Expr -> (Expr -> r) -> r
+sub'' v e = anaC (foo v e)
+
+foo :: Var -> Expr -> Expr -> (Expr -> r) -> r
+foo v e expr next = case expr of
+  In (EVar v') | v' == v -> next e
+  In (ELam v' e') | v' == v -> next e'
+  e' -> next e'
 
 {-
 instance Reducible Expr Expr () CoreEvalError where

@@ -47,6 +47,7 @@ library
       Nat.Reduction
       Nat.Syntax.Core
       Nat.Syntax.Type
+      Nat.Viz
       Utils
   other-modules:
       Paths_interpreter
