@@ -1,14 +1,14 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Nat.Context where
 
+import Data.Fix
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Mean.Viz
-import Nat.Cata
+import Nat.Walk (Walkable (walkC))
 import Text.PrettyPrint
   ( char,
     text,
@@ -31,7 +31,7 @@ instance Ord Var where
   compare (Var _ v0) (Var _ v1) = compare v0 v1
 
 instance Show Var where
-  show (Var vPub vPri) = vPub -- ++ "(" ++ vPri ++ ")"
+  show (Var vPub vPri) = vPub ++ "(" ++ vPri ++ ")"
 
 instance Pretty [Var] where
   ppr p (v : vs) = text (show v) <> char ',' <> text (show v)
@@ -43,18 +43,18 @@ var v = Var v v
 class Functor f => Contextual f where
   fv' :: f (Set.Set Var) -> Set.Set Var
 
-  fv :: Mu f -> Set.Set Var
-  fv = cata fv'
+  fv :: Fix f -> Set.Set Var
+  fv = foldFix fv'
 
-class Functor f => Substitutable f where
-  sub' :: Var -> Mu f -> Mu f -> Mu f
+class (Walkable (Fix f), Functor f) => Substitutable f where
+  sub' :: (Fix f -> Fix f) -> Var -> Fix f -> Fix f -> Fix f
 
-  sub :: Var -> Mu f -> Mu f -> Mu f
-  sub v e = ana (out . sub' v e)
+  sub :: Var -> Fix f -> Fix f -> Fix f
+  sub v e = walkC $ \e' c -> sub' c v e e'
 
 {-
-bus :: Var -> f (Mu f) -> Mu f -> (Mu f -> r) -> r
+bus :: Var -> f (Fix f) -> Fix f -> (Fix f -> r) -> r
 bus v e = anaC (bus' v e)
 
-bus' :: Var -> f (Mu f) -> Mu f -> (f (Mu f) -> r) -> r
+bus' :: Var -> f (Fix f) -> Fix f -> (f (Fix f) -> r) -> r
 -}

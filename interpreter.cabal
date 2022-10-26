@@ -48,6 +48,7 @@ library
       Nat.Syntax.Core
       Nat.Syntax.Type
       Nat.Viz
+      Nat.Walk
       Utils
   other-modules:
       Paths_interpreter
@@ -62,6 +63,8 @@ library
     , containers
     , cookie >=0.4.3 && <0.5
     , data-default
+    , data-fix
+    , deriving-compat
     , directory
     , fast-logger
     , filepath
@@ -107,6 +110,8 @@ executable interpreter-exe
     , containers
     , cookie >=0.4.3 && <0.5
     , data-default
+    , data-fix
+    , deriving-compat
     , directory
     , fast-logger
     , filepath
@@ -149,7 +154,7 @@ test-suite spec
       Mean.Syntax.ModuleSpec
       Mean.Syntax.SurfaceSpec
       Mean.Syntax.TypeSpec
-      Nat.Evaluation.Core
+      Nat.Evaluation.CoreSpec
       Paths_interpreter
   hs-source-dirs:
       test
@@ -164,6 +169,8 @@ test-suite spec
     , containers
     , cookie >=0.4.3 && <0.5
     , data-default
+    , data-fix
+    , deriving-compat
     , directory
     , fast-logger
     , filepath

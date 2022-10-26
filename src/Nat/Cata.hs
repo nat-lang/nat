@@ -35,10 +35,14 @@ cataM f = f <=< mapM (cataM f) . out
 
 anaM ::
   (Traversable f, Monad m) =>
-  MonadicCoAlgebra f m a ->
+  (a -> m (f a)) ->
   a ->
   m (Mu f)
 anaM f = f >=> fmap In . mapM (anaM f)
 
-anaC :: Traversable f => (a -> (f a -> r) -> r) -> a -> (Mu f -> r) -> r
-anaC f e = runCont $ anaM (cont . f) e
+anaC ::
+  Traversable f =>
+  (a -> (f a -> Mu f) -> Mu f) -> -- continuized coalgebra
+  a ->
+  Mu f
+anaC f e = (`runCont` id) $ anaM (cont . f) e
