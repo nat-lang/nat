@@ -65,8 +65,6 @@ dependencies:
 
   - megaparsec
   - parser-combinators
-  - data-fix
-  - deriving-compat
 
 library:
   source-dirs:

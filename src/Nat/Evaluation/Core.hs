@@ -8,7 +8,6 @@ module Nat.Evaluation.Core where
 
 import Control.Monad.Cont (Cont, callCC, cont, runCont)
 import Control.Monad.Identity (Identity (Identity))
-import Data.Fix
 import qualified Data.Set as Set
 import Debug.Trace (trace)
 import Nat.Context
@@ -21,17 +20,17 @@ data CoreEvalError
   = MaxRecursion Expr
   | UnboundVar Expr
 
-instance Contextual AExpr where
-  fv' :: AExpr (Set.Set Var) -> Set.Set Var
-  fv' = \case
+instance Contextual Expr where
+  fv :: Expr -> Set.Set Var
+  fv = \case
     EVar v -> Set.singleton v
-    ELam v e -> e Set.\\ Set.singleton v
-    EApp e0 e1 -> e0 `Set.union` e1
+    ELam v e -> fv e Set.\\ Set.singleton v
+    EApp e0 e1 -> fv e0 `Set.union` fv e1
 
-instance Substitutable AExpr where
+instance Substitutable Expr Expr where
   sub' c v e e' = case e' of
-    Fix (EVar v') | v' == v -> e
-    Fix (ELam v' b) | v' == v -> e'
+    EVar v' | v' == v -> e
+    ELam v' b | v' == v -> e'
     e' -> c e'
 
 {-

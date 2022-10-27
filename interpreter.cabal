@@ -63,8 +63,6 @@ library
     , containers
     , cookie >=0.4.3 && <0.5
     , data-default
-    , data-fix
-    , deriving-compat
     , directory
     , fast-logger
     , filepath
@@ -110,8 +108,6 @@ executable interpreter-exe
     , containers
     , cookie >=0.4.3 && <0.5
     , data-default
-    , data-fix
-    , deriving-compat
     , directory
     , fast-logger
     , filepath
@@ -169,8 +165,6 @@ test-suite spec
     , containers
     , cookie >=0.4.3 && <0.5
     , data-default
-    , data-fix
-    , deriving-compat
     , directory
     , fast-logger
     , filepath

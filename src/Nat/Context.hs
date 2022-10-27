@@ -3,8 +3,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Nat.Context where
-
-import Data.Fix
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Mean.Viz
@@ -40,21 +38,11 @@ instance Pretty [Var] where
 var :: Name -> Var
 var v = Var v v
 
-class Functor f => Contextual f where
-  fv' :: f (Set.Set Var) -> Set.Set Var
+class Substitutable a b where
+  sub' :: (b -> b) -> Var -> a -> b -> b
 
-  fv :: Fix f -> Set.Set Var
-  fv = foldFix fv'
-
-class (Walkable (Fix f), Functor f) => Substitutable f where
-  sub' :: (Fix f -> Fix f) -> Var -> Fix f -> Fix f -> Fix f
-
-  sub :: Var -> Fix f -> Fix f -> Fix f
+  sub :: Walkable b => Var -> a -> b -> b
   sub v e = walkC $ \e' c -> sub' c v e e'
 
-{-
-bus :: Var -> f (Fix f) -> Fix f -> (Fix f -> r) -> r
-bus v e = anaC (bus' v e)
-
-bus' :: Var -> f (Fix f) -> Fix f -> (f (Fix f) -> r) -> r
--}
+class Contextual a where
+  fv :: a -> Set.Set Var
