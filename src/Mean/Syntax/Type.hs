@@ -38,7 +38,6 @@ data Type
   | TyFun Type Type
   | TyTup [Type]
   | TyUnion (Set.Set Type)
-  | TyQuant (QExpr Type)
   | TyTyCase Type [(Type, Type)]
   | -- TyNil is a placeholder left by the parser and factory functions in
     -- lieu of an explicit type annotation. It says "make me a fresh tv"
@@ -55,7 +54,6 @@ instance Walkable Type where
         TyFun t0 t1 -> TyFun <$> go t0 <*> go t1
         TyTup ts -> TyTup <$> mapM go ts
         TyUnion ts -> TyUnion . Set.fromList <$> mapM go (Set.toList ts)
-        TyQuant (Univ v t) -> TyQuant <$> (Univ v <$> go t)
         TyTyCase v ts -> do
           let (tsL, tsR) = unzip ts
           tsL' <- mapM go tsL
@@ -80,9 +78,8 @@ instance Pretty Type where
   ppr p (TyFun a b) = ppr (p + 1) a <> text "->" <> ppr (p + 1) b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
-  ppr p (TyQuant (Univ tvs ty)) = "Forall" <+> brackets (ppr p tvs) <> ":" <+> ppr p ty
-  ppr p TyUndef = text "TyUndef"
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
+  ppr p TyUndef = text "TyUndef"
   ppr p TyNil = text "TyNil"
 
 instance Show Type where

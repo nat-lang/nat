@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -35,7 +36,6 @@ instance Contextual Type where
     TyTup ts -> foldMap fv ts
     TyTyCase b cs -> let (csL, csR) = unzip cs in Set.unions [fv b, fv csL, fv csR]
     TyUnion ts -> foldMap fv ts
-    TyQuant (Univ vs t) -> fv t `Set.difference` Set.fromList vs
     TyNil -> Set.empty
     TyWild -> Set.empty
     TyUndef -> Set.empty

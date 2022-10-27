@@ -18,6 +18,7 @@ import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (trace, traceM)
 import Mean.Context
 import qualified Mean.Parser as P
+import Mean.Syntax.Logic
 import Mean.Syntax.Type
 import Mean.Viz
 import Mean.Walk
@@ -31,7 +32,9 @@ data Lit
   | LBool Bool
   deriving (Prel.Eq, Ord, Show)
 
-data Binder b = Binder b Type deriving (Prel.Eq, Ord)
+data ABinder b t = Binder b t deriving (Prel.Eq, Ord)
+
+type Binder b = ABinder b Type
 
 data UnOp = Neg deriving (Prel.Eq, Ord, Show)
 
@@ -53,7 +56,9 @@ data Expr
   | ELet Var Expr Expr
   | EFix Var Expr
   | ETup [Expr]
-  | EIdx Int
+  | EIdx Int -- TODO: parse me
+  | EDom Type (Set.Set Expr)
+  | EQnt (QExpr (ABinder [Var] [Type]) Expr)
   | EWildcard
   | EUndef
   deriving (Prel.Eq, Ord)

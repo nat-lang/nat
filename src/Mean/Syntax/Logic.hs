@@ -15,16 +15,16 @@ import Text.PrettyPrint
   )
 import Prelude hiding ((<>))
 
-data QExpr a
-  = Univ ![Var] !a
-  | Exis ![Var] !a
+data QExpr v a
+  = Univ !v !a
+  | Exis !v !a
   deriving (Eq, Ord, Show)
 
-pq :: (Pretty p, Pretty [a]) => Int -> [a] -> p -> Doc
-pq p vs b = brackets (ppr p vs) <> ":" <+> ppr p b
+pq :: (Pretty p, Pretty a) => Int -> a -> p -> Doc
+pq p v b = brackets (ppr p v) <> ":" <+> ppr p b
 
-instance Pretty a => Pretty (QExpr a) where
-  ppr :: Pretty a => Int -> QExpr a -> Doc
+instance (Pretty a, Pretty v) => Pretty (QExpr v a) where
+  ppr :: Int -> QExpr v a -> Doc
   ppr p qe = case qe of
-    Univ vs b -> "Forall" <+> pq p vs b
-    Exis vs b -> "Exists" <+> pq p vs b
+    Univ v b -> "Forall" <+> pq p v b
+    Exis v b -> "Exists" <+> pq p v b
