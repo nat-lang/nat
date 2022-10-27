@@ -40,10 +40,7 @@ type ModuleEnv = Map.Map Var Expr
 toExpr = \case MDecl _ e -> e; MLetRec v e -> EFix v e; MExec e -> e
 
 instance Reducible ModuleExpr ModuleExpr ExprEvalError TypeEnv where
-  reduce = \case
-    MDecl v e -> MDecl v <$> reduce e
-    MLetRec v e -> MLetRec v <$> reduce (EFix v e)
-    MExec e -> MExec <$> reduce e
+  reduce = mapM reduce
 
 toEnv t = \case
   MDecl v _ -> Map.singleton v t

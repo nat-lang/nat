@@ -67,13 +67,17 @@ idxOf _ = error "not an index"
 reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
 
 instance Reducible (Tree Expr) Expr ExprEvalError TypeEnv where
+  -- TODO: instantiate the tree with fresh variable names.
+  -- currently we avoid shadowing by using a different format for
+  -- church tree vars (e.g. lower case letters, no indexes), but
+  -- this only works if no two trees are in the same scope.
   reduce t = reduce $ mkChurchTree t
 
 instance Reducible Expr Expr ExprEvalError TypeEnv where
   runReduce = runReduce' mkCEnv
   runNormalize = runNormalize' mkCEnv
 
-  -- cbn
+  -- cbn reduction to weak head normal form
   reduce expr = case expr of
     -- (1) leftmost, outermost
     EApp e0 e1 -> case e0 of
@@ -164,6 +168,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
     -- (3) var/literal
     _ -> pure expr
 
+  -- reduction to normal form
   normalize expr =
     reduce expr >>= \case
       ELam b body -> do

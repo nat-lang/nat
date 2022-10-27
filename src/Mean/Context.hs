@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -82,12 +81,15 @@ instance Contextual a => Contextual (Pair a) where
   fv :: Contextual a => (a, a) -> Set.Set Var
   fv (t0, t1) = fv t0 `Set.union` fv t1
 
+unfoldSet :: (a -> Set.Set Var) -> [a] -> Set.Set Var
+unfoldSet f = foldr (Set.union . f) Set.empty
+
 instance {-# OVERLAPPABLE #-} Contextual a => Contextual [a] where
   fv :: [a] -> Set.Set Var
-  fv = foldr (Set.union . fv) Set.empty
+  fv = unfoldSet fv
 
   bv :: Contextual a => [a] -> Set.Set Var
-  bv = foldr (Set.union . bv) Set.empty
+  bv = unfoldSet bv
 
 instance Contextual a => Contextual (Env a) where
   fv :: Contextual a => Env a -> Set.Set Var
@@ -115,13 +117,14 @@ evalFreshT s m = runIdentity $ evalStateT m s
 runFreshT :: Int -> FreshT Identity a -> (a, Int)
 runFreshT s m = runIdentity $ runStateT m s
 
+-- | A renamable `a` conforms to the barendregt convention.
 class Contextual a => Renamable a where
   rename' :: Set.Set Var -> a -> FreshM a
 
   next :: Var -> FreshM a
 
   rename :: a -> FreshM a
-  rename expr = rename' (fv expr) expr
+  rename a = rename' (fv a) a
 
   evalRename' :: FreshM a -> a
   evalRename' = evalFreshT 0
@@ -135,11 +138,10 @@ class Contextual a => Renamable a where
   runRename :: a -> (a, Int)
   runRename a = runRename' (rename a)
 
-  alphaEq :: Eq a => a -> a -> Bool
-  alphaEq e0 e1 = evalRename e0 == evalRename e1
-
+-- | Expressions should be reduced before checking
+--   for alpha equivalence.
+class AlphaComparable a where
   (@=) :: Eq a => a -> a -> Bool
-  (@=) = alphaEq
 
   (@!=) :: Eq a => a -> a -> Bool
   e0 @!= e1 = not (e0 @= e1)

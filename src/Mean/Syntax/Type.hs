@@ -48,7 +48,7 @@ data Type
   deriving (Prel.Eq, Ord)
 
 instance Walkable Type where
-  walkMC' f ty = f ty ctn
+  walkMC' f ty = f ctn ty
     where
       go = walkMC' f
       ctn = \case
@@ -62,7 +62,7 @@ instance Walkable Type where
           tsR' <- mapM go tsR
           v' <- go v
           pure $ TyTyCase v' (zip tsL' tsR')
-        t' -> f t' pure
+        t' -> f pure t'
 
 mkTv :: String -> Type
 mkTv = TyVar . mkVar

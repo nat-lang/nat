@@ -23,37 +23,31 @@ import Mean.Walk
 -------------------------------------------------------------------------------
 
 instance Substitutable Type Type where
-  sub v t = walk $ \t' -> case t' of
+  sub v t = walk $ \case
     TyVar v' | v' == v -> t
-    _ -> t'
+    t' -> t'
 
 instance Contextual Type where
-  fv t = case t of
-    TyCon {} -> Set.empty
-    TyWild -> Set.empty
+  fv = \case
     TyVar a -> Set.singleton a
+    TyCon {} -> Set.empty
     TyFun t0 t1 -> fv t0 `Set.union` fv t1
-    TyUnion ts -> foldMap fv ts
+    TyTup ts -> foldMap fv ts
     TyTyCase b cs -> let (csL, csR) = unzip cs in Set.unions [fv b, fv csL, fv csR]
+    TyUnion ts -> foldMap fv ts
     TyQuant (Univ vs t) -> fv t `Set.difference` Set.fromList vs
     TyNil -> Set.empty
+    TyWild -> Set.empty
+    TyUndef -> Set.empty
 
 mkTv' i = let c = 'A' : show i in TyVar (Var c c)
-
-instance Renamable Type where
-  next v = TyVar <$> next' v
-
-  rename' vs t = flip walkM t $ \case
-    TyVar v | Set.member v vs -> next v
-    TyNil -> mkTv' <$> fresh
-    t' -> pure t'
 
 -------------------------------------------------------------------------------
 -- Expression contexts
 -------------------------------------------------------------------------------
 
 instance Contextual Expr where
-  fv expr = case expr of
+  fv = \case
     EVar v -> Set.singleton v
     ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
     ETyCase e cs ->
@@ -71,16 +65,16 @@ instance Contextual Expr where
     _ -> Set.empty
 
 instance Substitutable Expr Expr where
-  sub v e = walkC $ \e' ctn -> case e' of
+  sub v e = walkC $ \ctn -> \case
     -- base case
     EVar v' | v' == v -> e
     -- ignore contexts that already bind v
-    ELam (Binder bv t) _ | bv == v -> e'
+    e'@(ELam (Binder bv t) _) | bv == v -> e'
     ETyCase c cs -> ETyCase (ctn c) (fmap ctn' cs)
       where
         ctn' p@(Binder b t, e) = if fvOf b v then p else (Binder b t, ctn e)
     -- otherwise continue the walk
-    _ -> ctn e'
+    e' -> ctn e'
 
 shift :: Var -> Expr -> FreshM (Var, Expr)
 shift v e = do
@@ -99,8 +93,6 @@ shiftBP (Binder p t, e) = do
 
   pure (Binder p' t, e')
 
-renameETypesM = walkETypesM rename
-
 instance Renamable Expr where
   next v = EVar <$> next' v
 
@@ -116,7 +108,33 @@ instance Renamable Expr where
     -- nothing to do
     e -> pure e
 
-  evalRename = evalRename' . renameETypesM . evalRename' . rename
+instance AlphaComparable Expr where
+  (@=) e0 e1 = evalRename e0 == evalRename e1
+
+-------------------------------------------------------------------------------
+-- Explicit type contexts
+-------------------------------------------------------------------------------
+
+-- take care to preserve the syntactic identity of variables
+-- within the scopes of typed lambdas and tycase patterns
+renameETypes :: Expr -> FreshM Expr
+renameETypes = walkM $ \case
+  ELam b e -> do
+    b' <- renameB b
+    pure $ ELam b e
+  ETyCase c cs -> ETyCase c <$> mapM m' cs
+    where
+      m' (b, e) = do
+        b' <- renameB b
+        pure (b', e)
+  e' -> pure e'
+  where
+    renameB (Binder v t) = do
+      let fvs = Set.toList $ fv t
+      tvs <- mapM (fmap TyVar . next') fvs
+      let sub = Map.fromList (zip fvs tvs)
+      let t' = inEnv sub t
+      pure (Binder v t')
 
 -------------------------------------------------------------------------------
 -- Module contexts
@@ -133,9 +151,8 @@ instance Contextual ModuleExpr where
     _ -> Set.empty
 
 instance {-# OVERLAPPING #-} Contextual Module where
-  fv mod = fv' mod Set.\\ bv mod
-    where
-      fv' = foldr (Set.union . fv) Set.empty
+  fv mod = unfoldSet fv mod Set.\\ bv mod
+  bv = unfoldSet bv
 
 instance Substitutable Expr ModuleExpr where
   sub v expr mExpr =
@@ -174,10 +191,6 @@ instance Renamable Module where
         let rename e = rename' vs e
          in mapM rename mod
 
-  evalRename = evalRename' . m . evalRename' . rename
+  evalRename = evalRename' . renameTypes . evalRename' . rename
     where
-      r = walkETypesM rename
-      m mod = forM mod $ \case
-        MDecl v e -> MDecl v <$> r e
-        MLetRec v e -> MLetRec v <$> r e
-        MExec e -> MExec <$> r e
+      renameTypes mod = forM mod (mapM renameETypes)

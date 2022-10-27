@@ -4,18 +4,18 @@ import Control.Monad ((<=<))
 import Control.Monad.Identity
 
 class Walkable a where
-  walkMC' :: Monad m => (a -> (a -> m a) -> m a) -> a -> m a
+  walkMC' :: Monad m => ((a -> m a) -> a -> m a) -> a -> m a
 
-  walkC' :: (a -> (a -> a) -> a) -> a -> a
+  walkC' :: ((a -> a) -> a -> a) -> a -> a
   walkC' f = runIdentity . walkMC' f'
     where
-      f' e c = pure $ f e (runIdentity . c)
+      f' c = pure . f (runIdentity . c)
 
-  walkC :: (a -> (a -> a) -> a) -> a -> a
+  walkC :: ((a -> a) -> a -> a) -> a -> a
   walkC f = walkC' f
 
   walkM' :: Monad m => (a -> m a) -> a -> m a
-  walkM' f = walkMC' (\e c -> (c <=< f) e)
+  walkM' f = walkMC' (<=< f)
 
   walkM :: Monad m => (a -> m a) -> a -> m a
   walkM f = walkM' f

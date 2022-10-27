@@ -59,7 +59,7 @@ data Expr
   deriving (Prel.Eq, Ord)
 
 instance Walkable Expr where
-  walkMC' f expr = f expr ctn
+  walkMC' f expr = f ctn expr
     where
       go = walkMC' f
       ctn = \case
@@ -74,18 +74,7 @@ instance Walkable Expr where
         ELam b e -> ELam b <$> go e
         ETyCase e cs -> ETyCase <$> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
         EFix v e -> EFix v <$> go e
-        e' -> f e' pure
-
-walkETypesM m = walkM $ \case
-  ELam (Binder b t) e -> do
-    t' <- m t
-    pure $ ELam (Binder b t') e
-  ETyCase c cs -> ETyCase c <$> mapM m' cs
-    where
-      m' (Binder p t, e') = do
-        t' <- m t
-        pure (Binder p t', e')
-  e' -> pure e'
+        e' -> f pure e'
 
 instance Pretty Lit where
   ppr p l = case l of

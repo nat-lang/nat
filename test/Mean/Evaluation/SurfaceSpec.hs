@@ -5,7 +5,9 @@ module Mean.Evaluation.SurfaceSpec where
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import Mean.Context
+import Mean.Context (evalFreshT)
 import qualified Mean.Context as C
+import Mean.Evaluation.Context
 import Mean.Evaluation.Surface hiding ((*=), (@=))
 import qualified Mean.Evaluation.Surface as E
 import Mean.Parser (parse)
@@ -51,8 +53,41 @@ spec = do
       -- (2) typecase patterns
       -- tycase x of z:<n> -> z + 1 | y:<t> -> !z(y)
       let tyCase0 = ETyCase x [(Binder z tyInt, EBinOp Add z one), (Binder y tyBool, EUnOp Neg (EApp z y))]
+      -- tycase x of z:<n> -> z + 1 | y:<t> -> !(\x.x)(y)
       let tyCase1 = ETyCase x [(Binder z tyInt, EBinOp Add z one), (Binder y tyBool, EUnOp Neg (EApp (f ~> f) y))]
       sub zV (f ~> f) tyCase0 `shouldBe` tyCase1
+
+  describe "rename" $ do
+    it "preserves the syntactic identity of variables in a scope" $ do
+      -- TODO: write me
+      True `shouldBe` False
+
+  describe "renameETypes" $ do
+    let rename = evalRename' . renameETypes
+
+    it "preserves the syntactic identity of type variables in the scope of a lambda binding" $ do
+      let tA = mkTv "A"
+      let tF = TyFun tA tA
+      let lam = (z, tF) +> (z ~> z)
+
+      let (ELam (Binder _ (TyFun t0 t1)) _) = rename lam
+
+      t0 `shouldBe` t1
+
+    it "preserves the syntactic identity of type variables in the scope of a tycase pattern binding" $ do
+      let p = ETup [l, r]
+      let [tA, tB] = mkTv <$> ["A", "B"]
+      let tF = TyFun tA tB
+      -- λx . tycase x of (l,r):(<A, B>, <A>) -> l(r) | (l,r):(<A>, <A, B>) -> r(l)
+      let tyCase = ETyCase x [(Binder p (TyTup [tF, tA]), l * r), (Binder p (TyTup [tA, tF]), r * l)]
+
+      let (ETyCase _ [(Binder _ (TyTup [tF', tA']), _), (Binder _ (TyTup [tA'', tF'']), _)]) = rename tyCase
+
+      let (TyFun d _) = tF'
+      d `shouldBe` tA'
+
+      let (TyFun d _) = tF''
+      d `shouldBe` tA''
 
   describe "alpha equivalence (@=)" $ do
     let (@=) e0 e1 = (e0 C.@= e1) @?= True
@@ -65,9 +100,9 @@ spec = do
       -- λfλx . x(f) == λfλy . y(f)
       (f ~> (x ~> (x * f))) @= (f ~> (y ~> (y * f)))
     it "recognizes syntactic equivalence" $ do
-      -- this is naturally a special case of alpha equivalence,
-      -- but probably @= should check for syntactic equivalence
-      -- before trying substitutions for the sake of efficiency. tbc
+      -- e.g. no renaming is necessary. probably (@=)
+      -- should check for syntactic equivalence
+      -- before renaming for the sake of economy. tbc
       x @= x
       id @= id
       (x ~> x) @= (x ~> x)

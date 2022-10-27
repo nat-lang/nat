@@ -1,4 +1,6 @@
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Mean.Syntax.Module where
@@ -12,11 +14,13 @@ import Mean.Syntax.Surface
 import Mean.Walk
 import Text.Megaparsec.Debug (dbg)
 
-data ModuleExpr
-  = MDecl Var Expr
-  | MLetRec Var Expr
-  | MExec Expr
-  deriving (Eq, Show, Ord)
+data ModuleExprR e
+  = MDecl Var e
+  | MLetRec Var e
+  | MExec e
+  deriving (Eq, Show, Ord, Functor, Foldable, Traversable)
+
+type ModuleExpr = ModuleExprR Expr
 
 type Module = [ModuleExpr]
 

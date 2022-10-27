@@ -114,7 +114,7 @@ isVar = \case TyVar {} -> True; _ -> False
 
 mkChurchTree bTy t = do
   let t' = S.mkTypedChurchTree bTy t
-  state (flip runFreshT $ renameETypesM t')
+  state (flip runFreshT $ renameETypes t')
 
 freshIfNil :: Type -> TypeConstrainT Type
 freshIfNil t = case t of
@@ -124,7 +124,11 @@ freshIfNil t = case t of
 instance Inferrable Type S.Expr where
   fresh = mkTv' <$> fresh'
 
-  -- ETyCases get special treatment
+  -- ETyCases get special treatment, namely:
+  -- if the scrutinee has a non-variable principal
+  -- type at this step, then we determine the
+  -- matched pattern/body, and thus the principal type
+  -- of the whole case expression, otherwise we defer
   principal e = case e of
     S.ETyCase {} -> do
       (t, cs) <- principal' e
@@ -187,6 +191,8 @@ instance Inferrable Type S.Expr where
       let (tEs, cEs) = unzip eTs
       tv <- fresh
       let bTy = TyFun (refine tEs) tv
+      -- use the name supply of the inference monad
+      -- to instantiate a fresh typed church tree
       t' <- mkChurchTree bTy t
       (tv, cs) <- principal t'
       return (tv, concat $ cs : cEs)
