@@ -4,17 +4,10 @@
 
 module Mean.Evaluation.Surface where
 
-import Control.Monad ((>=>))
-import Control.Monad.Except (ExceptT, runExceptT, throwError)
-import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.Reader (ReaderT (runReaderT), ask)
-import Data.Char (digitToInt)
-import Data.Foldable (toList)
-import Data.List (foldl')
-import qualified Data.Map as Map
+import Control.Monad.Except (throwError)
+import Control.Monad.Reader (ask)
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
-import Debug.Trace (trace, traceM)
 import Mean.Context
 import Mean.Evaluation.Context
 import Mean.Evaluation.Type hiding (fresh, mkChurchTree, normalize)
@@ -26,10 +19,6 @@ import Mean.Unification
 import Mean.Viz
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
-
--- Evaluative equality is the kind we recognize during evaluation.
-class EvalEq a where
-  (=*=) :: a -> a -> Bool
 
 data ExprEvalError
   = InexhaustiveCase Expr

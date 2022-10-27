@@ -17,9 +17,8 @@ import Mean.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
 
--- λeλb . b 0 (b 0 e e) (b (λx.x+1) e e)
 mod0 =
-  [r|let succ = \x:<n> . x + 1
+  [r|let succ = \x. x + 1
      let tree = [undef [undef [succ] [0]] [succ]]
      let FA = \l.\r. tycase (l, r) of
         (l',r'):(<A>, <A,B>) -> r'(l')

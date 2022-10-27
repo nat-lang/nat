@@ -5,18 +5,17 @@
 
 module Mean.Evaluation.Module where
 
-import Control.Monad (MonadPlus (..), foldM, forM, (<=<))
+import Control.Monad (foldM, forM, (<=<))
 import Control.Monad.Except (Except, liftEither, runExcept, runExceptT, throwError, withExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.Reader (MonadReader (local), ReaderT (runReaderT), ask)
 import Control.Monad.State (evalStateT)
 import Data.Foldable (Foldable (foldl'))
-import Data.Function ((&))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
 import Mean.Context
-import Mean.Control (foldM1, mapAccumM)
+import Mean.Control (mapAccumM)
 import Mean.Evaluation.Context
 import Mean.Evaluation.Surface
 import Mean.Evaluation.Type
@@ -47,10 +46,10 @@ toEnv t = \case
   MLetRec v _ -> Map.singleton v t
   MExec _ -> Map.empty
 
-typeMod :: Module -> Either (InferenceError Type Expr) TypeEnv
+typeMod :: Module -> Int -> Either (InferenceError Type Expr) TypeEnv
 typeMod mod = run (foldM typeMod' mkCEnv mod)
   where
-    run m = runExcept $ evalStateT (runReaderT m mkCEnv) 0
+    run m s = runExcept $ evalStateT (runReaderT m mkCEnv) s
     typeMod' :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
     typeMod' env mExpr = local (Map.union env) $ do
       (t, env') <- signify (toExpr mExpr)
@@ -71,8 +70,8 @@ reduceMod mod tyEnv = run (mapAccumM accumModM Map.empty mod)
 eval :: Module -> Either ModuleEvalError Module
 eval mod = runExcept $ (reduceMod' <=< typeMod') mod
   where
-    mod' = evalRename mod
-    typeMod' mod = case typeMod mod of
+    (mod', s) = runRename mod
+    typeMod' mod = case typeMod mod s of
       Left err -> throwError $ MTypeError err
       Right tyEnv -> pure tyEnv
     reduceMod' tyEnv = case reduceMod mod' tyEnv of
