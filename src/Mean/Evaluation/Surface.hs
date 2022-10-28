@@ -50,16 +50,16 @@ instance Arithmetic Expr where
 
 isIdx e = case e of EIdx {} -> True; _ -> False
 
-idxOf (EIdx i) = i
-idxOf _ = error "not an index"
+dIdx (EIdx i) = i
+dIdx _ = error "not an index"
 
 reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
 
 instance Reducible (Tree Expr) Expr ExprEvalError TypeEnv where
   -- TODO: instantiate the tree with fresh variable names.
   -- currently we avoid shadowing by using a different format for
-  -- church tree vars (e.g. lower case letters, no indexes), but
-  -- this only works if no two trees are in the same scope.
+  -- church tree vars (e.g. lower case letters, no postfixed numbers),
+  -- but this only works if no two trees are in the same scope.
   reduce t = reduce $ mkChurchTree t
 
 instance Reducible Expr Expr ExprEvalError TypeEnv where
@@ -77,7 +77,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
         e1' <- reduce e1
         pure $ ELit $ LBool $ Set.member e1' s
       -- (sugar) indexed access to tuples
-      ETup t | isIdx e1 -> reduce (t !! idxOf e1)
+      ETup t | isIdx e1 -> reduce (t !! dIdx e1)
       -- (1b) binders have a semantics of their own: they may be applied
       -- to terms, in which case they simply abstract a free variable.
       EBind b -> reduce (ELam b e1)
@@ -151,7 +151,6 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
           e' <- reduce e
           reduce $ (b' === c') ? e' > ELitCase b cs'
         _ -> throwError $ InexhaustiveCase expr
-    ELet v e0 e1 -> reduce (sub v e0 e1)
     EFix v e -> reduce $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
     -- (3) var/literal
@@ -173,6 +172,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
         pure $ EBinOp op e0' e1'
       expr' -> pure expr'
 
+-- | We pattern match via unification.
 instance Unifiable Expr where
   unify e0 e1 = case (e0, e1) of
     (EVar v0, EVar v1) | v0 == v1 -> pure mempty
@@ -180,8 +180,8 @@ instance Unifiable Expr where
     (EUndef, EUndef) -> pure mempty
     (EVar v, _) -> pure $ mkEnv v e1
     (_, EVar v) -> pure $ mkEnv v e0
-    (EWildcard, _) -> pure mempty
-    (_, EWildcard) -> pure mempty
+    (EWild, _) -> pure mempty
+    (_, EWild) -> pure mempty
     _ -> throwError $ NotUnifiable e0 e1
 
 type Normalization = Either ExprEvalError Expr

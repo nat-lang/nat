@@ -38,7 +38,7 @@ instance Ord Var where
 
 instance Show Var where
   show :: Var -> String
-  show (Var vPub vPri) = vPub ++ "(" ++ vPri ++ ")"
+  show (Var vPub vPri) = vPub -- ++ "(" ++ vPri ++ ")"
 
 instance Pretty [Var] where
   ppr p (v : vs) = text (show v) <> char ',' <> text (show v)
@@ -117,7 +117,7 @@ evalFreshT s m = runIdentity $ evalStateT m s
 runFreshT :: Int -> FreshT Identity a -> (a, Int)
 runFreshT s m = runIdentity $ runStateT m s
 
--- | A renamable `a` conforms to the barendregt convention.
+-- | A renamable `a` can be made to conform to the barendregt convention.
 class Contextual a => Renamable a where
   rename' :: Set.Set Var -> a -> FreshM a
 

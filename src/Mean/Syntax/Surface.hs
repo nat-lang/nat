@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -18,7 +19,6 @@ import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (trace, traceM)
 import Mean.Context
 import qualified Mean.Parser as P
-import Mean.Syntax.Logic
 import Mean.Syntax.Type
 import Mean.Viz
 import Mean.Walk
@@ -38,7 +38,36 @@ type Binder b = ABinder b Type
 
 data UnOp = Neg deriving (Prel.Eq, Ord, Show)
 
-data BinOp = Add | Sub | Mul | LT | GT | GTE | LTE | Eq | NEq | And | Or deriving (Prel.Eq, Ord, Show)
+data BinOp = Add | Sub | Mul | LT | GT | GTE | LTE | Eq | NEq | And | Or | Impl deriving (Prel.Eq, Ord, Show)
+
+data Domain e = Dom Type (Set.Set e)
+
+instance Prel.Eq e => Prel.Eq (Domain e) where
+  (Dom t es) == (Dom t' es') = t == t' Prel.&& es == es'
+
+instance Ord e => Ord (Domain e) where
+  (Dom t es) <= (Dom t' es') = t <= t' Prel.&& es <= es'
+
+data QRstr e = QRstr Var (Domain e)
+
+instance Prel.Eq e => Prel.Eq (QRstr e) where
+  (QRstr v d) == (QRstr v' d') = v == v' Prel.&& d == d'
+
+instance Ord e => Ord (QRstr e) where
+  (QRstr v d) <= (QRstr v' d') = v <= v' Prel.&& d <= d'
+
+data QExpr e
+  = Univ [QRstr e] !e
+  | Exis [QRstr e] !e
+
+instance Prel.Eq e => Prel.Eq (QExpr e) where
+  (Univ rs b) == (Univ rs' b') = rs == rs' Prel.&& b == b'
+  (Exis rs b) == (Exis rs' b') = rs == rs' Prel.&& b == b'
+  _ == _ = False
+
+instance Ord e => Ord (QExpr e) where
+  (Univ rs b) <= (Univ rs' b') = rs <= rs' Prel.&& b <= b'
+  (Exis rs b) <= (Exis rs' b') = rs <= rs' Prel.&& b <= b'
 
 data Expr
   = ELit Lit
@@ -53,15 +82,23 @@ data Expr
   | ELitCase Expr [(Expr, Expr)]
   | ETyCase Expr [(Binder Expr, Expr)]
   | ESet (Set.Set Expr)
-  | ELet Var Expr Expr
   | EFix Var Expr
   | ETup [Expr]
   | EIdx Int -- TODO: parse me
-  | EDom Type (Set.Set Expr)
-  | EQnt (QExpr (ABinder [Var] [Type]) Expr)
-  | EWildcard
+  | EWild
   | EUndef
+  | EDom (Domain Expr)
+  | EQnt (QExpr Expr)
   deriving (Prel.Eq, Ord)
+
+qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Domain Expr)] -> Expr -> Expr
+qnt q vs b = EQnt (q (fmap (uncurry QRstr) vs) b)
+
+univ :: [(Var, Domain Expr)] -> Expr -> Expr
+univ = qnt Univ
+
+exis :: [(Var, Domain Expr)] -> Expr -> Expr
+exis = qnt Exis
 
 instance Walkable Expr where
   walkMC' f expr = f ctn expr
@@ -86,9 +123,28 @@ instance Pretty Lit where
     LInt n -> text (show n)
     LBool b -> text (show b)
 
+instance Pretty a => Pretty (Domain a) where
+  ppr p (Dom _ es) = ppr p es
+
+instance Pretty a => Pretty (QRstr a) where
+  ppr n (QRstr var d) = text (show var) <+> text "∈" <+> ppr n d
+
+instance Pretty a => Pretty [QRstr a] where
+  ppr n rs = text $ intercalate ", " (show . ppr n <$> rs)
+
+instance Pretty a => Pretty (QExpr a) where
+  ppr p qe = case qe of
+    Univ r b -> "∀" <> pq p r b
+    Exis r b -> "∃" <> pq p r b
+    where
+      pq p r b = ppr p r <> brackets (ppr p b)
+
 ppCase p c es =
   let pp (e0, e1) = ppr p e0 <+> text "->" <+> ppr p e1
    in ppr p c <> char ':' <+> text (intercalate " | " (show . pp <$> es))
+
+instance Pretty a => Pretty (Set.Set a) where
+  ppr p s = curlies $ text (intercalate ", " (show . ppr 0 <$> Set.toList s))
 
 instance Pretty Expr where
   ppr p e = case e of
@@ -116,19 +172,21 @@ instance Pretty Expr where
       NEq -> "!="
       And -> "&"
       Or -> "|"
+      Impl -> "=>"
       where
         infx p e0 e1 op = ppr p e0 <+> text op <+> ppr p e1
     ECond x y z -> text "if" <+> ppr p x <+> text "then" <+> ppr p y <+> text "else" <+> ppr p z
     ETree t -> text $ T.drawTree t
     ELitCase e es -> text "litcase" <+> ppCase p e es
     ETyCase e es -> text "tycase" <+> ppCase p e es
-    ESet s -> text $ show s
-    ELet v e e' -> "let" <+> text (show v) <+> "=" <+> ppr p e <+> "in" <+> ppr p e'
+    ESet s -> ppr p s
     EFix v e -> text "fix" <+> text (show v) <+> text "in" <+> ppr p e
     ETup es -> parens $ text (intercalate ", " (show <$> es))
     EIdx i -> brackets (text $ show i)
-    EWildcard -> text "_"
+    EWild -> text "_"
     EUndef -> text "undef"
+    EDom d -> ppr p d
+    EQnt q -> ppr p q
 
 instance Show Expr where
   show = show . ppr 0
@@ -168,6 +226,8 @@ infixl 8 ~>
 
 (||) :: Expr -> Expr -> Expr
 (||) = EBinOp Or
+
+(==>) = EBinOp Impl
 
 (===) = EBinOp Eq
 
@@ -278,7 +338,7 @@ pELitCase = do
       r <- pExpr
       pure (c, r)
 
-pWildcardBinder = P.reserved "_" >> pure (Binder EWildcard TyWild)
+pWildcardBinder = P.reserved "_" >> pure (Binder EWild TyWild)
 
 pExprBinder :: P.Parser (Binder Expr)
 pExprBinder = do
@@ -301,9 +361,11 @@ pETyCase = do
       r <- pExpr
       pure (b, r)
 
-pESet = do
+pSet = do
   es <- P.curlies (P.commaSep pExpr)
-  pure $ ESet $ Set.fromList es
+  pure $ Set.fromList es
+
+pESet = ESet <$> pSet
 
 after p fn = do
   mA <- P.observing p
@@ -340,6 +402,8 @@ pTree pNode =
       l <- pTree pNode
       T.Node e l <$> pTree pNode
 
+pEDom = P.reserved "dom" >> EDom . Dom TyNil <$> pSet
+
 terms =
   [ P.try $ P.parens pExpr,
     pELit,
@@ -350,6 +414,7 @@ terms =
     pETyCase,
     pESet,
     pETup,
+    pEDom,
     P.reserved "undef" >> pure EUndef
   ]
 
@@ -366,6 +431,7 @@ operatorTable =
       P.infixOpL "!=" (EBinOp NEq),
       P.infixOpL "&&" (EBinOp And),
       P.infixOpL "||" (EBinOp Or),
+      P.infixOpL "=>" (EBinOp Impl),
       P.infixOpL "+" (EBinOp Add),
       P.infixOpL "-" (EBinOp Sub),
       P.infixOpL "*" (EBinOp Mul),

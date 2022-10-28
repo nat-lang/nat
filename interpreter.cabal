@@ -34,7 +34,6 @@ library
       Mean.Inference
       Mean.Parser
       Mean.Reduction
-      Mean.Syntax.Logic
       Mean.Syntax.Module
       Mean.Syntax.Surface
       Mean.Syntax.Type

@@ -264,6 +264,24 @@ spec = do
       reduce (tyCase * tup0) `shouldBe` Right (mkI 2)
       reduce (tyCase * tup1) `shouldBe` Right (mkI 2)
 
+    it "reduces generalized quantifiers" $ do
+      let par = parse pExpr
+
+      let (Right (EDom dom)) = par "dom {0,1,2,3,4,5}"
+      let gq b = q ~> (p ~> b)
+      let every r = gq (univ [r] $ (q * x) ==> (p * x))
+      let some r = gq (exis [r] $ (q * x) && (p * x))
+      let (EVar xV) = x
+
+      let (Right lt2) = par "\\x. x >= 2"
+      let (Right lt5) = par "\\x. x >= 5"
+
+      reduce (every (xV, dom) * lt2 * lt5) `shouldBe` Right true
+      reduce (some (xV, dom) * lt2 * lt5) `shouldBe` Right true
+
+      reduce (every (xV, dom) * lt5 * lt2) `shouldBe` Right false
+      reduce (some (xV, dom) * lt5 * lt2) `shouldBe` Right true
+
   describe "confluence (*=)" $ do
     let (*=) e0 e1 = (e0 E.*= e1) @?= True
 

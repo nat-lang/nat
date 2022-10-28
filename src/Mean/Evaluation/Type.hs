@@ -43,7 +43,6 @@ import Mean.Context hiding (fresh, fresh')
 import qualified Mean.Context as C
 import Mean.Evaluation.Context
 import Mean.Inference
-import Mean.Syntax.Logic
 import qualified Mean.Syntax.Surface as S
 import Mean.Syntax.Type
 import Mean.Unification
@@ -176,7 +175,7 @@ instance Inferrable Type S.Expr where
       cs <- mapM principal es
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
-    S.EWildcard -> return (TyWild, [])
+    S.EWild -> return (TyWild, [])
     S.ETyCase e cases -> do
       tv <- fresh
       (et, eCs) <- principal e

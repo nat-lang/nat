@@ -1,3 +1,5 @@
+{-# LANGUAGE ConstrainedClassMethods #-}
+
 module Mean.Viz
   ( text,
     parens,

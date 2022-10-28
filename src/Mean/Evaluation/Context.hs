@@ -12,7 +12,6 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
 import Mean.Context
-import Mean.Syntax.Logic
 import Mean.Syntax.Module
 import Mean.Syntax.Surface
 import Mean.Syntax.Type
