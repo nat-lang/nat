@@ -58,9 +58,17 @@ reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
 instance Reducible (Tree Expr) Expr ExprEvalError TypeEnv where
   -- TODO: instantiate the tree with fresh variable names.
   -- currently we avoid shadowing by using a different format for
-  -- church tree vars (e.g. lower case letters, no postfixed numbers),
+  -- private church tree vars (e.g. no postfixed numbers),
   -- but this only works if no two trees are in the same scope.
   reduce t = reduce $ mkChurchTree t
+
+instance Reducible (Set.Set Expr) (Set.Set Expr) ExprEvalError TypeEnv where
+  reduce s = map reduce s
+
+instance Reducible (QExpr Expr) Expr ExprEvalError TypeEnv where
+  reduce q = case q of
+    Univ rs d -> all
+    Exis rs d -> some
 
 instance Reducible Expr Expr ExprEvalError TypeEnv where
   runReduce = runReduce' mkCEnv
@@ -153,6 +161,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
         _ -> throwError $ InexhaustiveCase expr
     EFix v e -> reduce $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
+    EQnt q -> reduce q
     -- (3) var/literal
     _ -> pure expr
 
