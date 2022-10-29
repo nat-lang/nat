@@ -56,8 +56,11 @@ reset (Var vPre _) = Var vPre vPre
 class Substitutable a b where
   sub :: Var -> a -> b -> b
 
+  inEnv' :: [(Var, a)] -> b -> b
+  inEnv' env e = foldl' (flip $ uncurry sub) e env
+
   inEnv :: Env a -> b -> b
-  inEnv env e = foldl' (flip $ uncurry sub) e (Map.toList env)
+  inEnv env = inEnv' (Map.toList env)
 
 class Contextual a where
   fv :: a -> Set.Set Var

@@ -269,7 +269,7 @@ spec = do
 
       let (Right (EDom dom)) = par "dom {0,1,2,3,4,5}"
       let gq b = q ~> (p ~> b)
-      let every r = gq (univ [r] $ (q * x) ==> (p * x))
+      let every r = gq (univ [r, r] $ (q * x) ==> (p * x))
       let some r = gq (exis [r] $ (q * x) && (p * x))
       let (EVar xV) = x
 

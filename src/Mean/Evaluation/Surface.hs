@@ -1,14 +1,17 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Mean.Evaluation.Surface where
 
+import Control.Monad ((<=<))
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader (ask)
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
 import Mean.Context
+import Mean.Control
 import Mean.Evaluation.Context
 import Mean.Evaluation.Type hiding (fresh, mkChurchTree, normalize)
 import Mean.Inference
@@ -30,7 +33,7 @@ data ExprEvalError
 bool :: Expr -> Bool
 bool e = case e of
   (ELit (LBool b)) -> b
-  _ -> error "can only extract bool from literal bool"
+  _ -> error ("can only extract bool from literal bool: " ++ show e)
 
 class Arithmetic a where
   (+) :: a -> a -> a
@@ -60,15 +63,24 @@ instance Reducible (Tree Expr) Expr ExprEvalError TypeEnv where
   -- currently we avoid shadowing by using a different format for
   -- private church tree vars (e.g. no postfixed numbers),
   -- but this only works if no two trees are in the same scope.
-  reduce t = reduce $ mkChurchTree t
+  reduce = reduce . mkChurchTree
 
 instance Reducible (Set.Set Expr) (Set.Set Expr) ExprEvalError TypeEnv where
-  reduce s = map reduce s
+  reduce s = do
+    s' <- mapM reduce (Set.toList s)
+    pure $ Set.fromList s'
 
 instance Reducible (QExpr Expr) Expr ExprEvalError TypeEnv where
-  reduce q = case q of
-    Univ rs d -> all
-    Exis rs d -> some
+  reduce q = do
+    t <- case q of
+      Univ rs b -> allM (test rs) b
+      Exis rs b -> anyM (test rs) b
+    pure $ ELit $ LBool t
+    where
+      test rs =
+        let (vars, doms) = unzip $ fmap (\(QRstr v (Dom _ es)) -> (v, Set.toList es)) rs
+            envs = fmap (zip vars) (sequenceA doms)
+         in [pure . bool <=< reduce . inEnv' env | env <- envs]
 
 instance Reducible Expr Expr ExprEvalError TypeEnv where
   runReduce = runReduce' mkCEnv
@@ -90,6 +102,8 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
       -- to terms, in which case they simply abstract a free variable.
       EBind b -> reduce (ELam b e1)
       -- (1c) normal form for lhs, goto rhs
+      -- here we allow unbound (so unreducible) variables of tyfun into
+      -- the normal form. this also allows literals, but that doesn't type check.
       _ | not (reducible e0) -> do
         e1' <- reduce e1
         pure (e0 * e1')
@@ -97,7 +111,8 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
       _ -> do
         e0' <- reduce e0
         case e0' of
-          -- (1d.1) normal form for lhs (app), goto rhs
+          --  (1d.1) here we encounter (1c)
+          -- normal form for lhs, goto rhs
           EApp {} -> do
             e1' <- reduce e1
             pure (e0' * e1')
@@ -129,6 +144,7 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
               GTE -> b $ (>=) e0' e1'
               And -> b $ and $ bool <$> [e0', e1']
               Or -> b $ or $ bool <$> [e0', e1']
+              Impl -> b $ or [bool e1', not (bool e0')]
               Add -> (+) e0' e1'
               Sub -> (-) e0' e1'
               Mul -> mul e0' e1'

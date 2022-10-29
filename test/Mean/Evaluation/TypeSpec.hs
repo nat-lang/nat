@@ -178,7 +178,7 @@ spec = do
       inferIn env tyCase `shouldBe` Right (TyTup [tyInt, tyInt])
 
   describe "the union type" $ do
-    it "is unified with other types existentially" $ do
+    it "is unified with other types intersectively" $ do
       let [tA, tB, tC] = TyCon <$> ["A", "B", "C"]
       let unionTy = mkTyUnion [tA, tB]
 
