@@ -13,7 +13,9 @@ where
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State
 import Data.Bifunctor (second)
+import Data.Foldable (toList)
 import Data.List (intercalate)
+import qualified Data.Monoid as M
 import qualified Data.Set as Set
 import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (trace, traceM)
@@ -42,23 +44,23 @@ data BinOp = Add | Sub | Mul | LT | GT | GTE | LTE | Eq | NEq | And | Or | Impl 
 
 data Domain e = Dom Type (Set.Set e)
 
+data QRstr e = QRstr Var (Domain e)
+
+data QExpr e
+  = Univ [QRstr e] !e
+  | Exis [QRstr e] !e
+
 instance Prel.Eq e => Prel.Eq (Domain e) where
   (Dom t es) == (Dom t' es') = t == t' Prel.&& es == es'
 
 instance Ord e => Ord (Domain e) where
   (Dom t es) <= (Dom t' es') = t <= t' Prel.&& es <= es'
 
-data QRstr e = QRstr Var (Domain e)
-
 instance Prel.Eq e => Prel.Eq (QRstr e) where
   (QRstr v d) == (QRstr v' d') = v == v' Prel.&& d == d'
 
 instance Ord e => Ord (QRstr e) where
   (QRstr v d) <= (QRstr v' d') = v <= v' Prel.&& d <= d'
-
-data QExpr e
-  = Univ [QRstr e] !e
-  | Exis [QRstr e] !e
 
 instance Prel.Eq e => Prel.Eq (QExpr e) where
   (Univ rs b) == (Univ rs' b') = rs == rs' Prel.&& b == b'
@@ -100,23 +102,56 @@ univ = qnt Univ
 exis :: [(Var, Domain Expr)] -> Expr -> Expr
 exis = qnt Exis
 
+-- | The alternative to writing this by hand is to make
+--   `Expr` a recursive datatype, take its fix point, and
+--   derive a properly general functor. For the time being
+--   this is simpler.
 instance Walkable Expr where
-  walkMC' f expr = f ctn expr
+  walkMC' f = f ctn
     where
       go = walkMC' f
+      sgo s = Set.fromList <$> mapM go (Set.toList s)
       ctn = \case
         EApp e0 e1 -> EApp <$> go e0 <*> go e1
         ECond x y z -> ECond <$> go x <*> go y <*> go z
         EUnOp op e -> EUnOp op <$> go e
         EBinOp op e0 e1 -> EBinOp op <$> go e0 <*> go e1
-        ETree t -> ETree <$> mapM go t
-        ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
-        ESet es -> ESet . Set.fromList <$> mapM go (Set.toList es)
+        ESet es -> ESet <$> sgo es
         ETup es -> ETup <$> mapM go es
         ELam b e -> ELam b <$> go e
+        ETree t -> ETree <$> mapM go t
+        ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
         ETyCase e cs -> ETyCase <$> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
         EFix v e -> EFix v <$> go e
+        EQnt q ->
+          EQnt <$> case q of
+            Exis r e -> Exis r <$> go e
+            Univ r e -> Univ r <$> go e
+        EDom (Dom t es) -> EDom <$> (Dom t <$> sgo es)
+        -- non recursive inhabitants
         e' -> f pure e'
+
+{-
+foldWalk :: Monoid b => (Expr -> b) -> Expr -> b
+foldWalk f = f'
+  where
+    go = foldWalk f
+    cgo = M.mconcat . fmap go
+    f' = \case
+      EApp e0 e1 -> go e0 M.<> go e1
+      ECond x y z -> go x M.<> go y M.<> go z
+      EUnOp op e -> go e
+      EBinOp op e0 e1 -> go e0 M.<> go e1
+      ETup es -> cgo es
+      ELam b e -> go e
+      ETree t -> cgo (toList t)
+      ESet es -> cgo (Set.toList es)
+      ELitCase e cs -> go e M.<> M.mconcat (fmap (fmap go) cs)
+      -- ETyCase e cs -> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
+      EFix v e -> go e
+      -- non recursive inhabitants
+      e' -> f e'
+-}
 
 instance Pretty Lit where
   ppr p l = case l of
@@ -435,10 +470,10 @@ operatorTable =
       P.infixOpL "+" (EBinOp Add),
       P.infixOpL "-" (EBinOp Sub),
       P.infixOpL "*" (EBinOp Mul),
-      P.infixOpL "<" (EBinOp LT),
       P.infixOpL "<=" (EBinOp LTE),
-      P.infixOpL ">" (EBinOp GT),
-      P.infixOpL ">=" (EBinOp GTE)
+      P.infixOpL ">=" (EBinOp GTE),
+      P.infixOpL "<" (EBinOp LT),
+      P.infixOpL ">" (EBinOp GT)
     ]
   ]
 

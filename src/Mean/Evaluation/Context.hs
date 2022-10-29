@@ -44,9 +44,23 @@ mkTv' i = let c = 'A' : show i in TyVar (Var c c)
 -------------------------------------------------------------------------------
 -- Expression contexts
 -------------------------------------------------------------------------------
+instance Contextual [QRstr Expr] where
+  bv = foldl1 Set.union . fmap (\(QRstr v _) -> Set.singleton v)
+  fv _ = Set.empty
+
+instance Contextual (QExpr Expr) where
+  bv q = case q of
+    Exis rs _ -> bv rs
+    Univ rs _ -> bv rs
+  fv q = case q of
+    Exis rs b -> fv' rs b
+    Univ rs b -> fv' rs b
+    where
+      fv' rs b = fv b Set.\\ bv rs
 
 instance Contextual Expr where
   fv = \case
+    ELit {} -> Set.empty
     EVar v -> Set.singleton v
     ELam (Binder v _) body -> fv body Set.\\ Set.singleton v
     ETyCase e cs ->
@@ -61,7 +75,10 @@ instance Contextual Expr where
     ETup es -> fv es
     ELitCase e es -> fv e `Set.union` fv es
     ESet es -> fv (toList es)
-    _ -> Set.empty
+    EWild -> Set.empty
+    EUndef -> Set.empty
+    EQnt q -> fv q
+    e -> error ("unexpected expr: " ++ show e)
 
 instance Substitutable Expr Expr where
   sub v e = walkC $ \ctn -> \case
@@ -72,6 +89,7 @@ instance Substitutable Expr Expr where
     ETyCase c cs -> ETyCase (ctn c) (fmap ctn' cs)
       where
         ctn' p@(Binder b t, e) = if fvOf b v then p else (Binder b t, ctn e)
+    e'@(EQnt q) | Set.member v (bv q) -> e'
     -- otherwise continue the walk
     e' -> ctn e'
 
@@ -104,6 +122,7 @@ instance Renamable Expr where
       pure (ELam (Binder v' t) e')
     ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
     EFix v e -> uncurry EFix <$> shift v e
+    -- TODO: EQnt
     -- nothing to do
     e -> pure e
 

@@ -273,8 +273,8 @@ spec = do
       let some r = gq (exis [r] $ (q * x) && (p * x))
       let (EVar xV) = x
 
-      let (Right lt2) = par "\\x. x >= 2"
-      let (Right lt5) = par "\\x. x >= 5"
+      let (Right lt2) = par "\\x. x <= 2"
+      let (Right lt5) = par "\\x. x <= 5"
 
       reduce (every (xV, dom) * lt2 * lt5) `shouldBe` Right true
       reduce (some (xV, dom) * lt2 * lt5) `shouldBe` Right true

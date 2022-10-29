@@ -3,6 +3,7 @@ module Mean.Walk where
 import Control.Monad ((<=<))
 import Control.Monad.Identity
 
+-- | E.g. a functor over a single type.
 class Walkable a where
   walkMC' :: Monad m => ((a -> m a) -> a -> m a) -> a -> m a
 
