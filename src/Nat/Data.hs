@@ -1,4 +1,4 @@
-module Mean.Data where
+module Nat.Data where
 
 import Data.Char
 

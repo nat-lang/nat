@@ -4,7 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Syntax.Type where
+module Nat.Syntax.Type where
 
 import Control.Monad.Except (ExceptT, runExceptT, throwError)
 import Control.Monad.Identity (Identity (runIdentity))
@@ -15,10 +15,10 @@ import qualified Data.Map as Map
 import Data.Set ((\\))
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
-import Mean.Context
-import qualified Mean.Parser as P
-import Mean.Viz (Pretty (ppr), angles, anglesIf, curlies, parens)
-import Mean.Walk
+import Nat.Context
+import qualified Nat.Parser as P
+import Nat.Viz (Pretty (ppr), angles, anglesIf, curlies, parens)
+import Nat.Walk
 import Text.PrettyPrint
   ( Doc,
     brackets,

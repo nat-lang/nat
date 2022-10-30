@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Mean.Inference where
+module Nat.Inference where
 
 import Control.Monad.Except (Except, MonadError (throwError), liftEither, runExcept)
 import Control.Monad.Reader (ReaderT (runReaderT))
@@ -10,8 +10,8 @@ import Control.Monad.State (MonadState, StateT, evalStateT, runStateT, state)
 import Data.Either (fromLeft, fromRight)
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
-import qualified Mean.Context as C
-import Mean.Unification
+import qualified Nat.Context as C
+import Nat.Unification
 
 data InferenceError a b
   = IUnconstrainable b

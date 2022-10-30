@@ -23,23 +23,23 @@ source-repository head
 
 library
   exposed-modules:
-      Mean.Cmd
-      Mean.Context
-      Mean.Control
-      Mean.Data
-      Mean.Evaluation.Context
-      Mean.Evaluation.Module
-      Mean.Evaluation.Surface
-      Mean.Evaluation.Type
-      Mean.Inference
-      Mean.Parser
-      Mean.Reduction
-      Mean.Syntax.Module
-      Mean.Syntax.Surface
-      Mean.Syntax.Type
-      Mean.Unification
-      Mean.Viz
-      Mean.Walk
+      Nat.Cmd
+      Nat.Context
+      Nat.Control
+      Nat.Data
+      Nat.Evaluation.Context
+      Nat.Evaluation.Module
+      Nat.Evaluation.Surface
+      Nat.Evaluation.Type
+      Nat.Inference
+      Nat.Parser
+      Nat.Reduction
+      Nat.Syntax.Module
+      Nat.Syntax.Surface
+      Nat.Syntax.Type
+      Nat.Unification
+      Nat.Viz
+      Nat.Walk
       Utils
   other-modules:
       Paths_interpreter
@@ -135,12 +135,12 @@ test-suite spec
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Mean.Evaluation.ModuleSpec
-      Mean.Evaluation.SurfaceSpec
-      Mean.Evaluation.TypeSpec
-      Mean.Syntax.ModuleSpec
-      Mean.Syntax.SurfaceSpec
-      Mean.Syntax.TypeSpec
+      Nat.Evaluation.ModuleSpec
+      Nat.Evaluation.SurfaceSpec
+      Nat.Evaluation.TypeSpec
+      Nat.Syntax.ModuleSpec
+      Nat.Syntax.SurfaceSpec
+      Nat.Syntax.TypeSpec
       Paths_interpreter
   hs-source-dirs:
       test

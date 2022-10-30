@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Mean.Syntax.ModuleSpec where
+module Nat.Syntax.ModuleSpec where
 
 import qualified Data.Set as Set
-import Mean.Context
-import Mean.Parser (parse)
-import Mean.Syntax.Module
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
+import Nat.Context
+import Nat.Parser (parse)
+import Nat.Syntax.Module
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
 import Prelude hiding ((*))

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Parser
+module Nat.Parser
   ( Lex.IndentOpt (..),
     Lex.indentBlock,
     Operator (..),
@@ -8,7 +8,7 @@ module Mean.Parser
     C.char,
     C.space1,
     dbg,
-    module Mean.Parser,
+    module Nat.Parser,
     module Text.Megaparsec,
   )
 where

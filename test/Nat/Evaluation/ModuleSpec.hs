@@ -1,19 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Mean.Evaluation.ModuleSpec where
+module Nat.Evaluation.ModuleSpec where
 
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
-import Mean.Context (mkVar)
-import Mean.Evaluation.Module
-import Mean.Evaluation.Surface (Normalization)
-import Mean.Inference
-import Mean.Parser
-import Mean.Reduction
-import Mean.Syntax.Module
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
+import Nat.Context (mkVar)
+import Nat.Evaluation.Module
+import Nat.Evaluation.Surface (Normalization)
+import Nat.Inference
+import Nat.Parser
+import Nat.Reduction
+import Nat.Syntax.Module
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
 

@@ -1,20 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Evaluation.SurfaceSpec where
+module Nat.Evaluation.SurfaceSpec where
 
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
-import Mean.Context
-import Mean.Context (evalFreshT)
-import qualified Mean.Context as C
-import Mean.Evaluation.Context
-import Mean.Evaluation.Surface hiding ((*=), (@=))
-import qualified Mean.Evaluation.Surface as E
-import Mean.Parser (parse)
-import Mean.Reduction
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
-import Mean.Unification
+import Nat.Context
+import Nat.Context (evalFreshT)
+import qualified Nat.Context as C
+import Nat.Evaluation.Context
+import Nat.Evaluation.Surface hiding ((*=), (@=))
+import qualified Nat.Evaluation.Surface as E
+import Nat.Parser (parse)
+import Nat.Reduction
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
+import Nat.Unification
 import Test.HUnit ((@?=))
 import Test.Hspec
 import Prelude hiding (LTE, id, (&&), (*), (>), (||))

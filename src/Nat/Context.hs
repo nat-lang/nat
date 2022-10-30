@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Mean.Context where
+module Nat.Context where
 
 import Control.Monad (replicateM)
 import Control.Monad.Identity (Identity (runIdentity))
@@ -11,9 +11,9 @@ import Control.Monad.State (MonadState (get, put), StateT, evalStateT, runStateT
 import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import qualified Mean.Parser as P
-import Mean.Viz
-import Mean.Walk
+import qualified Nat.Parser as P
+import Nat.Viz
+import Nat.Walk
 import Text.PrettyPrint
   ( char,
     text,

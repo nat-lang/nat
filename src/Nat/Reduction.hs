@@ -1,6 +1,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 
-module Mean.Reduction where
+module Nat.Reduction where
 
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))

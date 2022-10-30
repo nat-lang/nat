@@ -1,9 +1,9 @@
 {-# LANGUAGE ConstrainedClassMethods #-}
 
-module Mean.Viz
+module Nat.Viz
   ( text,
     parens,
-    module Mean.Viz,
+    module Nat.Viz,
   )
 where
 

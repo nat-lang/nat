@@ -3,14 +3,14 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Mean.Unification where
+module Nat.Unification where
 
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Identity (Identity, runIdentity)
 import Data.Either (isRight)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Mean.Context
+import Nat.Context
 import Prelude hiding ((<*>))
 
 data UnificationError a

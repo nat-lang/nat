@@ -3,16 +3,16 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Syntax.Module where
+module Nat.Syntax.Module where
 
 import Data.Text
 import Data.Void
 import Debug.Trace (traceM)
-import Mean.Context
-import qualified Mean.Parser as P
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
-import Mean.Walk
+import Nat.Context
+import qualified Nat.Parser as P
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
+import Nat.Walk
 import Text.Megaparsec.Debug (dbg)
 
 data ModuleExprR e

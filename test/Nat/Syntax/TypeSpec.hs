@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Syntax.TypeSpec where
+module Nat.Syntax.TypeSpec where
 
-import Mean.Parser (parse)
-import Mean.Syntax.Type
+import Nat.Parser (parse)
+import Nat.Syntax.Type
 import Test.Hspec
 
 spec :: Spec

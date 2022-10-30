@@ -3,7 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Mean.Evaluation.Surface where
+module Nat.Evaluation.Surface where
 
 import Control.Monad ((<=<))
 import Control.Monad.Except (throwError)
@@ -11,17 +11,17 @@ import Control.Monad.Reader (ask)
 import Data.Foldable (Foldable (foldl', foldr'))
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
-import Mean.Context
-import Mean.Control
-import Mean.Evaluation.Context
-import Mean.Evaluation.Type hiding (fresh, mkChurchTree, normalize)
-import Mean.Inference
-import Mean.Reduction
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
-import Mean.Unification
-import Mean.Viz
-import Mean.Walk
+import Nat.Context
+import Nat.Control
+import Nat.Evaluation.Context
+import Nat.Evaluation.Type hiding (fresh, mkChurchTree, normalize)
+import Nat.Inference
+import Nat.Reduction
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
+import Nat.Unification
+import Nat.Viz
+import Nat.Walk
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
 

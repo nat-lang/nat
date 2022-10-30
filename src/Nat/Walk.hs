@@ -1,4 +1,4 @@
-module Mean.Walk where
+module Nat.Walk where
 
 import Control.Monad ((<=<))
 import Control.Monad.Identity

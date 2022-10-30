@@ -1,21 +1,21 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Evaluation.TypeSpec where
+module Nat.Evaluation.TypeSpec where
 
 import Data.List (foldl')
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
-import Mean.Context
-import Mean.Evaluation.Surface
-import Mean.Evaluation.Type
-import Mean.Inference
-import Mean.Inference (Inferrable (runSignifyIn))
-import Mean.Parser
-import Mean.Syntax.Surface hiding (fromList)
-import Mean.Syntax.Type
-import Mean.Unification
+import Nat.Context
+import Nat.Evaluation.Surface
+import Nat.Evaluation.Type
+import Nat.Inference
+import Nat.Inference (Inferrable (runSignifyIn))
+import Nat.Parser
+import Nat.Syntax.Surface hiding (fromList)
+import Nat.Syntax.Type
+import Nat.Unification
 import Test.Hspec
 import Prelude hiding ((*), (>))
 

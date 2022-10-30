@@ -3,7 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Mean.Evaluation.Context where
+module Nat.Evaluation.Context where
 
 import Control.Monad (forM, liftM, (<=<))
 import Data.Foldable (foldl', toList)
@@ -11,12 +11,12 @@ import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Context
-import Mean.Syntax.Module
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
-import Mean.Unification
-import Mean.Walk
+import Nat.Context
+import Nat.Syntax.Module
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
+import Nat.Unification
+import Nat.Walk
 
 -------------------------------------------------------------------------------
 -- Type contexts

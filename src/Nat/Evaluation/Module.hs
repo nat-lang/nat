@@ -3,7 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Mean.Evaluation.Module where
+module Nat.Evaluation.Module where
 
 import Control.Monad (foldM, forM, (<=<))
 import Control.Monad.Except (Except, liftEither, runExcept, runExceptT, throwError, withExceptT)
@@ -14,18 +14,18 @@ import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Context
-import Mean.Control (mapAccumM)
-import Mean.Evaluation.Context
-import Mean.Evaluation.Surface
-import Mean.Evaluation.Type
-import Mean.Inference
-import Mean.Reduction
-import Mean.Syntax.Module
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
-import Mean.Unification
-import Mean.Walk (Walkable (walkM))
+import Nat.Context
+import Nat.Control (mapAccumM)
+import Nat.Evaluation.Context
+import Nat.Evaluation.Surface
+import Nat.Evaluation.Type
+import Nat.Inference
+import Nat.Reduction
+import Nat.Syntax.Module
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
+import Nat.Unification
+import Nat.Walk (Walkable (walkM))
 
 data ModuleEvalError
   = MExprEvalError ExprEvalError

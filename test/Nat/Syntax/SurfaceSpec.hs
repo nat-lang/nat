@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Mean.Syntax.SurfaceSpec where
+module Nat.Syntax.SurfaceSpec where
 
 import qualified Data.Set as Set
-import Mean.Context
-import Mean.Parser (parse)
-import Mean.Syntax.Surface
-import Mean.Syntax.Type
+import Nat.Context
+import Nat.Parser (parse)
+import Nat.Syntax.Surface
+import Nat.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
 import Prelude hiding ((&&), (*), (>), (||))

@@ -3,10 +3,10 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Syntax.Surface
+module Nat.Syntax.Surface
   ( T.Tree (..),
     T.fromList,
-    module Mean.Syntax.Surface,
+    module Nat.Syntax.Surface,
   )
 where
 
@@ -19,11 +19,11 @@ import qualified Data.Monoid as M
 import qualified Data.Set as Set
 import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (trace, traceM)
-import Mean.Context
-import qualified Mean.Parser as P
-import Mean.Syntax.Type
-import Mean.Viz
-import Mean.Walk
+import Nat.Context
+import qualified Nat.Parser as P
+import Nat.Syntax.Type
+import Nat.Viz
+import Nat.Walk
 import Text.Megaparsec.Debug (dbg)
 import Text.PrettyPrint (char, parens, text, (<+>), (<>))
 import Prelude hiding (Eq, GT, LT, (*), (<>), (>))

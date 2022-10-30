@@ -1,4 +1,4 @@
-module Mean.Control where
+module Nat.Control where
 
 import Control.Monad (MonadPlus, foldM, mplus, mzero)
 

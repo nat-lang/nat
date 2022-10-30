@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Mean.Evaluation.Type where
+module Nat.Evaluation.Type where
 
 import Control.Monad (liftM, replicateM)
 import Control.Monad.Except
@@ -39,15 +39,15 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
-import Mean.Context hiding (fresh, fresh')
-import qualified Mean.Context as C
-import Mean.Evaluation.Context
-import Mean.Inference
-import qualified Mean.Syntax.Surface as S
-import Mean.Syntax.Type
-import Mean.Unification
-import Mean.Viz
-import Mean.Walk
+import Nat.Context hiding (fresh, fresh')
+import qualified Nat.Context as C
+import Nat.Evaluation.Context
+import Nat.Inference
+import qualified Nat.Syntax.Surface as S
+import Nat.Syntax.Type
+import Nat.Unification
+import Nat.Viz
+import Nat.Walk
 import Text.PrettyPrint (vcat, (<+>))
 
 -------------------------------------------------------------------------------
