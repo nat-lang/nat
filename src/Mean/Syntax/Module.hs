@@ -11,6 +11,7 @@ import Debug.Trace (traceM)
 import Mean.Context
 import qualified Mean.Parser as P
 import Mean.Syntax.Surface
+import Mean.Syntax.Type
 import Mean.Walk
 import Text.Megaparsec.Debug (dbg)
 
@@ -45,7 +46,13 @@ pMDecl = do
 pMExec :: P.Parser ModuleExpr
 pMExec = MExec <$> pExpr
 
-pMExpr = P.choice [pMExec, pMLetRec, pMDecl]
+pMDom = do
+  P.reserved "dom"
+  v <- pVar
+  P.symbol "="
+  MDecl v . EDom . Dom (TyCon v) <$> pSet
+
+pMExpr = P.choice [pMExec, pMLetRec, pMDecl, pMDom]
 
 pModule :: P.Parser Module
 pModule = pMExpr `P.sepEndBy` P.delimiter

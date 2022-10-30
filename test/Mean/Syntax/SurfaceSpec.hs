@@ -80,16 +80,18 @@ spec = do
       parse pECond "if f(x) then f(y) else f(z)" `shouldBe` Right ((f * x) ? (f * y) > (f * z))
 
   describe "pETree" $ do
+    let intTree = ETree (Node (mkI 0) (Node (mkI 1) Leaf Leaf) (Node (mkI 0) Leaf Leaf))
+    let booTree = ETree (Node (ELit $ LBool True) (Node true Leaf Leaf) (Node false Leaf Leaf))
+    let varTree = ETree (Node x (Node y Leaf Leaf) (Node z Leaf Leaf))
+
     it "parses trees of integers" $ do
-      parse pETree "[0 [1] [0]]"
-        `shouldBe` Right (ETree (Node (ELit $ LInt 0) (Node (mkI 1) Leaf Leaf) (Node (mkI 0) Leaf Leaf)))
+      parse pETree "[0 [1] [0]]" `shouldBe` Right intTree
 
     it "parses trees of booleans" $ do
-      parse pETree "[True [True] [False]]"
-        `shouldBe` Right (ETree (Node (ELit $ LBool True) (Node true Leaf Leaf) (Node false Leaf Leaf)))
+      parse pETree "[True [True] [False]]" `shouldBe` Right booTree
+
     it "parses trees of variables" $ do
-      parse pETree "[x [y] [z]]"
-        `shouldBe` Right (ETree (Node x (Node y Leaf Leaf) (Node z Leaf Leaf)))
+      parse pETree "[x [y] [z]]" `shouldBe` Right varTree
 
     it "parses trees of binders" $ do
       parse pETree "[\\x [\\y] [\\z]]"
@@ -117,6 +119,10 @@ spec = do
     it "parses trees of function applications" $ do
       parse pETree "[(f x) [f x] [f(x)]]"
         `shouldBe` Right (ETree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
+
+    it "parses trees of parenthesized trees" $ do
+      parse pETree "[0 [( [True [True] [False]] )] [( [x [y] [z]] )] ]"
+        `shouldBe` Right (ETree (Node intTree (Node booTree Leaf Leaf) (Node varTree Leaf Leaf)))
 
   describe "pELitCase" $ do
     it "parses literal case expressions" $ do

@@ -3,6 +3,8 @@
 
 module Mean.Syntax.ModuleSpec where
 
+import qualified Data.Set as Set
+import Mean.Context
 import Mean.Parser (parse)
 import Mean.Syntax.Module
 import Mean.Syntax.Surface
@@ -11,16 +13,9 @@ import Test.Hspec
 import Text.RawString.QQ
 import Prelude hiding ((*))
 
-[f@(EVar vF), x@(EVar vX), y@(EVar vY), z] = mkEVar <$> ["f", "x", "y", "z"]
+[f@(EVar vF), x@(EVar vX), y@(EVar vY), z@(EVar vZ)] = mkEVar <$> ["f", "x", "y", "z"]
 
 mkI = ELit . LInt
-
-mod0 =
-  [r|let f = \x:<n>.\y:<n>. x + y
-let x = 0
-let y = 1
-f(x)(y)
-|]
 
 spec :: Spec
 spec = do
@@ -41,7 +36,13 @@ spec = do
       parse pMExpr "[0 [1][2]]" `shouldBe` Right (MExec (ETree (Node (mkI 0) (Node (mkI 1) Leaf Leaf) (Node (mkI 2) Leaf Leaf))))
 
   describe "pModule" $ do
-    it "parses modules" $ do
+    it "parses modules with let declarations" $ do
+      let mod0 =
+            [r|let f = \x:<n>.\y:<n>. x + y
+               let x = 0
+               let y = 1
+               f(x)(y)|]
+
       parse pModule mod0
         `shouldBe` Right
           [ MDecl vF ((x, tyInt) +> (y, tyInt) +> EBinOp Add x y),
@@ -49,3 +50,16 @@ spec = do
             MDecl vY $ mkI 1,
             MExec (f * x * y)
           ]
+    it "parses modules with domain declarations" $ do
+      let mod0 =
+            [r|dom x = {x1,x2,x3}
+               dom y = {1,2,3}
+               dom z = {True, False}|]
+
+      let vars = EVar . mkVar <$> ["x1", "x2", "x3"]
+      let ints = mkI <$> [1, 2, 3]
+      let boos = ELit . LBool <$> [True, False]
+
+      let mDom v s = MDecl v (EDom (Dom (TyCon v) (Set.fromList s)))
+
+      parse pModule mod0 `shouldBe` Right [mDom vX vars, mDom vY ints, mDom vZ boos]

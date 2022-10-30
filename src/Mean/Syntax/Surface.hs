@@ -91,6 +91,8 @@ data Expr
   | EUndef
   | EDom (Domain Expr)
   | EQnt (QExpr Expr)
+  | ENLam [Binder Var] Expr
+  | ENApp Expr [Expr]
   deriving (Prel.Eq, Ord)
 
 qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Domain Expr)] -> Expr -> Expr
@@ -323,9 +325,6 @@ pInt = LInt . fromIntegral <$> P.integer
 pLit :: LitParser
 pLit = P.choice [pInt, pBool]
 
-pVar :: P.Parser Var
-pVar = mkVar <$> P.identifier
-
 pVarBinder :: P.Parser (Binder Var)
 pVarBinder = do
   P.symbol "\\"
@@ -437,8 +436,6 @@ pTree pNode =
       l <- pTree pNode
       T.Node e l <$> pTree pNode
 
-pEDom = P.reserved "dom" >> EDom . Dom TyNil <$> pSet
-
 terms =
   [ P.try $ P.parens pExpr,
     pELit,
@@ -449,15 +446,13 @@ terms =
     pETyCase,
     pESet,
     pETup,
-    pEDom,
     P.reserved "undef" >> pure EUndef
   ]
 
 pTerm :: ExprParser
 pTerm = do
   s <- get
-  P.choice $
-    [pETree | not (P.inTree s)] ++ terms
+  P.choice $ [pETree | not (P.inTree s)] ++ terms
 
 operatorTable :: [[P.Operator P.Parser Expr]]
 operatorTable =

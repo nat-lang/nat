@@ -33,7 +33,7 @@ import qualified Prelude as Prel
 
 data Type
   = TyVar Var
-  | TyCon String
+  | TyCon Var
   | TyFun Type Type
   | TyTup [Type]
   | TyUnion (Set.Set Type)
@@ -67,12 +67,11 @@ mkTv = TyVar . mkVar
 mkTyUnion = TyUnion . Set.fromList
 
 tyInt, tyBool :: Type
-tyInt = TyCon "n"
-tyBool = TyCon "t"
+tyInt = TyCon (mkVar "n")
+tyBool = TyCon (mkVar "t")
 
 instance Pretty Type where
-  ppr p (TyCon t) = text t
-  ppr p TyWild = text "_"
+  ppr p (TyCon v) = text (show v)
   ppr p (TyVar v) = text (show v)
   ppr p (TyFun a b) = ppr (p + 1) a <> text "->" <> ppr (p + 1) b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
@@ -80,6 +79,7 @@ instance Pretty Type where
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
   ppr p TyUndef = text "TyUndef"
   ppr p TyNil = text "TyNil"
+  ppr p TyWild = text "_"
 
 instance Show Type where
   show = show . ppr 0
@@ -98,7 +98,7 @@ pTyTerm =
       P.reserved "n" >> pure tyInt,
       P.reserved "undef" >> pure TyUndef,
       P.titularIdentifier <&> mkTv,
-      P.identifier <&> TyCon,
+      pVar <&> TyCon,
       P.parens $ P.commaSep pTyTerm <&> TyTup
     ]
 

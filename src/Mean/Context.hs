@@ -11,6 +11,7 @@ import Control.Monad.State (MonadState (get, put), StateT, evalStateT, runStateT
 import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Mean.Parser as P
 import Mean.Viz
 import Mean.Walk
 import Text.PrettyPrint
@@ -148,3 +149,6 @@ class AlphaComparable a where
 
   (@!=) :: Eq a => a -> a -> Bool
   e0 @!= e1 = not (e0 @= e1)
+
+pVar :: P.Parser Var
+pVar = mkVar <$> P.identifier

@@ -8,6 +8,7 @@ module Mean.Evaluation.Surface where
 import Control.Monad ((<=<))
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader (ask)
+import Data.Foldable (Foldable (foldl', foldr'))
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
 import Mean.Context
@@ -20,6 +21,7 @@ import Mean.Syntax.Surface
 import Mean.Syntax.Type
 import Mean.Unification
 import Mean.Viz
+import Mean.Walk
 import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
 import qualified Prelude as P
 
@@ -81,6 +83,22 @@ instance Reducible (QExpr Expr) Expr ExprEvalError TypeEnv where
         let (vars, doms) = unzip $ fmap (\(QRstr v (Dom _ es)) -> (v, Set.toList es)) rs
             envs = fmap (zip vars) (sequenceA doms)
          in [pure . bool <=< reduce . inEnv' env | env <- envs]
+
+rephrase = walk $ \case
+  ETree t -> mkChurchTree t
+  ENApp f as -> foldl' EApp f as
+  ENLam bs e -> foldr' ELam e bs
+  EQnt q -> rephrase $ case q of
+    Univ rs b -> foldl1 (EBinOp And) (bndSeq rs b)
+    Exis rs b -> foldl1 (EBinOp Or) (bndSeq rs b)
+    where
+      qrBnd (QRstr v (Dom t _)) = Binder v t
+      qrDom (QRstr _ (Dom _ s)) = Set.toList s
+      bndSeq rs e =
+        let bnds = fmap qrBnd rs
+            args = traverse qrDom rs
+         in [ENApp (ENLam bnds e) a | a <- args]
+  e -> e
 
 instance Reducible Expr Expr ExprEvalError TypeEnv where
   runReduce = runReduce' mkCEnv

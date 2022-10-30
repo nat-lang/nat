@@ -179,7 +179,7 @@ spec = do
 
   describe "the union type" $ do
     it "is unified with other types intersectively" $ do
-      let [tA, tB, tC] = TyCon <$> ["A", "B", "C"]
+      let [tA, tB, tC] = TyCon . mkVar <$> ["A", "B", "C"]
       let unionTy = mkTyUnion [tA, tB]
 
       unionTy <=> tA `shouldBe` True
