@@ -7,10 +7,12 @@ module Nat.Evaluation.Surface where
 
 import Control.Monad ((<=<))
 import Control.Monad.Except (throwError)
-import Control.Monad.Reader (ask)
+import Control.Monad.Reader (asks)
 import Data.Foldable (Foldable (foldl', foldr'))
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
+import Debug.Trace (traceM)
 import Nat.Context
 import Nat.Control
 import Nat.Evaluation.Context
@@ -22,7 +24,7 @@ import Nat.Syntax.Type
 import Nat.Unification
 import Nat.Viz
 import Nat.Walk
-import Prelude hiding (GT, LT, (&&), (*), (+), (-), (>), (||))
+import Prelude hiding (GT, LT, (*), (>))
 import qualified Prelude as P
 
 data ExprEvalError
@@ -30,28 +32,26 @@ data ExprEvalError
   | EUnificationError (UnificationError Expr)
   | RuntimeTypeError (InferenceError Type Expr)
   | CompilationTypeError (InferenceError Type Expr)
-  deriving (P.Eq, Show)
+  deriving (Eq, Show)
+
+type RelationEnv = Map.Map Type (Map.Map BinOp Expr)
+
+data ExprReductionEnv = ExprRedEnv {tyEnv :: TypeEnv, relEnv :: RelationEnv}
 
 bool :: Expr -> Bool
 bool e = case e of
   (ELit (LBool b)) -> b
   _ -> error ("can only extract bool from literal bool: " ++ show e)
 
-class Arithmetic a where
-  (+) :: a -> a -> a
-  (-) :: a -> a -> a
-  mul :: a -> a -> a
+numErr = error "bool is not a num"
 
-  arithOnlyErr :: a
-  arithOnlyErr = error "can only perform arithmetic on natural numbers"
-
-instance Arithmetic Expr where
-  (ELit (LInt l0)) + (ELit (LInt l1)) = ELit $ LInt $ l0 P.+ l1
-  _ + _ = arithOnlyErr
-  (ELit (LInt l0)) `mul` (ELit (LInt l1)) = ELit $ LInt $ l0 P.* l1
-  _ `mul` _ = arithOnlyErr
-  (ELit (LInt l0)) - (ELit (LInt l1)) = ELit $ LInt $ l0 P.- l1
-  _ - _ = arithOnlyErr
+instance Num Lit where
+  (+) (LInt i0) (LInt i1) = LInt (i0 + i1)
+  (*) (LInt i0) (LInt i1) = LInt (i0 P.* i1)
+  abs (LInt i) = LInt (abs i)
+  signum (LInt l) = LInt (signum l)
+  fromInteger i = LInt (fromIntegral i)
+  negate (LInt i) = LInt (negate i)
 
 isIdx e = case e of EIdx {} -> True; _ -> False
 
@@ -60,23 +60,16 @@ dIdx _ = error "not an index"
 
 reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
 
-instance Reducible (Tree Expr) Expr ExprEvalError TypeEnv where
-  -- TODO: instantiate the tree with fresh variable names.
-  -- currently we avoid shadowing by using a different format for
-  -- private church tree vars (e.g. no postfixed numbers),
-  -- but this only works if no two trees are in the same scope.
-  reduce = reduce . mkChurchTree
-
-instance Reducible (Set.Set Expr) (Set.Set Expr) ExprEvalError TypeEnv where
+instance Reducible (Set.Set Expr) (Set.Set Expr) ExprEvalError ExprReductionEnv where
   reduce s = do
     s' <- mapM reduce (Set.toList s)
     pure $ Set.fromList s'
 
-instance Reducible (QExpr Expr) Expr ExprEvalError TypeEnv where
+instance Reducible (QExpr Expr) Expr ExprEvalError ExprReductionEnv where
   reduce q = do
     t <- case q of
-      Univ rs b -> allM (test rs) b
-      Exis rs b -> anyM (test rs) b
+      Univ rs b -> allM' (test rs) b
+      Exis rs b -> anyM' (test rs) b
     pure $ ELit $ LBool t
     where
       test rs =
@@ -84,25 +77,60 @@ instance Reducible (QExpr Expr) Expr ExprEvalError TypeEnv where
             envs = fmap (zip vars) (sequenceA doms)
          in [pure . bool <=< reduce . inEnv' env | env <- envs]
 
-rephrase = walk $ \case
+desugar = walk $ \case
   ETree t -> mkChurchTree t
-  ENApp f as -> foldl' EApp f as
-  ENLam bs e -> foldr' ELam e bs
-  EQnt q -> rephrase $ case q of
-    Univ rs b -> foldl1 (EBinOp And) (bndSeq rs b)
-    Exis rs b -> foldl1 (EBinOp Or) (bndSeq rs b)
+  EInv f as -> foldl' EApp f as
+  EFun bs e -> foldr' ELam e bs
+  EQnt q -> desugar $ case q of
+    Univ rs b -> join And rs b
+    Exis rs b -> join Or rs b
     where
-      qrBnd (QRstr v (Dom t _)) = Binder v t
+      join op rs b = foldl1 (EBinOp op) (bindEnum rs b)
+      qrBind (QRstr v (Dom t _)) = Binder v t
       qrDom (QRstr _ (Dom _ s)) = Set.toList s
-      bndSeq rs e =
-        let bnds = fmap qrBnd rs
+      bindEnum rs e =
+        let binds = fmap qrBind rs
             args = traverse qrDom rs
-         in [ENApp (ENLam bnds e) a | a <- args]
+         in [EInv (EFun binds e) a | a <- args]
   e -> e
 
-instance Reducible Expr Expr ExprEvalError TypeEnv where
-  runReduce = runReduce' mkCEnv
-  runNormalize = runNormalize' mkCEnv
+primOpMap :: BinOp -> Expr -> Expr -> Expr
+primOpMap op = case op of
+  Eq -> l (==) Eq
+  NEq -> l (/=) NEq
+  LT -> o (<)
+  LTE -> o (<=)
+  GT -> o (P.>)
+  GTE -> o (>=)
+  And -> b (&&)
+  Or -> b (||)
+  Impl -> b (\e e' -> e' || not e)
+  Add -> i (+)
+  Sub -> i (-)
+  Mul -> i (P.*)
+  where
+    l f _ (ELit l0) (ELit l1) = ELit $ LBool (f l0 l1)
+    l _ op e0 e1 = EBinOp op e0 e1
+    o f (ELit (LInt i0)) (ELit (LInt i1)) = ELit $ LBool (f i0 i1)
+    o _ _ _ = error "ordinal expressions only"
+    b f (ELit (LBool b0)) (ELit (LBool b1)) = ELit $ LBool (f b0 b1)
+    b _ _ _ = error "boolean expressions only"
+    i f (ELit (LInt i0)) (ELit (LInt i1)) = ELit $ LInt (f i0 i1)
+    i _ _ _ = error "integer expressions only"
+
+mkReductionEnv = ExprRedEnv {tyEnv = mkCEnv, relEnv = Map.empty}
+
+tyOf e = asks (\s -> inferIn (tyEnv s) e)
+
+tryTyOf e = do
+  eTy <- tyOf e
+  case eTy of
+    Left err -> throwError $ RuntimeTypeError err
+    Right t -> pure t
+
+instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
+  runReduce = runReduce' mkReductionEnv
+  runNormalize = runNormalize' mkReductionEnv
 
   -- cbn reduction to weak head normal form
   reduce expr = case expr of
@@ -120,8 +148,9 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
       -- to terms, in which case they simply abstract a free variable.
       EBind b -> reduce (ELam b e1)
       -- (1c) normal form for lhs, goto rhs
-      -- here we allow unbound (so unreducible) variables of tyfun into
-      -- the normal form. this also allows literals, but that doesn't type check.
+      -- here we allow unbound variables into the normal form
+      -- as unreduced redexes. this also allows literals, but
+      -- that doesn't type check.
       _ | not (reducible e0) -> do
         e1' <- reduce e1
         pure (e0 * e1')
@@ -140,51 +169,36 @@ instance Reducible Expr Expr ExprEvalError TypeEnv where
     EUnOp Neg e -> do
       e' <- reduce e
       pure $ ELit $ LBool $ not $ bool e'
-    EBinOp op e0 e1 ->
-      let b = ELit . LBool
-       in do
-            e0' <- reduce e0
-            e1' <- reduce e1
-            pure $ case op of
-              -- term level equality is selectively defined
-              Eq ->
-                let eq = b $ (==) e0' e1'
-                    noop = EBinOp op e0' e1'
-                 in case (e0', e1') of
-                      (ELit {}, ELit {}) -> eq
-                      (ESet {}, ESet {}) -> eq
-                      _ -> noop
-              -- as should inequality be
-              NEq -> b $ (/=) e0' e1'
-              LT -> b $ (<) e0' e1'
-              LTE -> b $ (<=) e0' e1'
-              GT -> b $ (P.>) e0' e1'
-              GTE -> b $ (>=) e0' e1'
-              And -> b $ and $ bool <$> [e0', e1']
-              Or -> b $ or $ bool <$> [e0', e1']
-              Impl -> b $ or [bool e1', not (bool e0')]
-              Add -> (+) e0' e1'
-              Sub -> (-) e0' e1'
-              Mul -> mul e0' e1'
+    EBinOp op e0 e1 -> do
+      e0' <- reduce e0
+      e1' <- reduce e1
+
+      eArgTy <- tyOf e0' -- the type checker enforces equality of e0 & e1
+      relEnv <- asks relEnv
+
+      let primOp = let op' = primOpMap op in pure $ e0' `op'` e1'
+          uOp argTy = case Map.lookup argTy relEnv of
+            Nothing -> primOp
+            Just relMap -> maybe primOp (\op -> reduce (op * e0 * e1)) (Map.lookup op relMap)
+
+      either (const primOp) uOp eArgTy
     ECond x y z -> do
       x' <- reduce x
       case x' of
         ELit LBool {} -> reduce $ if bool x' then y else z
         _ -> pure $ ECond x' y z
-    ETree t -> reduce t
     ETyCase b cs -> do
       b' <- reduce b
-      env <- ask
-      case inferIn env b' of
-        Left e -> throwError $ RuntimeTypeError e
-        Right ty -> case cs of
-          ((Binder p ty', e) : cs') ->
-            if unifiable ty ty'
-              then case runUnify [(p, b)] of
-                Left e -> throwError $ EUnificationError e
-                Right s -> reduce $ inEnv s e
-              else reduce $ ETyCase b cs'
-          _ -> throwError $ InexhaustiveCase expr
+      bTy <- tryTyOf b'
+
+      case cs of
+        ((Binder p pTy, e) : cs') ->
+          if unifiable bTy pTy
+            then case runUnify [(p, b')] of
+              Left e -> throwError $ EUnificationError e
+              Right s -> reduce $ inEnv s e
+            else reduce $ ETyCase b cs'
+        _ -> throwError $ InexhaustiveCase expr
     ELitCase b cs -> do
       b' <- reduce b
       case cs of
@@ -230,9 +244,12 @@ instance Unifiable Expr where
 type Normalization = Either ExprEvalError Expr
 
 confluent :: Expr -> Expr -> Bool
-confluent e0 e1 = case (runNormalize e0 :: Normalization, runNormalize e1 :: Normalization) of
+confluent e0 e1 = case (reduce e0, reduce e1) of
   (Right e1', Right e0') -> e0' @= e1'
   _ -> False
+  where
+    reduce :: Expr -> Normalization
+    reduce = runNormalize . desugar
 
 e0 *= e1 = confluent e0 e1
 
@@ -241,6 +258,6 @@ e0 *!= e1 = not (e0 *= e1)
 eval :: Expr -> Either ExprEvalError Expr
 eval expr = case runSignify expr' of
   Left err -> Left $ CompilationTypeError err
-  Right env -> runReduce' env expr'
+  Right env -> runReduce' (ExprRedEnv {tyEnv = env, relEnv = Map.empty}) expr'
   where
-    expr' = evalRename expr
+    expr' = evalRename $ desugar expr

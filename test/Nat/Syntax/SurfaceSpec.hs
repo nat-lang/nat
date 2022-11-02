@@ -10,7 +10,7 @@ import Nat.Syntax.Surface
 import Nat.Syntax.Type
 import Test.Hspec
 import Text.RawString.QQ
-import Prelude hiding ((&&), (*), (>), (||))
+import Prelude hiding ((*), (>))
 
 [f, x, y, z, p, q] = mkEVar <$> ["f", "x", "y", "z", "p", "q"]
 
@@ -103,7 +103,7 @@ spec = do
 
     it "parses trees of binary operations" $ do
       parse pETree "[x || x [(f y) != (f x)] [(\\f.x) && (\\f.y)]]"
-        `shouldBe` Right (ETree (Node (x || x) (Node ((f * y) !== (f * x)) Leaf Leaf) (Node ((f ~> x) && (f ~> y)) Leaf Leaf)))
+        `shouldBe` Right (ETree (Node (x ||| x) (Node ((f * y) !== (f * x)) Leaf Leaf) (Node ((f ~> x) &&& (f ~> y)) Leaf Leaf)))
 
     it "parses trees of ternary conditionals " $ do
       parse pETree "[if z then y else x [\\x.if x then z else y] [if y then x else z]]"
@@ -159,7 +159,7 @@ spec = do
     it "parses sets of unary operations" $ do
       parse pESet "{!x,!y,!z}" `shouldBe` Right (mkS [not' x, not' y, not' z])
     it "parses sets of binary operations" $ do
-      parse pESet "{x && y, y == x, z || y}" `shouldBe` Right (mkS [x && y, y === x, z || y])
+      parse pESet "{x && y, y == x, z || y}" `shouldBe` Right (mkS [x &&& y, y === x, z ||| y])
     it "parses sets of lambdas" $ do
       parse pESet "{\\x.x,\\y.y,\\z.z}" `shouldBe` Right (mkS [x ~> x, y ~> y, z ~> z])
     it "parses sets of function applications" $ do
@@ -190,25 +190,25 @@ spec = do
     it "parses binary operations on primitives" $ do
       parse pExpr "x == y" `shouldBe` Right (x === y)
       parse pExpr "x != y" `shouldBe` Right (x !== y)
-      parse pExpr "x && y" `shouldBe` Right (x && y)
-      parse pExpr "x || y" `shouldBe` Right (x || y)
+      parse pExpr "x && y" `shouldBe` Right (x &&& y)
+      parse pExpr "x || y" `shouldBe` Right (x ||| y)
       parse pExpr "x + y" `shouldBe` Right (EBinOp Add x y)
       parse pExpr "x - y" `shouldBe` Right (EBinOp Sub x y)
     it "parses binary operations on expressions" $ do
-      parse pExpr "(f x) && (f y)" `shouldBe` Right ((f * x) && (f * y))
-      parse pExpr "(f x) || (f y)" `shouldBe` Right ((f * x) || (f * y))
+      parse pExpr "(f x) && (f y)" `shouldBe` Right ((f * x) &&& (f * y))
+      parse pExpr "(f x) || (f y)" `shouldBe` Right ((f * x) ||| (f * y))
       parse pExpr "(f x) + (f y)" `shouldBe` Right (EBinOp Add (f * x) (f * y))
 
     it "parses operations of different arity on primitives in concert" $ do
       parse pExpr "!(p == q)" `shouldBe` Right (not' (p === q))
       parse pExpr "!(p != q)" `shouldBe` Right (not' (p !== q))
-      parse pExpr "!(p && q)" `shouldBe` Right (not' (p && q))
-      parse pExpr "!(p || q)" `shouldBe` Right (not' (p || q))
-      parse pExpr "(!p && !q)" `shouldBe` Right (not' p && not' q)
-      parse pExpr "(!p || !q)" `shouldBe` Right (not' p || not' q)
+      parse pExpr "!(p && q)" `shouldBe` Right (not' (p &&& q))
+      parse pExpr "!(p || q)" `shouldBe` Right (not' (p ||| q))
+      parse pExpr "(!p && !q)" `shouldBe` Right (not' p &&& not' q)
+      parse pExpr "(!p || !q)" `shouldBe` Right (not' p ||| not' q)
     it "parses operations of different arity on expressions in concert" $ do
       parse pExpr "!((f p) == (f q))" `shouldBe` Right (not' ((f * p) === (f * q)))
-      parse pExpr "(!(f p) && !(f q))" `shouldBe` Right (not' (f * p) && not' (f * q))
+      parse pExpr "(!(f p) && !(f q))" `shouldBe` Right (not' (f * p) &&& not' (f * q))
 
     it "parses applications of lambdas to trees" $ do
       let tree = ETree $ Node (mkEBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)

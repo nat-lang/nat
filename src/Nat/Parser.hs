@@ -69,8 +69,10 @@ angles = btw "<" ">"
 curlies :: Parser a -> Parser a
 curlies = btw "{" "}"
 
+comma = space >> C.char ',' >> space
+
 commaSep :: Parser a -> Parser [a]
-commaSep p = p `sepBy` (space >> C.char ',' >> space)
+commaSep p = p `sepBy` comma
 
 pipeSep :: Parser a -> Parser [a]
 pipeSep p = p `sepBy` try (C.space >> C.char '|' >> C.space)

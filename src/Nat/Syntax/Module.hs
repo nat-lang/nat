@@ -18,6 +18,7 @@ import Text.Megaparsec.Debug (dbg)
 data ModuleExprR e
   = MDecl Var e
   | MLetRec Var e
+  | MStruct Var e [e]
   | MExec e
   deriving (Eq, Show, Ord, Functor, Foldable, Traversable)
 
@@ -46,11 +47,13 @@ pMDecl = do
 pMExec :: P.Parser ModuleExpr
 pMExec = MExec <$> pExpr
 
+pEDom v = EDom . Dom (TyCon v) <$> pSet
+
 pMDom = do
   P.reserved "dom"
   v <- pVar
   P.symbol "="
-  MDecl v . EDom . Dom (TyCon v) <$> pSet
+  MDecl v <$> pEDom v
 
 pMExpr = P.choice [pMExec, pMLetRec, pMDecl, pMDom]
 

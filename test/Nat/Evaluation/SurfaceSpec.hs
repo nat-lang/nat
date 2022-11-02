@@ -5,7 +5,6 @@ module Nat.Evaluation.SurfaceSpec where
 import qualified Data.Set as Set
 import Debug.Trace (traceM)
 import Nat.Context
-import Nat.Context (evalFreshT)
 import qualified Nat.Context as C
 import Nat.Evaluation.Context
 import Nat.Evaluation.Surface hiding ((*=), (@=))
@@ -17,7 +16,7 @@ import Nat.Syntax.Type
 import Nat.Unification
 import Test.HUnit ((@?=))
 import Test.Hspec
-import Prelude hiding (LTE, id, (&&), (*), (>), (||))
+import Prelude hiding (LTE, id, (*), (>))
 
 [f, x, y, z, l, r, a, b, c, e, p, q, n, m] = mkEVar <$> ["f", "x", "y", "z", "l", "r", "a", "b", "c", "e", "p", "q", "n", "m"]
 
@@ -122,6 +121,15 @@ spec = do
       -- λfλx . f(x) != λfλx . x(f)
       (f ~> (x ~> (f * x))) !@= (f ~> (x ~> (x * f)))
 
+  describe "desugar" $ do
+    it "maps trees to their church encodings" $ do
+      let t = ETree (Node f (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
+
+      desugar t `shouldBe` (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
+
+    it "maps quantifiers to coordinated predicates" $ do
+      True `shouldBe` False
+
   describe "reduce" $ do
     let reduce = runReduce :: Expr -> Either ExprEvalError Expr
     let id' y = (x ~> x) * y
@@ -154,11 +162,11 @@ spec = do
     it "reduces truth conditional binary operations between set membership" $ do
       let s = mkS [mkI 0, mkI 1]
 
-      reduce ((s * mkI 0) || (s * mkI 2)) `shouldBe` Right true
-      reduce ((s * mkI 0) && (s * mkI 2)) `shouldBe` Right false
+      reduce ((s * mkI 0) ||| (s * mkI 2)) `shouldBe` Right true
+      reduce ((s * mkI 0) &&& (s * mkI 2)) `shouldBe` Right false
 
-      reduce ((s * mkI 0) || (s * mkI 1)) `shouldBe` Right true
-      reduce ((s * mkI 0) && (s * mkI 1)) `shouldBe` Right true
+      reduce ((s * mkI 0) ||| (s * mkI 1)) `shouldBe` Right true
+      reduce ((s * mkI 0) &&& (s * mkI 1)) `shouldBe` Right true
 
     it "reduces applications of recursive functions" $ do
       --  λn. if n ≤ 1 then 1 else n * fact (n - 1)
@@ -191,11 +199,6 @@ spec = do
       reduce (s * s2) `shouldBe` Right true
       reduce (s * s3) `shouldBe` Right false
 
-    it "reduces trees to their church encodings" $ do
-      let t = ETree (Node f (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
-
-      reduce t `shouldBe` reduce (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
-
     it "reduces case expressions on booleans" $ do
       reduce (ELitCase true [(true, x)]) `shouldBe` Right x
       reduce (ELitCase false [(false, y), (true, x), (false, z)]) `shouldBe` Right y
@@ -210,24 +213,23 @@ spec = do
       reduce (not' false) `shouldBe` Right true
 
     it "reduces truth conditional binary operations on booleans" $ do
-      reduce (true && false) `shouldBe` Right false
-      reduce (true || false) `shouldBe` Right true
+      reduce (true &&& false) `shouldBe` Right false
+      reduce (true ||| false) `shouldBe` Right true
 
     it "reduces truth conditional unary operations on terms that reduce to booleans" $ do
       reduce (not' (id' true)) `shouldBe` Right false
       reduce (not' (id' false)) `shouldBe` Right true
 
     it "reduces truth conditional binary operations on terms that reduce to booleans" $ do
-      reduce (id' true && id' false) `shouldBe` Right false
-      reduce (id' true || id' false) `shouldBe` Right true
+      reduce (id' true &&& id' false) `shouldBe` Right false
+      reduce (id' true ||| id' false) `shouldBe` Right true
 
     it "reduces inequalities between primitives" $ do
       reduce (true !== false) `shouldBe` Right true
-      reduce (x !== y) `shouldBe` Right true
       reduce (zero !== one) `shouldBe` Right true
 
     it "reduces inequalities between terms that reduce to primitives" $ do
-      reduce ((true && true) !== (false && false)) `shouldBe` Right true
+      reduce ((true &&& true) !== (false &&& false)) `shouldBe` Right true
 
     let tup = ETup [id * true, id * false]
 
@@ -266,12 +268,12 @@ spec = do
 
     it "reduces generalized quantifiers" $ do
       let par = parse pExpr
-      let red = reduce . rephrase
+      let red = reduce . desugar
 
       let dom = Dom (TyCon (mkVar "n")) (Set.fromList (mkI <$> [0, 1, 2, 3, 4, 5]))
       let gq b = q ~> (p ~> b)
       let every r = gq (univ [r, r] $ (q * x) ==> (p * x))
-      let some r = gq (exis [r] $ (q * x) && (p * x))
+      let some r = gq (exis [r] $ (q * x) &&& (p * x))
       let (EVar xV) = x
 
       let (Right lt2) = par "\\x. x <= 2"

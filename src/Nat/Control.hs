@@ -13,18 +13,34 @@ mapAccumM f z (x : xs) = do
   (z'', ys) <- mapAccumM f z' xs
   return (z'', y : ys)
 
-allM :: (Monad m) => [a -> m Bool] -> (a -> m Bool)
-allM [] _ = return True
-allM (p : ps) x = do
+allM' :: (Monad m) => [a -> m Bool] -> (a -> m Bool)
+allM' [] _ = return True
+allM' (p : ps) x = do
   q <- p x
   if q
-    then allM ps x
+    then allM' ps x
     else return False
 
-anyM :: (Monad m) => [a -> m Bool] -> (a -> m Bool)
-anyM [] _ = return False
-anyM (p : ps) x = do
+anyM' :: (Monad m) => [a -> m Bool] -> (a -> m Bool)
+anyM' [] _ = return False
+anyM' (p : ps) x = do
   q <- p x
   if q
     then return True
-    else anyM ps x
+    else anyM' ps x
+
+anyM :: (Monad m) => (a -> m Bool) -> [a] -> m Bool
+anyM _ [] = return False
+anyM p (x : xs) = do
+  q <- p x
+  if q
+    then return True
+    else anyM p xs
+
+allM :: (Monad m) => (a -> m Bool) -> [a] -> m Bool
+allM _ [] = return True
+allM p (x : xs) = do
+  q <- p x
+  if q
+    then allM p xs
+    else return False

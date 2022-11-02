@@ -32,13 +32,11 @@ data ModuleEvalError
   | MTypeError (InferenceError Type Expr)
   deriving (Eq, Show)
 
-type ModuleExprReduction = Reduction ModuleExpr ExprEvalError (TypeEnv, ModuleEnv)
-
 type ModuleEnv = Map.Map Var Expr
 
 toExpr = \case MDecl _ e -> e; MLetRec v e -> EFix v e; MExec e -> e
 
-instance Reducible ModuleExpr ModuleExpr ExprEvalError TypeEnv where
+instance Reducible ModuleExpr ModuleExpr ExprEvalError ExprReductionEnv where
   reduce = mapM reduce
 
 toEnv t = \case
@@ -55,22 +53,43 @@ typeMod mod = run (foldM typeMod' mkCEnv mod)
       (t, env') <- signify (toExpr mExpr)
       pure $ Map.unions [toEnv t mExpr, env', env]
 
-reduceMod :: Module -> TypeEnv -> Either ExprEvalError (ModuleEnv, Module)
-reduceMod mod tyEnv = run (mapAccumM accumModM Map.empty mod)
+-- | A relational type is a predicate of n identical types.
+isTyRel :: Type -> Type -> Bool
+isTyRel d = \case
+  TyFun d' r | d == d' -> isTyRel d r
+  r@TyCon {} | r == tyBool -> True
+  _ -> False
+
+{-
+modRels :: ModuleEnv -> TypeEnv -> RelationEnv
+modRels modEnv tyEnv = Map.foldrWithKey f Map.empty modEnv
   where
-    run m = runIdentity $ runExceptT (runReaderT m tyEnv)
+    f v e relEnv =
+      let rel = Map.singleton v e
+       in case Map.lookup v tyEnv of
+            Nothing -> error ("missing type: " ++ show v)
+            Just ty@(TyFun d r) | isTyRel d r -> case Map.lookup ty relEnv of
+              Nothing -> Map.insert ty rel relEnv
+              Just rels -> Map.insert ty (Map.union rel rels) relEnv
+            _ -> relEnv
+-}
+reduceMod :: Module -> TypeEnv -> Either ExprEvalError (ModuleEnv, Module)
+reduceMod mod tyEnv = run (mapAccumM accumMod Map.empty mod)
+  where
+    run m = runIdentity $ runExceptT (runReaderT m env)
+    env = ExprRedEnv {tyEnv = tyEnv, relEnv = Map.empty}
     merge modExpr modEnv = Map.union modEnv $ case modExpr of
       MDecl v e -> Map.singleton v e
       MLetRec v e -> Map.singleton v e
       _ -> Map.empty
-    accumModM env expr = do
+    accumMod env expr = do
       expr' <- reduce (inEnv env expr)
       pure (merge expr' env, expr')
 
 eval :: Module -> Either ModuleEvalError Module
 eval mod = runExcept $ (reduceMod' <=< typeMod') mod
   where
-    (mod', s) = runRename mod
+    (mod', s) = runRename $ fmap (fmap desugar) mod
     typeMod' mod = case typeMod mod s of
       Left err -> throwError $ MTypeError err
       Right tyEnv -> pure tyEnv

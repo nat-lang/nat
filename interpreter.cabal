@@ -34,6 +34,7 @@ library
       Nat.Inference
       Nat.Parser
       Nat.Reduction
+      Nat.Syntax.Core
       Nat.Syntax.Module
       Nat.Syntax.Surface
       Nat.Syntax.Type
@@ -46,89 +47,61 @@ library
   hs-source-dirs:
       src
   build-depends:
-      aeson
-    , base >=4.7 && <5
-    , base-compat
+      base >=4.7 && <5
     , binary-tree >=0.0.9.0 && <0.1.1.0
-    , bytestring
     , containers
-    , cookie >=0.4.3 && <0.5
-    , data-default
-    , directory
-    , fast-logger
-    , filepath
     , haskeline
-    , http-api-data
-    , http-client
-    , http-types
-    , lucid >=2.9.11 && <2.12
     , megaparsec
     , monad-gen
-    , monad-memo
     , mtl
     , parsec
     , parser-combinators
     , pretty
-    , random >=1.1 && <1.3
     , repline >=0.1.2.0
-    , servant
-    , servant-server
-    , string-conversions
     , text
-    , time >=1.6.0.1 && <1.13
     , transformers
-    , vector
-    , wai
-    , wai-cors
-    , wai-extra
-    , wai-logger
-    , warp
   default-language: Haskell2010
 
-executable interpreter-exe
+executable nat-exe
   main-is: Main.hs
   hs-source-dirs:
-      app
+      exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
-    , base
-    , base-compat
+      base >=4.7 && <5
     , binary-tree >=0.0.9.0 && <0.1.1.0
-    , bytestring
     , containers
-    , cookie >=0.4.3 && <0.5
-    , data-default
-    , directory
-    , fast-logger
-    , filepath
     , haskeline
-    , http-api-data
-    , http-client
-    , http-types
-    , interpreter
-    , lucid >=2.9.11 && <2.12
     , megaparsec
     , monad-gen
-    , monad-memo
     , mtl
     , parsec
     , parser-combinators
     , pretty
-    , random >=1.1 && <1.3
     , repline >=0.1.2.0
-    , servant
-    , servant-server
-    , string-conversions
     , text
-    , time >=1.6.0.1 && <1.13
     , transformers
-    , vector
-    , wai
-    , wai-cors
-    , wai-extra
-    , wai-logger
-    , warp
+  default-language: Haskell2010
+
+executable repl-exe
+  main-is: REPL.hs
+  hs-source-dirs:
+      exe
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , binary-tree >=0.0.9.0 && <0.1.1.0
+    , containers
+    , haskeline
+    , megaparsec
+    , monad-gen
+    , mtl
+    , parsec
+    , parser-combinators
+    , pretty
+    , repline >=0.1.2.0
+    , text
+    , transformers
   default-language: Haskell2010
 
 test-suite spec
@@ -149,45 +122,22 @@ test-suite spec
       HUnit
     , aeson
     , base
-    , base-compat
     , binary-tree >=0.0.9.0 && <0.1.1.0
-    , bytestring
     , containers
-    , cookie >=0.4.3 && <0.5
-    , data-default
-    , directory
-    , fast-logger
-    , filepath
     , haskeline
     , hspec
     , hspec-wai
     , hspec-wai-json
-    , http-api-data
-    , http-client
-    , http-types
     , interpreter
-    , lucid >=2.9.11 && <2.12
     , megaparsec
     , monad-gen
-    , monad-memo
     , mtl
     , parsec
     , parser-combinators
     , pretty
-    , random >=1.1 && <1.3
     , raw-strings-qq
     , repline >=0.1.2.0
-    , servant
-    , servant-server
-    , string-conversions
     , text
-    , time >=1.6.0.1 && <1.13
     , transformers
-    , vector
-    , wai
-    , wai-cors
-    , wai-extra
-    , wai-logger
-    , warp
   default-language: Haskell2010
   build-tool-depends: hspec-discover:hspec-discover == 2.*

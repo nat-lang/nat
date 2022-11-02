@@ -49,6 +49,7 @@ data QRstr e = QRstr Var (Domain e)
 data QExpr e
   = Univ [QRstr e] !e
   | Exis [QRstr e] !e
+  | Iota (QRstr e) !e
 
 instance Prel.Eq e => Prel.Eq (Domain e) where
   (Dom t es) == (Dom t' es') = t == t' Prel.&& es == es'
@@ -91,8 +92,8 @@ data Expr
   | EUndef
   | EDom (Domain Expr)
   | EQnt (QExpr Expr)
-  | ENLam [Binder Var] Expr
-  | ENApp Expr [Expr]
+  | EFun [Binder Var] Expr
+  | EInv Expr [Expr]
   deriving (Prel.Eq, Ord)
 
 qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Domain Expr)] -> Expr -> Expr
@@ -105,9 +106,9 @@ exis :: [(Var, Domain Expr)] -> Expr -> Expr
 exis = qnt Exis
 
 -- | The alternative to writing this by hand is to make
---   `Expr` a recursive datatype, take its fix point, and
---   derive a properly general functor. For the time being
---   this is simpler.
+--   `Expr` a recursive datatype, take its fix point,
+--   derive a properly general functor, and then generalize
+--   that to a traversal
 instance Walkable Expr where
   walkMC' f = f ctn
     where
@@ -258,11 +259,11 @@ infixr 8 +>
 
 infixl 8 ~>
 
-(&&) :: Expr -> Expr -> Expr
-(&&) = EBinOp And
+(&&&) :: Expr -> Expr -> Expr
+(&&&) = EBinOp And
 
-(||) :: Expr -> Expr -> Expr
-(||) = EBinOp Or
+(|||) :: Expr -> Expr -> Expr
+(|||) = EBinOp Or
 
 (==>) = EBinOp Impl
 
