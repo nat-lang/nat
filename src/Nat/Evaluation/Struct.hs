@@ -3,7 +3,7 @@
 
 module Nat.Evaluation.Struct where
 
-import Control.Monad (foldM, replicateM)
+import Control.Monad (filterM, foldM, replicateM)
 import Data.List (foldl', permutations)
 import Data.Maybe (isJust)
 import qualified Data.Set as Set
@@ -133,22 +133,22 @@ abelianMonoid s@(Struct (ESet d) [f]) = eachM [monoid s, commutative f d]
 
 abelianGroup s@(Struct (ESet d) [f]) = eachM [group s, commutative f d]
 
-cancellation f d = allM p (pDom 3 d)
+cancels f d = allM p (pDom 3 d)
   where
     z = mkI 0
     p [a, b, c] = bReduce ((c !== z &&& ((f * c * a) === (f * c * b))) ==> (a === b))
 
-distribution f0 f1 d = allM p (pDom 3 d)
+distributes f g d = allM p (pDom 3 d)
   where
-    p [a, b, c] = (f0 * a * (f1 * b * c)) `eq` (f1 * (f0 * a * b) * (f0 * a * c))
+    p [a, b, c] = (f * a * (g * b * c)) `eq` (g * (f * a * b) * (f * a * c))
 
 integral str@(Struct d@(ESet s) [a, m]) =
   eachM
     [ algebra str,
       abelianGroup (Struct d [a]),
       abelianMonoid (Struct d [m]),
-      cancellation m s,
-      distribution a m s
+      cancels m s,
+      distributes a m s
     ]
 
 reflexive f _ | not (binary f) = return False
@@ -156,17 +156,32 @@ reflexive f d = allM1 d (\e -> bReduce (f * e * e))
 
 symmetric f d = allM sym (pDom 2 d)
   where
-    sym x y = bReduce ((f * x === y) ==> (f * y === x))
+    sym [x, y] = bReduce ((f * x === y) ==> (f * y === x))
 
--- antiSymmetric f d
+antiSymmetric f d = allM sym (pDom 2 d)
+  where
+    anti [x, y] = bReduce ((f * x === y) ==> (f * y !== x))
 
 transitive f d = allM tran (pDom 3 d)
   where
-    tran x y z = bReduce (f * x ===)
+    tran [x, y, z] = bReduce (((f * x * y) &&& (f * y * z)) ==> (f * x * z))
 
-partiallyOrdered f d = allM p (pDom 2 d)
+connected f d = allM con (pDom 2 d)
   where
-    p = 
--- chain
+    con [x, y] = bReduce ((x !== y) ==> ((f * x * y) ||| (f * y * x)))
 
--- continuous
+linear f d = allM lin (pDom 2 d)
+  where
+    lin [x, y] = bReduce ((f * x * y) ||| (f * y * x))
+
+partiallyOrdered f d = eachM [reflexive f d, antiSymmetric f d, transitive f d]
+
+fullyOrdered f d = eachM [partiallyOrdered f d, linear f d]
+
+isUpperBound e f d = allM1 d (\e' -> bReduce (f * e' * e))
+
+upperBoundsOf f d = filterM (\e -> isUpperBound e f d) (Set.toList d)
+
+isLeastUpperBound e f d = allM (\e' -> bReduce (f * e * e')) <$> upperBoundsOf f d
+
+isSupremum = isLeastUpperBound

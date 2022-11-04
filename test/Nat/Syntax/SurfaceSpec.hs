@@ -30,7 +30,7 @@ mkI = ELit . LInt
 
 mkS = ESet . Set.fromList
 
-mkEBind (EVar x) = EBind (Binder x TyNil)
+bind (EVar x) = EBind (Binder x TyNil)
 
 spec :: Spec
 spec = do
@@ -95,7 +95,7 @@ spec = do
 
     it "parses trees of binders" $ do
       parse pETree "[\\x [\\y] [\\z]]"
-        `shouldBe` Right (ETree (Node (mkEBind x) (Node (mkEBind y) Leaf Leaf) (Node (mkEBind z) Leaf Leaf)))
+        `shouldBe` Right (ETree (Node (bind x) (Node (bind y) Leaf Leaf) (Node (bind z) Leaf Leaf)))
 
     it "parses trees of unary operations" $ do
       parse pETree "[!x [!(\\y.z)] [!(y z)]]"
@@ -171,6 +171,24 @@ spec = do
       parse pESet "{[x [y][z]], [y [z][x]]}"
         `shouldBe` Right (mkS [ETree (Node x (Node y Leaf Leaf) (Node z Leaf Leaf)), ETree (Node y (Node z Leaf Leaf) (Node x Leaf Leaf))])
 
+  describe "pEQnt" $ do
+    let (EVar pV) = p
+
+    it "parses quantification over variables" $ do
+      parse pEQnt "forall p in q . p == p" `shouldBe` Right (univ [(pV, q)] (p === p))
+      parse pEQnt "exists p in q . p == p" `shouldBe` Right (exis [(pV, q)] (p === p))
+      parse pEQnt "the p in q . p == p" `shouldBe` Right (the [(pV, q)] (p === p))
+
+    it "parses quantification over expressions" $ do
+      let s = ESet $ Set.fromList [mkI 1, mkI 2, mkI 3]
+      parse pEQnt "forall p in {1,2,3} . p == p" `shouldBe` Right (univ [(pV, s)] (p === p))
+      parse pEQnt "exists p in {1,2,3} . p == p" `shouldBe` Right (exis [(pV, s)] (p === p))
+      parse pEQnt "the p in {1,2,3} . p == p" `shouldBe` Right (the [(pV, s)] (p === p))
+
+      parse pEQnt "forall p in f(x) . p == p" `shouldBe` Right (univ [(pV, f * x)] (p === p))
+      parse pEQnt "exists p in f(x) . p == p" `shouldBe` Right (exis [(pV, f * x)] (p === p))
+      parse pEQnt "the p in f(x) . p == p" `shouldBe` Right (the [(pV, f * x)] (p === p))
+
   describe "pExpr" $ do
     it "parses functional application of variables" $ do
       parse pExpr "f x" `shouldBe` Right (f * x)
@@ -211,7 +229,7 @@ spec = do
       parse pExpr "(!(f p) && !(f q))" `shouldBe` Right (not' (f * p) &&& not' (f * q))
 
     it "parses applications of lambdas to trees" $ do
-      let tree = ETree $ Node (mkEBind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
+      let tree = ETree $ Node (bind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
       parse pExpr "(\\x.x)[\\y [\\x.x(y)] [\\x.x]]" `shouldBe` Right ((x ~> x) * tree)
     it "parses applications of lambdas to sets" $ do
       parse pExpr "(\\x.x){x,y,z}" `shouldBe` Right ((x ~> x) * mkS [x, y, z])

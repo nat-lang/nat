@@ -127,9 +127,6 @@ spec = do
 
       desugar t `shouldBe` (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
 
-    it "maps quantifiers to coordinated predicates" $ do
-      True `shouldBe` False
-
   describe "reduce" $ do
     let reduce = runReduce :: Expr -> Either ExprEvalError Expr
     let id' y = (x ~> x) * y
@@ -268,7 +265,6 @@ spec = do
 
     it "reduces generalized quantifiers" $ do
       let par = parse pExpr
-      let red = reduce . desugar
 
       let dom = ESet (Set.fromList (mkI <$> [0, 1, 2, 3, 4, 5]))
       let gq b = q ~> (p ~> b)
@@ -279,11 +275,11 @@ spec = do
       let (Right lt2) = par "\\x. x <= 2"
       let (Right lt5) = par "\\x. x <= 5"
 
-      red (every (xV, dom) * lt2 * lt5) `shouldBe` Right true
-      red (some (xV, dom) * lt2 * lt5) `shouldBe` Right true
+      reduce (every (xV, dom) * lt2 * lt5) `shouldBe` Right true
+      reduce (some (xV, dom) * lt2 * lt5) `shouldBe` Right true
 
-      red (every (xV, dom) * lt5 * lt2) `shouldBe` Right false
-      red (some (xV, dom) * lt5 * lt2) `shouldBe` Right true
+      reduce (every (xV, dom) * lt5 * lt2) `shouldBe` Right false
+      reduce (some (xV, dom) * lt5 * lt2) `shouldBe` Right true
 
   describe "confluence (*=)" $ do
     let (*=) e0 e1 = (e0 E.*= e1) @?= True

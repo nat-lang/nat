@@ -9,7 +9,7 @@ import Control.Monad ((<=<))
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader (asks)
 import Data.Fixed (mod')
-import Data.Foldable (Foldable (foldl', foldr'))
+import Data.Foldable (Foldable (foldl', foldr'), length)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -62,8 +62,9 @@ instance Reducible (Set Expr) (Set Expr) ExprEvalError ExprReductionEnv where
     pure $ Set.fromList s'
 
 instance Reducible (QRstr Expr) (QRstr (Set Expr)) ExprEvalError ExprReductionEnv where
-  reduce (QRstr v e) =
-    QRstr v <$> case reduce e of
+  reduce (QRstr v e) = do
+    e' <- reduce e
+    QRstr v <$> case e' of
       ESet es -> pure es
       _ -> throwError $ NotEnumerable e
 
@@ -78,8 +79,10 @@ instance Reducible (QExpr Expr) Expr ExprEvalError ExprReductionEnv where
       split = unzip . fmap (\(QRstr v es) -> (v, Set.toList es))
       combine (vs, ds) = fmap (zip vs) (sequenceA ds)
       envs = combine . split
+
+      test :: ([Expr -> ExprReductionT Bool] -> (Expr -> ExprReductionT Bool)) -> [QRstr Expr] -> Expr -> ExprReductionT Bool
       test q rs b = do
-        rs' <- mapM reduce rs
+        rs' <- mapM (reduce :: QRstr Expr -> ExprReductionT (QRstr (Set Expr))) rs
         q [pure . bool <=< reduce . inEnv' env | env <- envs rs'] b
 
 desugar = walk $ \case
@@ -88,23 +91,44 @@ desugar = walk $ \case
   EFun bs e -> foldr' ELam e bs
   e -> e
 
-primOpMap :: BinOp -> Expr -> Expr -> Expr
-primOpMap op = case op of
+primUnOpMap :: UnOp -> Expr -> Expr
+primUnOpMap op = case op of
+  Neg -> ELit . LBool . not . bool
+  Len -> \case
+    ESet s -> ELit (LInt (fromIntegral $ length s))
+    e -> unexpectedOperand op e
+  where
+    unexpectedOperand op e = error ("unexpected operand " ++ show e ++ " for op " ++ show op)
+
+primBiOpMap :: BinOp -> Expr -> Expr -> Expr
+primBiOpMap op = case op of
   Eq -> l (==) Eq
   NEq -> l (/=) NEq
   LT -> o (<)
   LTE -> o (<=)
   GT -> o (P.>)
   GTE -> o (>=)
-  And -> b (&&)
-  Or -> b (||)
-  Impl -> b (\e e' -> e' || not e)
   Add -> i (+)
   Sub -> i (-)
   Mul -> i (P.*)
-  Div -> i (/)
   Mod -> i mod'
+  Impl -> b (\e e' -> e' || not e)
+  Mem -> \e0 e1 -> case (e0, e1) of
+    (e, ESet s) -> ELit (LBool (Set.member e s))
+    _ -> unexpectedOperands op e0 e1
+  -- overloaded ops
+  _ -> \e0 e1 -> case (e0, e1) of
+    (ESet {}, ESet {}) -> case op of
+      Div -> s Set.difference e0 e1
+      And -> s Set.union e0 e1
+      Or -> s Set.intersection e0 e1
+    (ELit {}, ELit {}) -> case op of
+      Div -> i (/) e0 e1
+      And -> b (&&) e0 e1
+      Or -> b (||) e0 e1
+    _ -> unexpectedOperands op e0 e1
   where
+    unexpectedOperands op e0 e1 = error ("unexpected operands " ++ show e0 ++ " " ++ show e1 ++ " for op " ++ show op)
     l f _ (ELit l0) (ELit l1) = ELit $ LBool (f l0 l1)
     l _ op e0 e1 = EBinOp op e0 e1
     o f (ELit (LInt i0)) (ELit (LInt i1)) = ELit $ LBool (f i0 i1)
@@ -113,6 +137,12 @@ primOpMap op = case op of
     b _ _ _ = error "boolean expressions only"
     i f (ELit (LInt i0)) (ELit (LInt i1)) = ELit $ LInt (f i0 i1)
     i _ _ _ = error "integer expressions only"
+    s f (ESet s0) (ESet s1) = ESet (f s0 s1)
+    s _ _ _ = error "set expressions only"
+    sb f (ESet s0) (ESet s1) = ELit (LBool (f s0 s1))
+    sb _ _ _ = error "set expressions only"
+    si f (ESet s) = ELit (LInt (f s))
+    si _ _ = error "set expressions only"
 
 mkReductionEnv = ExprRedEnv {tyEnv = mkCEnv, relEnv = Map.empty}
 
@@ -162,9 +192,9 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
           -- (1d.2) otherwise goto top
           _ -> reduce (e0' * e1)
     -- (2) sugar
-    EUnOp Neg e -> do
+    EUnOp op e -> do
       e' <- reduce e
-      pure $ ELit $ LBool $ not $ bool e'
+      pure $ primUnOpMap op e'
     EBinOp op e0 e1 -> do
       e0' <- reduce e0
       e1' <- reduce e1
@@ -172,7 +202,7 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
       eArgTy <- tyOf e0' -- the type checker enforces equality of e0 & e1
       relEnv <- asks relEnv
 
-      let primOp = let op' = primOpMap op in pure $ e0' `op'` e1'
+      let primOp = let op' = primBiOpMap op in pure $ e0' `op'` e1'
           uOp argTy = case Map.lookup argTy relEnv of
             Nothing -> primOp
             Just relMap -> maybe primOp (\op -> reduce (op * e0 * e1)) (Map.lookup op relMap)

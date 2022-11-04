@@ -20,11 +20,13 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (trace, traceM)
+import GHC.Float (fromRat)
 import Nat.Context
 import qualified Nat.Parser as P
 import Nat.Syntax.Type
 import Nat.Viz
 import Nat.Walk
+import Numeric (showFFloat)
 import Text.Megaparsec.Debug (dbg)
 import Text.PrettyPrint (char, parens, text, (<+>), (<>))
 import Prelude hiding (Eq, GT, LT, (*), (<>), (>))
@@ -39,9 +41,31 @@ data ABinder b t = Binder b t deriving (Prel.Eq, Ord)
 
 type Binder b = ABinder b Type
 
-data UnOp = Neg deriving (Prel.Eq, Ord, Show)
+data UnOp = Neg | Len deriving (Prel.Eq, Ord, Show)
 
-data BinOp = Add | Sub | Mul | Div | Mod | LT | GT | GTE | LTE | Eq | NEq | And | Or | Impl deriving (Prel.Eq, Ord, Show)
+data BinOp
+  = -- universal
+    Eq
+  | NEq
+  | -- ints
+    Add
+  | Sub
+  | Mul
+  | Mod
+  | LT
+  | GT
+  | GTE
+  | LTE
+  | -- ints & sets
+    Div
+  | -- bools & sets
+    And
+  | Or
+  | -- bools
+    Impl
+  | -- sets
+    Mem
+  deriving (Prel.Eq, Ord, Show)
 
 data Domain e = Dom Type (Set e)
 
@@ -64,14 +88,20 @@ instance Prel.Eq e => Prel.Eq (QRstr e) where
 instance Ord e => Ord (QRstr e) where
   (QRstr v d) <= (QRstr v' d') = v <= v' Prel.&& d <= d'
 
+qEq rs rs' b b' = rs == rs' Prel.&& b == b'
+
 instance Prel.Eq e => Prel.Eq (QExpr e) where
-  (Univ rs b) == (Univ rs' b') = rs == rs' Prel.&& b == b'
-  (Exis rs b) == (Exis rs' b') = rs == rs' Prel.&& b == b'
+  (Univ rs b) == (Univ rs' b') = qEq rs rs' b b'
+  (Exis rs b) == (Exis rs' b') = qEq rs rs' b b'
+  (Iota rs b) == (Iota rs' b') = qEq rs rs' b b'
   _ == _ = False
 
+qOrd rs rs' b b' = rs <= rs' Prel.&& b <= b'
+
 instance Ord e => Ord (QExpr e) where
-  (Univ rs b) <= (Univ rs' b') = rs <= rs' Prel.&& b <= b'
-  (Exis rs b) <= (Exis rs' b') = rs <= rs' Prel.&& b <= b'
+  (Univ rs b) <= (Univ rs' b') = qOrd rs rs' b b'
+  (Exis rs b) <= (Exis rs' b') = qOrd rs rs' b b'
+  (Iota rs b) <= (Iota rs' b') = qOrd rs rs' b b'
 
 data Expr
   = ELit Lit
@@ -95,6 +125,9 @@ data Expr
   | EQnt (QExpr Expr)
   | EFun [Binder Var] Expr
   | EInv Expr [Expr]
+  | -- new
+    ECast Expr Expr
+  | ECard Expr
   deriving (Prel.Eq, Ord)
 
 qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Expr)] -> Expr -> Expr
@@ -105,6 +138,9 @@ univ = qnt Univ
 
 exis :: [(Var, Expr)] -> Expr -> Expr
 exis = qnt Exis
+
+the :: [(Var, Expr)] -> Expr -> Expr
+the = qnt Iota
 
 -- | The alternative to writing this by hand is to make
 --   `Expr` a recursive datatype, take its fix point,
@@ -162,8 +198,11 @@ foldWalk f = f'
 
 instance Pretty Lit where
   ppr p l = case l of
-    LInt n -> text (show n)
+    LInt n -> text (truncate n)
     LBool b -> text (show b)
+    where
+      isInt x = x == fromInteger (round x)
+      truncate n = showFFloat (Just $ if isInt n then 0 else 2) (fromRat n) ""
 
 instance Pretty a => Pretty (Domain a) where
   ppr p (Dom _ es) = ppr p es
@@ -178,6 +217,7 @@ instance Pretty a => Pretty (QExpr a) where
   ppr p qe = case qe of
     Univ r b -> "∀" <> pq p r b
     Exis r b -> "∃" <> pq p r b
+    Iota r b -> "ι" <> pq p r b
     where
       pq p r b = ppr p r <> brackets (ppr p b)
 
