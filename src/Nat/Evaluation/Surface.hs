@@ -8,11 +8,14 @@ module Nat.Evaluation.Surface where
 import Control.Monad ((<=<))
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader (asks)
+import Data.Fixed (mod')
 import Data.Foldable (Foldable (foldl', foldr'))
 import qualified Data.Map as Map
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
 import Debug.Trace (traceM)
+import GHC.Real (Integral (quotRem))
 import Nat.Context
 import Nat.Control
 import Nat.Evaluation.Context
@@ -32,66 +35,57 @@ data ExprEvalError
   | EUnificationError (UnificationError Expr)
   | RuntimeTypeError (InferenceError Type Expr)
   | CompilationTypeError (InferenceError Type Expr)
+  | NotEnumerable Expr
   deriving (Eq, Show)
 
 type RelationEnv = Map.Map Type (Map.Map BinOp Expr)
 
 data ExprReductionEnv = ExprRedEnv {tyEnv :: TypeEnv, relEnv :: RelationEnv}
 
+type ExprReductionT r = Reduction r ExprEvalError ExprReductionEnv
+
 bool :: Expr -> Bool
 bool e = case e of
   (ELit (LBool b)) -> b
   _ -> error ("can only extract bool from literal bool: " ++ show e)
 
-numErr = error "bool is not a num"
-
-instance Num Lit where
-  (+) (LInt i0) (LInt i1) = LInt (i0 + i1)
-  (*) (LInt i0) (LInt i1) = LInt (i0 P.* i1)
-  abs (LInt i) = LInt (abs i)
-  signum (LInt l) = LInt (signum l)
-  fromInteger i = LInt (fromIntegral i)
-  negate (LInt i) = LInt (negate i)
-
 isIdx e = case e of EIdx {} -> True; _ -> False
 
 dIdx (EIdx i) = i
-dIdx _ = error "not an index"
+dIdx e = error ("not an index: " ++ show e)
 
 reducible expr = case expr of EVar {} -> False; ELit {} -> False; _ -> True
 
-instance Reducible (Set.Set Expr) (Set.Set Expr) ExprEvalError ExprReductionEnv where
+instance Reducible (Set Expr) (Set Expr) ExprEvalError ExprReductionEnv where
   reduce s = do
     s' <- mapM reduce (Set.toList s)
     pure $ Set.fromList s'
 
+instance Reducible (QRstr Expr) (QRstr (Set Expr)) ExprEvalError ExprReductionEnv where
+  reduce (QRstr v e) =
+    QRstr v <$> case reduce e of
+      ESet es -> pure es
+      _ -> throwError $ NotEnumerable e
+
 instance Reducible (QExpr Expr) Expr ExprEvalError ExprReductionEnv where
   reduce q = do
     t <- case q of
-      Univ rs b -> allM' (test rs) b
-      Exis rs b -> anyM' (test rs) b
+      Univ rs b -> test allM' rs b
+      Exis rs b -> test anyM' rs b
+    -- Iota rs b ->
     pure $ ELit $ LBool t
     where
-      test rs =
-        let (vars, doms) = unzip $ fmap (\(QRstr v (Dom _ es)) -> (v, Set.toList es)) rs
-            envs = fmap (zip vars) (sequenceA doms)
-         in [pure . bool <=< reduce . inEnv' env | env <- envs]
+      split = unzip . fmap (\(QRstr v es) -> (v, Set.toList es))
+      combine (vs, ds) = fmap (zip vs) (sequenceA ds)
+      envs = combine . split
+      test q rs b = do
+        rs' <- mapM reduce rs
+        q [pure . bool <=< reduce . inEnv' env | env <- envs rs'] b
 
 desugar = walk $ \case
   ETree t -> mkChurchTree t
   EInv f as -> foldl' EApp f as
   EFun bs e -> foldr' ELam e bs
-  EQnt q -> desugar $ case q of
-    Univ rs b -> join And rs b
-    Exis rs b -> join Or rs b
-    where
-      join op rs b = foldl1 (EBinOp op) (bindEnum rs b)
-      qrBind (QRstr v (Dom t _)) = Binder v t
-      qrDom (QRstr _ (Dom _ s)) = Set.toList s
-      bindEnum rs e =
-        let binds = fmap qrBind rs
-            args = traverse qrDom rs
-         in [EInv (EFun binds e) a | a <- args]
   e -> e
 
 primOpMap :: BinOp -> Expr -> Expr -> Expr
@@ -108,6 +102,8 @@ primOpMap op = case op of
   Add -> i (+)
   Sub -> i (-)
   Mul -> i (P.*)
+  Div -> i (/)
+  Mod -> i mod'
   where
     l f _ (ELit l0) (ELit l1) = ELit $ LBool (f l0 l1)
     l _ op e0 e1 = EBinOp op e0 e1
@@ -217,17 +213,20 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
   normalize expr =
     reduce expr >>= \case
       ELam b body -> do
-        body' <- normalize body
+        body' <- norm body
         pure (ELam b body')
       EApp e0 e1 -> do
-        e0' <- normalize e0
-        e1' <- normalize e1
+        e0' <- norm e0
+        e1' <- norm e1
         pure (e0 * e1)
       EBinOp op e0 e1 -> do
-        e0' <- normalize e0
-        e1' <- normalize e1
+        e0' <- norm e0
+        e1' <- norm e1
         pure $ EBinOp op e0' e1'
       expr' -> pure expr'
+    where
+      norm :: Expr -> ExprReductionT Expr
+      norm = normalize
 
 -- | We pattern match via unification.
 instance Unifiable Expr where

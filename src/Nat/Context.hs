@@ -85,15 +85,15 @@ instance Contextual a => Contextual (Pair a) where
   fv :: Contextual a => (a, a) -> Set.Set Var
   fv (t0, t1) = fv t0 `Set.union` fv t1
 
-unfoldSet :: (a -> Set.Set Var) -> [a] -> Set.Set Var
-unfoldSet f = foldr (Set.union . f) Set.empty
+foldSet :: (a -> Set.Set Var) -> [a] -> Set.Set Var
+foldSet f = foldr (Set.union . f) Set.empty
 
 instance {-# OVERLAPPABLE #-} Contextual a => Contextual [a] where
   fv :: [a] -> Set.Set Var
-  fv = unfoldSet fv
+  fv = foldSet fv
 
   bv :: Contextual a => [a] -> Set.Set Var
-  bv = unfoldSet bv
+  bv = foldSet bv
 
 instance Contextual a => Contextual (Env a) where
   fv :: Contextual a => Env a -> Set.Set Var

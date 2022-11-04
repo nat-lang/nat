@@ -8,13 +8,16 @@ import Control.Monad.Reader (ReaderT (runReaderT))
 
 type Reduction a e r = ReaderT r (ExceptT e Identity) a
 
-class Reducible a b e r | a -> b, a -> r where
+runReduction :: Reduction a e r -> r -> Either e a
+runReduction m env = runIdentity $ runExceptT (runReaderT m env)
+
+class Reducible a b e r | a -> r where
   reduce :: a -> Reduction b e r
   runReduce :: a -> Either e b
   runReduce' :: r -> a -> Either e b
-  runReduce' env a = runIdentity $ runExceptT (runReaderT (reduce a) env)
+  runReduce' env a = runReduction (reduce a) env
 
   normalize :: a -> Reduction b e r
   runNormalize :: a -> Either e b
   runNormalize' :: r -> a -> Either e b
-  runNormalize' env a = runIdentity $ runExceptT (runReaderT (normalize a) env)
+  runNormalize' env a = runReduction (normalize a) env

@@ -270,9 +270,9 @@ spec = do
       let par = parse pExpr
       let red = reduce . desugar
 
-      let dom = Dom (TyCon (mkVar "n")) (Set.fromList (mkI <$> [0, 1, 2, 3, 4, 5]))
+      let dom = ESet (Set.fromList (mkI <$> [0, 1, 2, 3, 4, 5]))
       let gq b = q ~> (p ~> b)
-      let every r = gq (univ [r, r] $ (q * x) ==> (p * x))
+      let every r = gq (univ [r] $ (q * x) ==> (p * x))
       let some r = gq (exis [r] $ (q * x) &&& (p * x))
       let (EVar xV) = x
 

@@ -44,9 +44,10 @@ mkTv' i = let c = 'A' : show i in TyVar (Var c c)
 -------------------------------------------------------------------------------
 -- Expression contexts
 -------------------------------------------------------------------------------
-instance Contextual [QRstr Expr] where
-  bv = foldl1 Set.union . fmap (\(QRstr v _) -> Set.singleton v)
-  fv _ = Set.empty
+
+instance Contextual (QRstr Expr) where
+  bv (QRstr v _) = Set.singleton v
+  fv qr@(QRstr _ e) = fv e Set.\\ bv qr
 
 instance Contextual (QExpr Expr) where
   bv q = case q of
@@ -78,7 +79,6 @@ instance Contextual Expr where
     EWild -> Set.empty
     EUndef -> Set.empty
     EQnt q -> fv q
-    e -> error ("unexpected expr: " ++ show e)
 
 instance Substitutable Expr Expr where
   sub v e = walkC $ \ctn -> \case
@@ -133,8 +133,8 @@ instance AlphaComparable Expr where
 -- Explicit type contexts
 -------------------------------------------------------------------------------
 
--- take care to preserve the syntactic identity of variables
--- within the scopes of typed lambdas and tycase patterns
+-- | take care to preserve the syntactic identity of variables
+--   within the scopes of typed lambdas and tycase patterns
 renameETypes :: Expr -> FreshM Expr
 renameETypes = walkM $ \case
   ELam b e -> do
@@ -169,8 +169,8 @@ instance Contextual ModuleExpr where
     _ -> Set.empty
 
 instance {-# OVERLAPPING #-} Contextual Module where
-  fv mod = unfoldSet fv mod Set.\\ bv mod
-  bv = unfoldSet bv
+  fv mod = foldSet fv mod Set.\\ bv mod
+  bv = foldSet bv
 
 instance Substitutable Expr ModuleExpr where
   sub v expr mExpr =

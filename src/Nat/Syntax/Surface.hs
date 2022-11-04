@@ -16,6 +16,7 @@ import Data.Bifunctor (second)
 import Data.Foldable (toList)
 import Data.List (intercalate)
 import qualified Data.Monoid as M
+import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Tree.Binary.Preorder as T
 import Debug.Trace (trace, traceM)
@@ -30,7 +31,7 @@ import Prelude hiding (Eq, GT, LT, (*), (<>), (>))
 import qualified Prelude as Prel
 
 data Lit
-  = LInt Int
+  = LInt Rational
   | LBool Bool
   deriving (Prel.Eq, Ord, Show)
 
@@ -40,16 +41,16 @@ type Binder b = ABinder b Type
 
 data UnOp = Neg deriving (Prel.Eq, Ord, Show)
 
-data BinOp = Add | Sub | Mul | LT | GT | GTE | LTE | Eq | NEq | And | Or | Impl deriving (Prel.Eq, Ord, Show)
+data BinOp = Add | Sub | Mul | Div | Mod | LT | GT | GTE | LTE | Eq | NEq | And | Or | Impl deriving (Prel.Eq, Ord, Show)
 
-data Domain e = Dom Type (Set.Set e)
+data Domain e = Dom Type (Set e)
 
-data QRstr e = QRstr Var (Domain e)
+data QRstr e = QRstr Var e
 
 data QExpr e
   = Univ [QRstr e] !e
   | Exis [QRstr e] !e
-  | Iota (QRstr e) !e
+  | Iota [QRstr e] !e
 
 instance Prel.Eq e => Prel.Eq (Domain e) where
   (Dom t es) == (Dom t' es') = t == t' Prel.&& es == es'
@@ -84,7 +85,7 @@ data Expr
   | ETree (T.Tree Expr)
   | ELitCase Expr [(Expr, Expr)]
   | ETyCase Expr [(Binder Expr, Expr)]
-  | ESet (Set.Set Expr)
+  | ESet (Set Expr)
   | EFix Var Expr
   | ETup [Expr]
   | EIdx Int -- TODO: parse me
@@ -96,13 +97,13 @@ data Expr
   | EInv Expr [Expr]
   deriving (Prel.Eq, Ord)
 
-qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Domain Expr)] -> Expr -> Expr
+qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Expr)] -> Expr -> Expr
 qnt q vs b = EQnt (q (fmap (uncurry QRstr) vs) b)
 
-univ :: [(Var, Domain Expr)] -> Expr -> Expr
+univ :: [(Var, Expr)] -> Expr -> Expr
 univ = qnt Univ
 
-exis :: [(Var, Domain Expr)] -> Expr -> Expr
+exis :: [(Var, Expr)] -> Expr -> Expr
 exis = qnt Exis
 
 -- | The alternative to writing this by hand is to make
@@ -112,8 +113,6 @@ exis = qnt Exis
 instance Walkable Expr where
   walkMC' f = f ctn
     where
-      go = walkMC' f
-      sgo s = Set.fromList <$> mapM go (Set.toList s)
       ctn = \case
         EApp e0 e1 -> EApp <$> go e0 <*> go e1
         ECond x y z -> ECond <$> go x <*> go y <*> go z
@@ -124,15 +123,20 @@ instance Walkable Expr where
         ELam b e -> ELam b <$> go e
         ETree t -> ETree <$> mapM go t
         ELitCase e cs -> ELitCase <$> go e <*> mapM (mapM go) cs
-        ETyCase e cs -> ETyCase <$> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
+        ETyCase e cs -> ETyCase <$> go e <*> mapM cgo cs
         EFix v e -> EFix v <$> go e
         EQnt q ->
           EQnt <$> case q of
-            Exis r e -> Exis r <$> go e
-            Univ r e -> Univ r <$> go e
+            Exis rs e -> qgo Exis rs e
+            Univ rs e -> qgo Univ rs e
         EDom (Dom t es) -> EDom <$> (Dom t <$> sgo es)
         -- non recursive inhabitants
         e' -> f pure e'
+      sgo s = Set.fromList <$> mapM go (Set.toList s)
+      rgo (QRstr v e) = QRstr v <$> go e
+      qgo q rs e = q <$> mapM rgo rs <*> go e
+      cgo (b, e) = do e' <- go e; pure (b, e')
+      go = walkMC' f
 
 {-
 foldWalk :: Monoid b => (Expr -> b) -> Expr -> b
@@ -181,7 +185,7 @@ ppCase p c es =
   let pp (e0, e1) = ppr p e0 <+> text "->" <+> ppr p e1
    in ppr p c <> char ':' <+> text (intercalate " | " (show . pp <$> es))
 
-instance Pretty a => Pretty (Set.Set a) where
+instance Pretty a => Pretty (Set a) where
   ppr p s = curlies $ text (intercalate ", " (show . ppr 0 <$> Set.toList s))
 
 instance Pretty Expr where
@@ -202,6 +206,8 @@ instance Pretty Expr where
       Add -> "+"
       Sub -> "-"
       Mul -> "*"
+      Div -> "/"
+      Mod -> "%"
       LT -> "<"
       LTE -> "<="
       GT -> ">"
@@ -255,9 +261,7 @@ infixl 9 *
 
 infixl 8 &>
 
-infixr 8 +>
-
-infixl 8 ~>
+infixr 8 +>, ~>
 
 (&&&) :: Expr -> Expr -> Expr
 (&&&) = EBinOp And
@@ -402,6 +406,25 @@ pSet = do
 
 pESet = ESet <$> pSet
 
+pQRstr = do
+  v <- pVar
+  P.reserved "in"
+  QRstr v <$> pExpr
+
+pQnt keyw q = do
+  P.reserved keyw
+  rstrs <- P.commaSep pQRstr
+  P.symbol "."
+  q rstrs <$> pExpr
+
+pUniv = pQnt "forall" Univ
+
+pExis = pQnt "exists" Exis
+
+pIota = pQnt "the" Iota
+
+pEQnt = EQnt <$> P.choice [pUniv, pExis, pIota]
+
 after p fn = do
   mA <- P.observing p
   case mA of
@@ -466,6 +489,8 @@ operatorTable =
       P.infixOpL "+" (EBinOp Add),
       P.infixOpL "-" (EBinOp Sub),
       P.infixOpL "*" (EBinOp Mul),
+      P.infixOpL "/" (EBinOp Div),
+      P.infixOpL "%" (EBinOp Mod),
       P.infixOpL "<=" (EBinOp LTE),
       P.infixOpL ">=" (EBinOp GTE),
       P.infixOpL "<" (EBinOp LT),

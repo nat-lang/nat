@@ -35,7 +35,23 @@ newtype ParseState = ParseState {inTree :: Bool}
 type Parser = ParsecT Void Text (StateT ParseState Identity)
 
 keywords :: [String]
-keywords = ["if", "then", "else", "let", "letrec", "dom", "case", "tycase", "of", ":", "undef"]
+keywords =
+  [ "if",
+    "then",
+    "else",
+    "let",
+    "letrec",
+    "dom",
+    "case",
+    "tycase",
+    "of",
+    ":",
+    "undef",
+    "forall",
+    "exists",
+    "the",
+    "in"
+  ]
 
 lineComment = L.skipLineComment "//"
 

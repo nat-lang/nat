@@ -29,6 +29,7 @@ library
       Nat.Data
       Nat.Evaluation.Context
       Nat.Evaluation.Module
+      Nat.Evaluation.Struct
       Nat.Evaluation.Surface
       Nat.Evaluation.Type
       Nat.Inference
@@ -109,6 +110,7 @@ test-suite spec
   main-is: Spec.hs
   other-modules:
       Nat.Evaluation.ModuleSpec
+      Nat.Evaluation.StructSpec
       Nat.Evaluation.SurfaceSpec
       Nat.Evaluation.TypeSpec
       Nat.Syntax.ModuleSpec

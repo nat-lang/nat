@@ -44,3 +44,11 @@ allM p (x : xs) = do
   if q
     then allM p xs
     else return False
+
+findM :: (Monad m) => (a -> m Bool) -> [a] -> m (Maybe a)
+findM _ [] = return Nothing
+findM p (x : xs) = do
+  q <- p x
+  if q
+    then return (Just x)
+    else findM p xs
