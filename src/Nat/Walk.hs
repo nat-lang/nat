@@ -3,7 +3,7 @@ module Nat.Walk where
 import Control.Monad ((<=<))
 import Control.Monad.Identity
 
--- | E.g. a functor over a single type.
+-- | E.g. a monomorphic functor.
 class Walkable a where
   walkMC' :: Monad m => ((a -> m a) -> a -> m a) -> a -> m a
 

@@ -65,6 +65,10 @@ data BinOp
     Impl
   | -- sets
     Mem
+  | SubS
+  | SupS
+  | PSubS
+  | PSupS
   deriving (Prel.Eq, Ord, Show)
 
 data Domain e = Dom Type (Set e)

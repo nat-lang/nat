@@ -34,6 +34,8 @@ newtype ParseState = ParseState {inTree :: Bool}
 
 type Parser = ParsecT Void Text (StateT ParseState Identity)
 
+pState = ParseState {inTree = False}
+
 keywords :: [String]
 keywords =
   [ "if",
@@ -120,6 +122,6 @@ prefixOp, postfixOp :: Text -> (a -> a) -> Operator Parser a
 prefixOp name f = Prefix (f <$ symbol name)
 postfixOp name f = Postfix (f <$ symbol name)
 
-parse parser i = runIdentity $ evalStateT (runParserT parser "<input>" i) (ParseState {inTree = False})
+parse parser i = runIdentity $ evalStateT (runParserT parser "<input>" i) pState
 
-parseFile parser file = TiO.readFile file <&> \i -> evalStateT (runParserT parser file i) (ParseState {inTree = False})
+parseFile parser file = TiO.readFile file <&> \i -> evalStateT (runParserT parser file i) pState

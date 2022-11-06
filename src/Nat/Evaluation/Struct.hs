@@ -158,7 +158,7 @@ symmetric f d = allM sym (pDom 2 d)
   where
     sym [x, y] = bReduce ((f * x === y) ==> (f * y === x))
 
-antiSymmetric f d = allM sym (pDom 2 d)
+antiSymmetric f d = allM anti (pDom 2 d)
   where
     anti [x, y] = bReduce ((f * x === y) ==> (f * y !== x))
 
@@ -183,5 +183,3 @@ isUpperBound e f d = allM1 d (\e' -> bReduce (f * e' * e))
 upperBoundsOf f d = filterM (\e -> isUpperBound e f d) (Set.toList d)
 
 isLeastUpperBound e f d = allM (\e' -> bReduce (f * e * e')) <$> upperBoundsOf f d
-
-isSupremum = isLeastUpperBound

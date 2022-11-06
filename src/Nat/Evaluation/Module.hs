@@ -25,7 +25,6 @@ import Nat.Syntax.Module
 import Nat.Syntax.Surface
 import Nat.Syntax.Type
 import Nat.Unification
-import Nat.Walk (Walkable (walkM))
 
 data ModuleEvalError
   = MExprEvalError ExprEvalError
@@ -34,10 +33,23 @@ data ModuleEvalError
 
 type ModuleEnv = Map.Map Var Expr
 
-toExpr = \case MDecl _ e -> e; MLetRec v e -> EFix v e; MExec e -> e
-
 instance Reducible ModuleExpr ModuleExpr ExprEvalError ExprReductionEnv where
   reduce = mapM reduce
+
+instance Reducible Module Module ExprEvalError ExprReductionEnv where
+  reduce mod = do
+    (_, mod') <- mapAccumM reduce' Map.empty mod
+    return mod'
+    where
+      reduce' env expr = do
+        expr' <- reduce (inEnv env expr)
+        pure (merge expr' env, expr')
+      merge modExpr modEnv = Map.union modEnv $ case modExpr of
+        MDecl v e -> Map.singleton v e
+        MLetRec v e -> Map.singleton v e
+        _ -> Map.empty
+
+toExpr = \case MDecl _ e -> e; MLetRec v e -> EFix v e; MExec e -> e
 
 toEnv t = \case
   MDecl v _ -> Map.singleton v t
@@ -45,46 +57,13 @@ toEnv t = \case
   MExec _ -> Map.empty
 
 typeMod :: Module -> Int -> Either (InferenceError Type Expr) TypeEnv
-typeMod mod = run (foldM typeMod' mkCEnv mod)
+typeMod mod = run (foldM genSig mkCEnv mod)
   where
     run m s = runExcept $ evalStateT (runReaderT m mkCEnv) s
-    typeMod' :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
-    typeMod' env mExpr = local (Map.union env) $ do
+    genSig :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
+    genSig env mExpr = local (Map.union env) $ do
       (t, env') <- signify (toExpr mExpr)
       pure $ Map.unions [toEnv t mExpr, env', env]
-
--- | A relational type is a predicate of n identical types.
-isTyRel :: Type -> Type -> Bool
-isTyRel d = \case
-  TyFun d' r | d == d' -> isTyRel d r
-  r@TyCon {} | r == tyBool -> True
-  _ -> False
-
-{-
-modRels :: ModuleEnv -> TypeEnv -> RelationEnv
-modRels modEnv tyEnv = Map.foldrWithKey f Map.empty modEnv
-  where
-    f v e relEnv =
-      let rel = Map.singleton v e
-       in case Map.lookup v tyEnv of
-            Nothing -> error ("missing type: " ++ show v)
-            Just ty@(TyFun d r) | isTyRel d r -> case Map.lookup ty relEnv of
-              Nothing -> Map.insert ty rel relEnv
-              Just rels -> Map.insert ty (Map.union rel rels) relEnv
-            _ -> relEnv
--}
-reduceMod :: Module -> TypeEnv -> Either ExprEvalError (ModuleEnv, Module)
-reduceMod mod tyEnv = run (mapAccumM accumMod Map.empty mod)
-  where
-    run m = runIdentity $ runExceptT (runReaderT m env)
-    env = ExprRedEnv {tyEnv = tyEnv, relEnv = Map.empty}
-    merge modExpr modEnv = Map.union modEnv $ case modExpr of
-      MDecl v e -> Map.singleton v e
-      MLetRec v e -> Map.singleton v e
-      _ -> Map.empty
-    accumMod env expr = do
-      expr' <- reduce (inEnv env expr)
-      pure (merge expr' env, expr')
 
 eval :: Module -> Either ModuleEvalError Module
 eval mod = runExcept $ (reduceMod' <=< typeMod') mod
@@ -93,6 +72,7 @@ eval mod = runExcept $ (reduceMod' <=< typeMod') mod
     typeMod' mod = case typeMod mod s of
       Left err -> throwError $ MTypeError err
       Right tyEnv -> pure tyEnv
-    reduceMod' tyEnv = case reduceMod mod' tyEnv of
+    reduceIn tyEnv = runReduce' (ExprRedEnv {tyEnv = tyEnv, relEnv = Map.empty})
+    reduceMod' tyEnv = case reduceIn tyEnv mod' of
       Left err -> throwError $ MExprEvalError err
-      Right (_, mod) -> pure mod
+      Right mod -> pure mod
