@@ -6,7 +6,7 @@
 module Nat.Evaluation.Module where
 
 import Control.Monad (foldM, forM, (<=<))
-import Control.Monad.Except (Except, liftEither, runExcept, runExceptT, throwError, withExceptT)
+import Control.Monad.Except (Except, ExceptT, liftEither, runExcept, runExceptT, throwError, withExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.Reader (MonadReader (local), ReaderT (runReaderT), ask)
 import Control.Monad.State (evalStateT)
@@ -33,6 +33,8 @@ data ModuleEvalError
 
 type ModuleEnv = Map.Map Var Expr
 
+type ModuleEvalT a = ExceptT ModuleEvalError Identity a
+
 instance Reducible ModuleExpr ModuleExpr ExprEvalError ExprReductionEnv where
   reduce = mapM reduce
 
@@ -56,23 +58,38 @@ toEnv t = \case
   MLetRec v _ -> Map.singleton v t
   MExec _ -> Map.empty
 
-typeMod :: Module -> Int -> Either (InferenceError Type Expr) TypeEnv
-typeMod mod = run (foldM genSig mkCEnv mod)
+typeMod' :: Module -> Int -> Either (InferenceError Type Expr) TypeEnv
+typeMod' mod = run (foldM signifyIn mkCEnv mod)
   where
     run m s = runExcept $ evalStateT (runReaderT m mkCEnv) s
-    genSig :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
-    genSig env mExpr = local (Map.union env) $ do
+    signifyIn :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
+    signifyIn env mExpr = local (Map.union env) $ do
       (t, env') <- signify (toExpr mExpr)
       pure $ Map.unions [toEnv t mExpr, env', env]
 
-eval :: Module -> Either ModuleEvalError Module
-eval mod = runExcept $ (reduceMod' <=< typeMod') mod
+typeMod ::
+  Int ->
+  Module ->
+  ModuleEvalT TypeEnv
+typeMod s mod = case typeMod' mod s of
+  Left err -> throwError $ MTypeError err
+  Right tyEnv -> pure tyEnv
+
+reduceMod ::
+  Module ->
+  TypeEnv ->
+  ModuleEvalT Module
+reduceMod mod tyEnv = case reduceIn tyEnv mod of
+  Left err -> throwError $ MExprEvalError err
+  Right mod' -> pure mod'
   where
-    (mod', s) = runRename $ fmap (fmap desugar) mod
-    typeMod' mod = case typeMod mod s of
-      Left err -> throwError $ MTypeError err
-      Right tyEnv -> pure tyEnv
     reduceIn tyEnv = runReduce' (ExprRedEnv {tyEnv = tyEnv, relEnv = Map.empty})
-    reduceMod' tyEnv = case reduceIn tyEnv mod' of
-      Left err -> throwError $ MExprEvalError err
-      Right mod -> pure mod
+
+preproc mod = runRename $ fmap (fmap desugar) mod
+
+runTypeMod mod = runExcept (typeMod 0 mod)
+
+eval :: Module -> Either ModuleEvalError Module
+eval mod = runExcept $ (reduceMod mod' <=< typeMod nameSupply) mod'
+  where
+    (mod', nameSupply) = preproc mod

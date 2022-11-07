@@ -86,7 +86,6 @@ instance Reducible (QExpr Expr) Expr ExprEvalError ExprReductionEnv where
         q [pure . bool <=< reduce . inEnv' env | env <- envs rs'] b
 
 desugar = walk $ \case
-  ETree t -> mkChurchTree t
   EInv f as -> foldl' EApp f as
   EFun bs e -> foldr' ELam e bs
   e -> e
@@ -233,6 +232,7 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
           e' <- reduce e
           reduce $ (b' === c') ? e' > ELitCase b cs'
         _ -> throwError $ InexhaustiveCase expr
+    ETree t -> reduce $ mkChurchTree t
     EFix v e -> reduce $ mkFixPoint v e
     ETup es -> ETup <$> mapM reduce es
     EQnt q -> reduce q

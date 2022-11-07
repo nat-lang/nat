@@ -110,10 +110,10 @@ test-suite spec
     , hspec
     , hspec-wai
     , hspec-wai-json
-    , interpreter
     , megaparsec
     , monad-gen
     , mtl
+    , nat
     , optparse-applicative
     , parser-combinators
     , pretty

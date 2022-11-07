@@ -280,7 +280,7 @@ instance Show Expr where
   show = show . ppr 0
 
 instance Show b => Pretty (Binder b) where
-  ppr p (Binder b t) = char 'λ' <> text (show b) <> angles (ppr p t)
+  ppr p (Binder b t) = char 'λ' <> text (show b) --  <> angles (ppr p t)
 
 instance Show b => Show (Binder b) where
   show = show . ppr 0

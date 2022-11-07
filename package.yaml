@@ -54,10 +54,10 @@ tests:
       - -with-rtsopts=-N
     dependencies:
       - base
-      - interpreter
       - hspec
       - HUnit
       - hspec-wai
       - hspec-wai-json
       - aeson
       - raw-strings-qq
+      - nat

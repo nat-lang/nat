@@ -21,7 +21,6 @@ import Control.Monad.Identity (Identity, runIdentity)
 import Control.Monad.State
 import Data.Functor ((<&>))
 import Data.Text (Text)
-import qualified Data.Text.IO as TiO
 import Data.Void (Void)
 import Debug.Trace (traceM)
 import Text.Megaparsec (ParseErrorBundle, ParsecT, between, choice, lookAhead, many, notFollowedBy, observing, parseError, runParserT, sepBy, sepEndBy, some, try, (<|>))
@@ -122,6 +121,8 @@ prefixOp, postfixOp :: Text -> (a -> a) -> Operator Parser a
 prefixOp name f = Prefix (f <$ symbol name)
 postfixOp name f = Postfix (f <$ symbol name)
 
+parse ::
+  ParsecT e s (StateT ParseState Identity) a ->
+  s ->
+  Either (ParseErrorBundle s e) a
 parse parser i = runIdentity $ evalStateT (runParserT parser "<input>" i) pState
-
-parseFile parser file = TiO.readFile file <&> \i -> evalStateT (runParserT parser file i) pState

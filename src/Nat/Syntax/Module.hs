@@ -60,5 +60,3 @@ pMExpr = P.choice [pMExec, pMLetRec, pMDecl, pMDom]
 
 pModule :: P.Parser Module
 pModule = pMExpr `P.sepEndBy` P.delimiter
-
-pFModule = P.parseFile pModule

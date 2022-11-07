@@ -1,9 +1,12 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
+import Control.Monad.Except (runExcept)
 import Control.Monad.Identity (Identity (runIdentity))
 import Data.Text (Text, pack)
+import qualified Data.Text.IO as TiO
 import Debug.Trace (traceM)
 import qualified Nat.Evaluation.Module as E
 import qualified Nat.Parser as P
@@ -53,17 +56,19 @@ entry =
         <> header "nat v0.0.1"
     )
 
+chooseInput :: Input -> IO Text
+chooseInput = \case
+  IFile f -> TiO.readFile f
+  IStd i -> return (pack i)
+
 main = do
   options <- execParser entry
-  case oInput options of
-    IFile f -> do
-      eM <- S.pFModule f
-      case runIdentity eM of
-        Left err -> print err
-        Right m -> case E.eval m of
-          Right m' -> print m'
-    IStd i -> do
-      case P.parse S.pModule (pack i) of
-        Left err -> print err
-        Right m -> case E.eval m of
-          Right m' -> print m'
+  input <- chooseInput (oInput options)
+
+  case P.parse S.pModule input of
+    Left err -> print err
+    Right mod ->
+      print $
+        if oCheck options
+          then show $ E.runTypeMod mod
+          else show $ E.eval mod

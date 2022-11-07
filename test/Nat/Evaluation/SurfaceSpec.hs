@@ -122,10 +122,10 @@ spec = do
       (f ~> (x ~> (f * x))) !@= (f ~> (x ~> (x * f)))
 
   describe "desugar" $ do
-    it "maps trees to their church encodings" $ do
-      let t = ETree (Node f (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
-
-      desugar t `shouldBe` (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
+    it "converts polyadic functions to nested monadic lambdas" $ do
+      True `shouldBe` False
+    it "converts polyadic applications to nested monadic applications" $ do
+      True `shouldBe` False
 
   describe "reduce" $ do
     let reduce = runReduce :: Expr -> Either ExprEvalError Expr
@@ -236,6 +236,11 @@ spec = do
     it "reduces tuple access by index" $ do
       reduce (tup * EIdx 0) `shouldBe` Right true
       reduce (tup * EIdx 1) `shouldBe` Right false
+
+    it "reduces trees to their church encodings" $ do
+      let t = ETree (Node f (Node (x ~> x) Leaf Leaf) (Node y Leaf Leaf))
+
+      reduce t `shouldBe` reduce (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
 
     it "reduces typecase expressions with variable bindings" $ do
       let iFn = (+>) (n, tyInt)

@@ -125,7 +125,7 @@ instance Inferrable Type S.Expr where
 
   -- ETyCases get special treatment, namely:
   -- if the scrutinee has a non-variable principal
-  -- type at this step, then we determine the
+  -- type at this step, then we can determine the
   -- matched pattern/body, and thus the principal type
   -- of the whole case expression, otherwise we defer
   principal e = case e of
