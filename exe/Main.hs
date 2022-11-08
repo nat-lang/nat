@@ -3,16 +3,12 @@
 
 module Main where
 
-import Control.Monad.Except (runExcept)
-import Control.Monad.Identity (Identity (runIdentity))
-import Data.Text (Text, pack)
+import Data.Text
 import qualified Data.Text.IO as TiO
-import Debug.Trace (traceM)
 import qualified Nat.Evaluation.Module as E
 import qualified Nat.Parser as P
 import qualified Nat.Syntax.Module as S
 import Options.Applicative
-import System.Environment (getArgs)
 
 data Input
   = IFile FilePath
