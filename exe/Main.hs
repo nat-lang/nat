@@ -61,7 +61,7 @@ main = do
   options <- execParser entry
   input <- chooseInput (oInput options)
 
-  case P.parse S.pModule input of
+  case S.runPModule input of
     Left err -> print err
     Right mod ->
       print $

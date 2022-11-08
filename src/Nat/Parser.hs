@@ -23,7 +23,23 @@ import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Void (Void)
 import Debug.Trace (traceM)
-import Text.Megaparsec (ParseErrorBundle, ParsecT, between, choice, lookAhead, many, notFollowedBy, observing, parseError, runParserT, sepBy, sepEndBy, some, try, (<|>))
+import Text.Megaparsec
+  ( ParseErrorBundle,
+    ParsecT,
+    between,
+    choice,
+    lookAhead,
+    many,
+    notFollowedBy,
+    observing,
+    parseError,
+    runParserT,
+    sepBy,
+    sepEndBy,
+    some,
+    try,
+    (<|>),
+  )
 import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Text.Megaparsec.Char.Lexer as Lex
@@ -32,6 +48,8 @@ import Text.Megaparsec.Debug (dbg)
 newtype ParseState = ParseState {inTree :: Bool}
 
 type Parser = ParsecT Void Text (StateT ParseState Identity)
+
+-- type NatParseErrorBundle = ParseErrorBundle
 
 pState = ParseState {inTree = False}
 
