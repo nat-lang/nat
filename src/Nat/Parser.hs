@@ -8,6 +8,7 @@ module Nat.Parser
     C.char,
     C.space1,
     dbg,
+    ParseErrorBundle,
     module Nat.Parser,
     module Text.Megaparsec,
   )
