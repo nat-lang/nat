@@ -29,6 +29,8 @@ dependencies:
   - repline       >= 0.1.2.0
   - optparse-applicative
 
+  - HaTeX
+
 library:
   source-dirs:
     - src
