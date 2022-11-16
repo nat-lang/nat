@@ -8,7 +8,9 @@ import qualified Data.Text.IO as TiO
 import qualified Nat.Evaluation.Module as E
 import qualified Nat.Parser as P
 import qualified Nat.Syntax.Module as S
+import Nat.TeX
 import Options.Applicative
+import Text.LaTeX.Base.Pretty
 
 data Input
   = IFile FilePath
@@ -17,7 +19,8 @@ data Input
 
 data Options = Options
   { oInput :: Input,
-    oCheck :: Bool
+    oCheck :: Bool,
+    oTypeset :: Bool
   }
   deriving (Show)
 
@@ -42,6 +45,11 @@ opts =
           <> short 'c'
           <> help "Typecheck without executing."
       )
+    <*> switch
+      ( long "typeset"
+          <> short 't'
+          <> help "Convert the output to LaTeX."
+      )
 
 entry :: ParserInfo Options
 entry =
@@ -60,11 +68,15 @@ chooseInput = \case
 main = do
   options <- execParser entry
   input <- chooseInput (oInput options)
-
-  case S.runPModule input of
-    Left err -> print err
+  let out =
+        if oTypeset options
+          then typeset
+          else pack . show
+  TiO.putStrLn $ case S.runPModule input of
+    Left err -> pack $ show err
     Right mod ->
-      print $
-        if oCheck options
-          then show $ E.runTypeMod mod
-          else show $ E.eval mod
+      if oCheck options
+        then pack $ show $ E.runTypeMod mod
+        else case E.eval mod of
+          Left err -> pack $ show err
+          Right mod' -> out mod

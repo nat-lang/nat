@@ -1,7 +1,8 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Nat.TeX where
+module Nat.TeX (render, toTeX, typeset, pp) where
 
 import Data.List (intersperse)
 import qualified Data.Text as T
@@ -10,37 +11,46 @@ import Nat.Syntax.Module
 import Nat.Syntax.Surface
 import Nat.Walk
 import Text.LaTeX
-import Text.LaTeX.Base
 import Text.LaTeX.Base.Class
+import Text.LaTeX.Base.Pretty
+import Text.LaTeX.Base.Syntax (LaTeX (..))
 import Text.LaTeX.Packages.Inputenc
 import Text.LaTeX.Packages.Trees.Qtree (qtree)
 
+pp = T.pack . prettyLaTeX
+
 class TeX a where
-  toTex :: a -> LaTeXM T.Text
+  toTeX :: a -> LaTeX
 
   typeset :: a -> T.Text
-  typeset e = render (execLaTeXM doc)
+  typeset e = pp doc
     where
-      doc :: LaTeXM T.Text
-      doc = do
+      doc :: LaTeX
+      doc =
         documentclass [] article
-        usepackage [] qtree
-        usepackage [utf8] inputenc
-        document <$> tex e
+          <> usepackage [] qtree
+          <> usepackage [utf8] inputenc
+          <> document (toTeX e)
 
 instance TeX a => TeX (Tree a) where
-  toTex = \case
+  toTeX = \case
     Leaf -> mempty
     Node e l r ->
       mconcat
         [ "[",
-          (("." <>) . braces . toTex) e,
+          (("." <>) . braces . toTeX) e,
           " ",
-          mconcat $ intersperse " " $ fmap toTex [l, r],
-          " ]"
+          mconcat $ intersperse " " $ fmap toTeX [l, r],
+          "]"
         ]
 
 instance TeX Expr where
-  toTex = walk $ \case
-    ETree t -> toTex t
-    e -> TexRaw (T.pack $ show e)
+  toTeX = \case
+    ETree t -> commS "Tree" <> " " <> toTeX t
+    e -> TeXRaw (T.pack $ show e)
+
+instance TeX ModuleExpr where
+  toTeX = foldl1 (<>) . fmap toTeX
+
+instance TeX Module where
+  toTeX = mconcat . intersperse "\n" . fmap toTeX

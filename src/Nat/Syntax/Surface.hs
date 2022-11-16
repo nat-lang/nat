@@ -129,9 +129,6 @@ data Expr
   | EQnt (QExpr Expr)
   | EFun [Binder Var] Expr
   | EInv Expr [Expr]
-  | -- new
-    ECast Expr Expr
-  | ECard Expr
   deriving (Prel.Eq, Ord)
 
 qnt :: ([QRstr Expr] -> Expr -> QExpr Expr) -> [(Var, Expr)] -> Expr -> Expr

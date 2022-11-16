@@ -17,8 +17,6 @@ import Text.Megaparsec.Debug (dbg)
 data ModuleExprR e
   = MDecl Var e
   | MLetRec Var e
-  | MStruct Var e [e]
-  | MImport Module
   | MExec e
   deriving (Eq, Show, Ord, Functor, Foldable, Traversable)
 
