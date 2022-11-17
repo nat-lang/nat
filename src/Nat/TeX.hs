@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Nat.TeX (render, toTeX, typeset, pp, ppf) where
+module Nat.TeX (render, toTeX, typeset, pp, typesetFile) where
 
 import Data.List (intersperse)
 import qualified Data.Text as T
@@ -24,15 +24,15 @@ ppf f = renderFile f . pp
 class TeX a where
   toTeX :: a -> LaTeX
 
-  typeset :: a -> T.Text
-  typeset e = pp doc
-    where
-      doc :: LaTeX
-      doc =
-        documentclass [] article
-          <> usepackage [] qtree
-          <> usepackage [utf8] inputenc
-          <> document (toTeX e)
+  typeset :: a -> LaTeX
+  typeset e =
+    documentclass [] article
+      <> usepackage [] qtree
+      <> usepackage [utf8] inputenc
+      <> document (toTeX e)
+
+  typesetFile :: FilePath -> a -> IO ()
+  typesetFile f = renderFile f . typeset
 
 instance TeX a => TeX (Tree a) where
   toTeX = \case

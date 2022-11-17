@@ -69,9 +69,10 @@ main = do
   options <- execParser entry
   input <- chooseInput (oInput options)
   let out =
-        if oTypeset options
-          then typeset
-          else pack . show
+        pack
+          . if oTypeset options
+            then show . typeset
+            else show
   TiO.putStrLn $ case S.runPModule input of
     Left err -> pack $ show err
     Right mod ->
