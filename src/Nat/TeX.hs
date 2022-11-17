@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Nat.TeX (render, toTeX, typeset, pp) where
+module Nat.TeX (render, toTeX, typeset, pp, ppf) where
 
 import Data.List (intersperse)
 import qualified Data.Text as T
@@ -18,6 +18,8 @@ import Text.LaTeX.Packages.Inputenc
 import Text.LaTeX.Packages.Trees.Qtree (qtree)
 
 pp = T.pack . prettyLaTeX
+
+ppf f = renderFile f . pp
 
 class TeX a where
   toTeX :: a -> LaTeX
