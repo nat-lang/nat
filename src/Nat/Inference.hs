@@ -52,7 +52,7 @@ unwrapSignature = \case
   Right (_, env, _) -> Right env
 
 -- | Infer a from b
-class Unifiable a => Inferrable a b where
+class (Unifiable a, Show a, Show b) => Inferrable a b where
   constrain :: b -> Constrain a b
 
   unify' :: [Constraint a] -> b -> Either (InferenceError a b) (ConstraintEnv a)

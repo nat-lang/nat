@@ -98,26 +98,26 @@ spec = do
         `shouldBe` Right (ETree (Node (bind x) (Node (bind y) Leaf Leaf) (Node (bind z) Leaf Leaf)))
 
     it "parses trees of unary operations" $ do
-      parse pETree "[!x [!(\\y.z)] [!(y z)]]"
+      parse pETree "[(!x) [(! \\y.z)] [(!(y z))]]"
         `shouldBe` Right (ETree (Node (not' x) (Node (not' (y ~> z)) Leaf Leaf) (Node (not' (y * z)) Leaf Leaf)))
 
     it "parses trees of binary operations" $ do
-      parse pETree "[x || x [(f y) != (f x)] [(\\f.x) && (\\f.y)]]"
+      parse pETree "[(x || x) [((f y) != (f x))] [((\\f.x) && (\\f.y))]]"
         `shouldBe` Right (ETree (Node (x ||| x) (Node ((f * y) !== (f * x)) Leaf Leaf) (Node ((f ~> x) &&& (f ~> y)) Leaf Leaf)))
 
     it "parses trees of ternary conditionals " $ do
-      parse pETree "[if z then y else x [\\x.if x then z else y] [if y then x else z]]"
+      parse pETree "[(if z then y else x) [(\\x.if x then z else y)] [(if y then x else z)]]"
         `shouldBe` Right (ETree (Node (z ? y > x) (Node (x ~> x ? z > y) Leaf Leaf) (Node (y ? x > z) Leaf Leaf)))
 
     it "parses trees of lambdas" $ do
-      parse pETree "[\\x.x [\\y.y] [\\z.z]]"
+      parse pETree "[(\\x.x) [(\\y.y)] [(\\z.z)]]"
         `shouldBe` Right (ETree (Node (x ~> x) (Node (y ~> y) Leaf Leaf) (Node (z ~> z) Leaf Leaf)))
 
     it "parses trees of sets" $ do
       parse pETree "[{0,1} [{True,False}] [{x,y,z}]]"
         `shouldBe` Right (ETree (Node (mkS [mkI 0, mkI 1]) (Node (mkS [true, false]) Leaf Leaf) (Node (mkS [x, y, z]) Leaf Leaf)))
     it "parses trees of function applications" $ do
-      parse pETree "[(f x) [f x] [f(x)]]"
+      parse pETree "[(f x) [(f x)] [(f(x))]]"
         `shouldBe` Right (ETree (Node (f * x) (Node (f * x) Leaf Leaf) (Node (f * x) Leaf Leaf)))
 
     it "parses trees of parenthesized trees" $ do
@@ -230,6 +230,6 @@ spec = do
 
     it "parses applications of lambdas to trees" $ do
       let tree = ETree $ Node (bind y) (Node (x ~> (x * y)) Leaf Leaf) (Node (x ~> x) Leaf Leaf)
-      parse pExpr "(\\x.x)[\\y [\\x.x(y)] [\\x.x]]" `shouldBe` Right ((x ~> x) * tree)
+      parse pExpr "(\\x.x)[\\y [(\\x.x(y))] [(\\x.x)]]" `shouldBe` Right ((x ~> x) * tree)
     it "parses applications of lambdas to sets" $ do
       parse pExpr "(\\x.x){x,y,z}" `shouldBe` Right ((x ~> x) * mkS [x, y, z])

@@ -175,28 +175,6 @@ instance Walkable Expr where
       cgo (b, e) = do e' <- go e; pure (b, e')
       go = walkMC' f
 
-{-
-foldWalk :: Monoid b => (Expr -> b) -> Expr -> b
-foldWalk f = f'
-  where
-    go = foldWalk f
-    cgo = M.mconcat . fmap go
-    f' = \case
-      EApp e0 e1 -> go e0 M.<> go e1
-      ECond x y z -> go x M.<> go y M.<> go z
-      EUnOp op e -> go e
-      EBinOp op e0 e1 -> go e0 M.<> go e1
-      ETup es -> cgo es
-      ELam b e -> go e
-      ETree t -> cgo (toList t)
-      ESet es -> cgo (Set.toList es)
-      ELitCase e cs -> go e M.<> M.mconcat (fmap (fmap go) cs)
-      -- ETyCase e cs -> go e <*> mapM (\(b, e) -> do e' <- go e; pure (b, e')) cs
-      EFix v e -> go e
-      -- non recursive inhabitants
-      e' -> f e'
--}
-
 instance Pretty Lit where
   ppr p l = case l of
     LInt n -> text (truncate n)
@@ -204,6 +182,12 @@ instance Pretty Lit where
     where
       isInt x = x == fromInteger (round x)
       truncate n = showFFloat (Just $ if isInt n then 0 else 2) (fromRat n) ""
+
+isTyNil TyNil = True
+isTyNil _ = False
+
+instance Show b => Pretty (Binder b) where
+  ppr p (Binder b t) = char 'λ' <> text (show b) <> if isTyNil t then "" else angles (ppr p t)
 
 instance Pretty a => Pretty (Domain a) where
   ppr p (Dom _ es) = ppr p es
@@ -276,9 +260,6 @@ instance Pretty Expr where
 instance Show Expr where
   show = show . ppr 0
 
-instance Show b => Pretty (Binder b) where
-  ppr p (Binder b t) = char 'λ' <> text (show b) --  <> angles (ppr p t)
-
 instance Show b => Show (Binder b) where
   show = show . ppr 0
 
@@ -326,21 +307,32 @@ x ? y = ECond x y
 (>) :: (Expr -> Expr) -> Expr -> Expr
 e > e' = e e'
 
+churchLeaf' e b = e ~> (b ~> e)
+
 -- λeb . e
 churchLeaf =
   let [e, b] = mkEVar <$> ["e", "b"]
-   in e ~> (b ~> e)
+   in churchLeaf' e b
 
--- λxlreb . b(x)(l e b)(r e b)
-typedChurchBranch ty =
-  let [e, b@(EVar bV), x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
-   in x ~> (l ~> (r ~> (e ~> ELam (Binder bV ty) (b * x * (l * e * b) * (r * e * b)))))
+typedChurchBranch' x l r e b@(EVar bV) ty = x ~> (l ~> (r ~> (e ~> ELam (Binder bV ty) (b * x * (l * e * b) * (r * e * b)))))
+
+-- | The church encoding of a tree yields a catamorphism when
+-- reduced to normal form.
+--    Leaf: λeb. e
+--    Branch: λxlreb. b(x)(l e b)(r e b)
+--
+-- ... λeb. b(x)(l e b)(r e b)
+typedChurchBranch =
+  let [e, b, x, l, r] = mkEVar <$> ["e", "b", "x", "l", "r"]
+   in typedChurchBranch' x l r e b
 
 churchBranch = typedChurchBranch TyNil
 
 mkTypedChurchTree :: Type -> T.Tree Expr -> Expr
 mkTypedChurchTree ty t = case t of
   T.Leaf -> churchLeaf
+  -- expr trees stored as data are treated as branches
+  T.Node (ETree t') T.Leaf T.Leaf -> mkTypedChurchTree ty t'
   T.Node e l r -> typedChurchBranch ty * e * mkTypedChurchTree ty l * mkTypedChurchTree ty r
 
 mkChurchTree :: T.Tree Expr -> Expr
@@ -472,47 +464,48 @@ after p fn = do
     Left e -> fn >> P.parseError e
     Right a -> fn >> pure a
 
--- trees are prohibited as the expression nodes of trees,
--- as this would introduce syntactic ambiguity
 pETree :: ExprParser
-pETree = do
-  s <- get
-  put (s {P.inTree = True})
-  t <- after (pTree pENode) (put $ s {P.inTree = False})
-  pure $ ETree t
+pETree = ETree <$> pTree pENode
   where
+    tExpr = P.try (P.choice unitaryTerms) P.<|> P.parens pExpr
     pEBind = EBind <$> pVarBinder
-    pENode = P.try pExpr P.<|> pEBind
+    pENode = tExpr P.<|> pEBind
 
-pTree pNode =
+pTree pData =
   P.choice
-    [P.try pLeafNode, P.try pUnNode, pBiNode]
+    [P.try pLeafNode, P.try pUnaryNode, pBinaryNode]
   where
     mkLeafNode e = T.Node e T.Leaf T.Leaf
-    mkUnNode e l = T.Node e l T.Leaf
+    mkUnaryNode e l = T.Node e l T.Leaf
 
-    pLeafNode = P.brackets $ mkLeafNode <$> pNode
-    pUnNode = P.brackets $ do
-      e <- pNode
-      mkUnNode e <$> pTree pNode
+    pLeafNode =
+      P.brackets $
+        mkLeafNode <$> pData
 
-    pBiNode = P.brackets $ do
-      e <- pNode
-      l <- pTree pNode
-      T.Node e l <$> pTree pNode
+    pUnaryNode =
+      P.brackets $
+        mkUnaryNode <$> pData <*> pTree pData
+
+    pBinaryNode =
+      P.brackets $
+        T.Node <$> pData <*> pTree pData <*> pTree pData
+
+unitaryTerms =
+  [ pELit,
+    pEVar,
+    P.reserved "undef" >> pure EUndef,
+    pESet
+  ]
 
 terms =
   [ P.try $ P.parens pExpr,
-    pELit,
-    pEVar,
     pECond,
     pELam,
     pELitCase,
     pETyCase,
-    pESet,
-    pETup,
-    P.reserved "undef" >> pure EUndef
+    pETup
   ]
+    ++ unitaryTerms
 
 pTerm :: ExprParser
 pTerm = do

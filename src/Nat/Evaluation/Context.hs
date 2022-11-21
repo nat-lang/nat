@@ -23,9 +23,18 @@ import Nat.Walk
 -------------------------------------------------------------------------------
 
 instance Substitutable Type Type where
-  sub v t = walk $ \case
-    TyVar v' | v' == v -> t
-    t' -> t'
+  sub v t = walkC $
+    \ctn t' -> case t' of
+      -- FIXME: this is a bandaid on e.g.
+      -- λa. [a [0][1]], where
+      --   a:A ⊢ [a [0][1]]: T<{A | n}>, but
+      --   [a [0][1]]: T<{A | n}> ⊢ a:{A | n}
+      TyUnion u | Set.member (TyVar v) u && t == t' -> t'
+      -- base case. do not continue the substitution
+      -- over `t`, as this will diverge for recursive types.
+      TyVar v' | v' == v -> t
+      -- otherwise recurse
+      _ -> ctn t'
 
 instance Contextual Type where
   fv = \case
@@ -97,7 +106,7 @@ shift :: Var -> Expr -> FreshM (Var, Expr)
 shift v e = do
   ev' <- next v
   let (EVar v') = ev'
-  pure (v', sub v ev' e)
+  return (v', sub v ev' e)
 
 shiftBP :: (Binder Expr, Expr) -> FreshM (Binder Expr, Expr)
 shiftBP (Binder p t, e) = do
@@ -108,7 +117,7 @@ shiftBP (Binder p t, e) = do
   let s = Map.fromList $ zip bv bv'
   let [p', e'] = inEnv s <$> [p, e]
 
-  pure (Binder p' t, e')
+  return (Binder p' t, e')
 
 instance Renamable Expr where
   next v = EVar <$> next' v
@@ -119,12 +128,12 @@ instance Renamable Expr where
     -- binding contexts
     ELam (Binder v t) e -> do
       (v', e') <- shift v e
-      pure (ELam (Binder v' t) e')
+      return (ELam (Binder v' t) e')
     ETyCase e cs -> ETyCase e <$> mapM shiftBP cs
     EFix v e -> uncurry EFix <$> shift v e
     -- TODO: EQnt
     -- nothing to do
-    e -> pure e
+    e -> return e
 
 instance AlphaComparable Expr where
   (@=) e0 e1 = evalRename e0 == evalRename e1
@@ -133,26 +142,26 @@ instance AlphaComparable Expr where
 -- Explicit type contexts
 -------------------------------------------------------------------------------
 
--- | take care to preserve the syntactic identity of variables
+-- | Take care to preserve the syntactic identity of variables
 --   within the scopes of typed lambdas and tycase patterns
 renameETypes :: Expr -> FreshM Expr
 renameETypes = walkM $ \case
   ELam b e -> do
     b' <- renameB b
-    pure $ ELam b e
+    return $ ELam b e
   ETyCase c cs -> ETyCase c <$> mapM m' cs
     where
       m' (b, e) = do
         b' <- renameB b
-        pure (b', e)
-  e' -> pure e'
+        return (b', e)
+  e' -> return e'
   where
     renameB (Binder v t) = do
       let fvs = Set.toList $ fv t
       tvs <- mapM (fmap TyVar . next') fvs
       let sub = Map.fromList (zip fvs tvs)
       let t' = inEnv sub t
-      pure (Binder v t')
+      return (Binder v t')
 
 -------------------------------------------------------------------------------
 -- Module contexts
@@ -188,27 +197,28 @@ instance Renamable ModuleExpr where
     MExec e -> MExec <$> rename' vs e
 
 instance Renamable Module where
-  rename' vs mod = (thdPass <=< sndPass <=< fstPass) mod
+  rename' vs mod = (thirdPass <=< secondPass <=< firstPass) mod
     where
-      reBoundEnv mod = Map.fromList $ [(reset v, EVar v) | v <- Set.toList $ bv mod]
-
       -- rename topmost let vars
-      fstPass :: Module -> FreshM Module
-      fstPass mod = forM mod $ \case
-        MDecl v e -> MDecl <$> next' v <*> pure e
-        MLetRec v e -> MLetRec <$> next' v <*> pure e
-        mExpr -> pure mExpr
+      firstPass :: Module -> FreshM Module
+      firstPass mod = forM mod $ \case
+        MDecl v e -> MDecl <$> next' v <*> return e
+        MLetRec v e -> MLetRec <$> next' v <*> return e
+        mExpr -> return mExpr
 
-      -- update topmost let vars bound in every expr
-      sndPass :: Module -> FreshM Module
-      sndPass mod = pure $ inEnv (reBoundEnv mod) <$> mod
+      -- update topmost let vars bound in every expr. their declarations
+      -- have been renamed, but we can identify them by their public ids
+      secondPass :: Module -> FreshM Module
+      secondPass mod = return $ inEnv bindingEnv <$> mod
+        where
+          bindingEnv = Map.fromList $ [(reset v, EVar v) | v <- Set.toList $ bv mod]
 
       -- now rename each expr, ignoring the bound let vars
-      thdPass :: Module -> FreshM Module
-      thdPass mod =
+      thirdPass :: Module -> FreshM Module
+      thirdPass mod =
         let rename e = rename' vs e
          in mapM rename mod
 
-  evalRename = evalRename' . renameTypes . evalRename' . rename
+  evalRename = evalRename' . (renameTypes <=< rename)
     where
       renameTypes mod = forM mod (mapM renameETypes)

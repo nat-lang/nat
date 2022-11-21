@@ -10,6 +10,7 @@ import qualified Nat.Parser as P
 import qualified Nat.Syntax.Module as S
 import Nat.TeX
 import Options.Applicative
+import System.IO (hFlush, stderr)
 import Text.LaTeX.Base.Pretty
 
 data Input
@@ -71,7 +72,7 @@ main = do
   let out =
         pack
           . if oTypeset options
-            then show . typeset
+            then prettyLaTeX . typeset
             else show
   TiO.putStrLn $ case S.runPModule input of
     Left err -> pack $ show err
@@ -81,3 +82,5 @@ main = do
         else case E.eval mod of
           Left err -> pack $ show err
           Right mod' -> out mod
+
+  hFlush stderr

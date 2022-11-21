@@ -15,11 +15,19 @@ import Text.LaTeX.Base.Class
 import Text.LaTeX.Base.Pretty
 import Text.LaTeX.Base.Syntax (LaTeX (..))
 import Text.LaTeX.Packages.Inputenc
-import Text.LaTeX.Packages.Trees.Qtree (qtree)
+import Text.LaTeX.Packages.TikZ hiding (Node)
+
+-- import Text.LaTeX.Packages.Trees.Qtree (qtree)
 
 pp = T.pack . prettyLaTeX
 
 ppf f = renderFile f . pp
+
+tikzQTree :: PackageName
+tikzQTree = "tikz-qtree"
+
+tikzQTreeCompat :: PackageName
+tikzQTreeCompat = "tikz-qtree-compat"
 
 class TeX a where
   toTeX :: a -> LaTeX
@@ -27,9 +35,12 @@ class TeX a where
   typeset :: a -> LaTeX
   typeset e =
     documentclass [] article
-      <> usepackage [] qtree
+      -- <> usepackage [] qtree
+      <> usepackage [] tikz
+      <> usepackage [] tikzQTree
+      <> usepackage [] tikzQTreeCompat
       <> usepackage [utf8] inputenc
-      <> document (toTeX e)
+      <> (document $ TeXEnv "tikzpicture" [] (toTeX e))
 
   typesetFile :: FilePath -> a -> IO ()
   typesetFile f = renderFile f . typeset

@@ -19,6 +19,8 @@ import Text.RawString.QQ
 
 mkI = ELit . LInt
 
+mkB = ELit . LBool
+
 spec :: Spec
 spec = do
   let p = parse pModule
@@ -29,7 +31,26 @@ spec = do
     it "evaluates executables" $ do True `shouldBe` False
     it "evaluates domain declarations" $ do True `shouldBe` False
 
-    it "evaluates each expr within an accumulated environment" $ do
+    it "evaluates functors over trees" $ do
+      let (Right mod) =
+            p
+              [r|let t0 = [0 [0][0]]
+                 let t1 = [1 [1][1]]
+
+                 let L = \e.\b.e
+                 let B = \x.\l.\r.\e.\b. b(x)(l e b)(r e b)
+
+                 let fmap = \f.\t. t(L)(\x. B(f x))
+                 let acc = \x.\l.\r. x + l + r
+
+                 let t0' = fmap (\x. x + 1) t0
+
+                 (t0'(0)(acc)) == (t1(0)(acc))|]
+
+      let (Right mod') = eval mod
+      last mod' `shouldBe` MExec (mkB True)
+
+    it "evaluates type driven composition" $ do
       let (Right mod) =
             p
               [r|let succ = \x. x + 1

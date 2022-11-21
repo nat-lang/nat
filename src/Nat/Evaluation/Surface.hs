@@ -14,7 +14,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tree.Binary.Preorder (Tree)
-import Debug.Trace (traceM)
+import Debug.Trace (trace, traceM)
 import GHC.Real (Integral (quotRem))
 import Nat.Context
 import Nat.Control
@@ -135,7 +135,10 @@ primBiOpMap op = case op of
     b f (ELit (LBool b0)) (ELit (LBool b1)) = ELit $ LBool (f b0 b1)
     b _ _ _ = error "boolean expressions only"
     i f (ELit (LInt i0)) (ELit (LInt i1)) = ELit $ LInt (f i0 i1)
-    i _ _ _ = error "integer expressions only"
+    i _ e0 e1 = error (show op ++ " accepts integer expressions only, got: " ++ show e0' ++ ", " ++ show e1')
+      where
+        Right e0' = runReduce e0 :: Either ExprEvalError Expr
+        Right e1' = runReduce e1 :: Either ExprEvalError Expr
     s f (ESet s0) (ESet s1) = ESet (f s0 s1)
     s _ _ _ = error "set expressions only"
     sb f (ESet s0) (ESet s1) = ELit (LBool (f s0 s1))

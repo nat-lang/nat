@@ -11,6 +11,7 @@ import Control.Monad.State (MonadState (get, put), StateT, evalStateT, runStateT
 import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Debug.Trace (trace)
 import qualified Nat.Parser as P
 import Nat.Viz
 import Nat.Walk
@@ -99,7 +100,7 @@ instance Contextual a => Contextual (Env a) where
   fv :: Contextual a => Env a -> Set.Set Var
   fv env = fv $ Map.elems env
 
-(<.>) :: Substitutable a a => Env a -> Env a -> Env a
+(<.>) :: (Substitutable a a, Show a) => Env a -> Env a -> Env a
 (<.>) e0 e1 = Map.map (inEnv e0) e1 `Map.union` e0
 
 type FreshT m = StateT Int m

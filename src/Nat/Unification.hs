@@ -9,6 +9,7 @@ import Control.Monad.Identity (Identity, runIdentity)
 import Data.Either (isRight)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Debug.Trace (traceM)
 import Nat.Context
 import Prelude hiding ((<*>))
 
@@ -18,7 +19,7 @@ data UnificationError a
 
 type UnifyM a = ExceptT (UnificationError a) Identity (Env a)
 
-class Substitutable a a => Unifiable a where
+class (Substitutable a a, Show a) => Unifiable a where
   unify :: a -> a -> UnifyM a
 
   unifyMany :: [Pair a] -> UnifyM a
@@ -27,7 +28,7 @@ class Substitutable a a => Unifiable a where
     ((a0, a1) : cs') -> do
       u <- unify a0 a1
       us <- unifyMany (inEnv u cs')
-      pure $ u <.> us
+      return (u <.> us)
 
   runUnify :: [Pair a] -> Either (UnificationError a) (Env a)
   runUnify = runIdentity . runExceptT . unifyMany

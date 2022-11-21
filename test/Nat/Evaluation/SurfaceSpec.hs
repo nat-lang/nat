@@ -242,6 +242,17 @@ spec = do
 
       reduce t `shouldBe` reduce (churchBranch * f * (churchBranch * (x ~> x) * churchLeaf * churchLeaf) * (churchBranch * y * churchLeaf * churchLeaf))
 
+    it "reduces trees in the (terminal) data positions of trees to branches" $ do
+      let x = ETree (Node zero (Node zero Leaf Leaf) (Node zero Leaf Leaf))
+      let y = ETree (Node one (Node one Leaf Leaf) (Node one Leaf Leaf))
+      let t = ETree (Node one (Node x Leaf Leaf) (Node y Leaf Leaf))
+
+      let churchX = churchBranch * zero * (churchBranch * zero * churchLeaf * churchLeaf) * (churchBranch * zero * churchLeaf * churchLeaf)
+      let churchY = churchBranch * one * (churchBranch * one * churchLeaf * churchLeaf) * (churchBranch * one * churchLeaf * churchLeaf)
+      let churchT = churchBranch * one * churchX * churchY
+
+      reduce t `shouldBe` reduce churchT
+
     it "reduces typecase expressions with variable bindings" $ do
       let iFn = (+>) (n, tyInt)
       let fnA = iFn (EBinOp Add n one)

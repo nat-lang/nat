@@ -93,9 +93,9 @@ type Case = (S.Binder S.Expr, S.Expr)
 --   (2) constrain the pattern under these tvars
 --   (3) constrain the expr under these tvars
 --   (4) constrain the inferred type of the pattern
---       the pattern's type to be equal
---   (5) return the sum of the pattern and body's types +
---       constraints incurred along the way
+--       and the pattern's type annotation to be equal
+--   (5) return the sumtype of the pattern and body's types
+--       alongside constraints incurred along the way
 constrainCase ::
   (S.Binder S.Expr, S.Expr) ->
   ConstrainT Type S.Expr ((Type, Type), [Constraint Type])
@@ -186,15 +186,13 @@ instance Inferrable Type S.Expr where
 
       return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
     S.ETree t -> do
-      eTs <- mapM principal (toList t)
-      let (tEs, cEs) = unzip eTs
-      tv <- fresh
-      let bTy = TyFun (refine tEs) tv
+      (branchTys, branchConstrs) <- unzip <$> mapM principal (toList t)
+      branchTy <- TyFun (refine branchTys) <$> fresh
       -- use the name supply of the inference monad
       -- to instantiate a fresh typed church tree
-      t' <- mkChurchTree bTy t
+      t' <- mkChurchTree branchTy t
       (tv, cs) <- principal t'
-      return (tv, concat $ cs : cEs)
+      return (tv, concat $ cs : branchConstrs)
     S.EUndef -> pure (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
 
