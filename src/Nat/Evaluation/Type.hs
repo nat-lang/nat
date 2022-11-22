@@ -113,7 +113,7 @@ isVar = \case TyVar {} -> True; _ -> False
 
 mkChurchTree bTy t = do
   let t' = S.mkTypedChurchTree bTy t
-  state (flip runFreshT $ renameETypes t')
+  state (flip runFreshT $ renameExprTypes t')
 
 freshIfNil :: Type -> TypeConstrainT Type
 freshIfNil t = case t of
@@ -151,6 +151,7 @@ instance Inferrable Type S.Expr where
       t <- freshIfNil t
       (t', cs) <- constrainWith e v t
       return (t `TyFun` t', cs)
+    -- fact, if n <= 1 then 1 else n * fact(n - 1)
     S.EFix v e -> do
       tv <- fresh
       constrainWith e v (TyFun tv tv)

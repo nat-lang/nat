@@ -47,15 +47,17 @@ instance Reducible Module Module ExprEvalError ExprReductionEnv where
         expr' <- reduce (inEnv env expr)
         pure (merge expr' env, expr')
       merge modExpr modEnv = Map.union modEnv $ case modExpr of
-        MDecl v e -> Map.singleton v e
-        MLetRec v e -> Map.singleton v e
+        MDecl v e -> Map.singleton v (toExpr modExpr)
         _ -> Map.empty
 
-toExpr = \case MDecl _ e -> e; MLetRec v e -> EFix v e; MExec e -> e
+toExpr = \case
+  -- is the declaration recursive?
+  MDecl v e | Set.member v (fv e) -> EFix v e
+  MDecl _ e -> e
+  MExec e -> e
 
 toEnv t = \case
   MDecl v _ -> Map.singleton v t
-  MLetRec v _ -> Map.singleton v t
   MExec _ -> Map.empty
 
 typeMod' :: Module -> Int -> Either (InferenceError Type Expr) TypeEnv
@@ -65,6 +67,7 @@ typeMod' mod = run (foldM signifyIn mkCEnv mod)
     signifyIn :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
     signifyIn env mExpr = local (Map.union env) $ do
       (t, env') <- signify (toExpr mExpr)
+      -- traceM
       pure $ Map.unions [toEnv t mExpr, env', env]
 
 typeMod ::
@@ -85,7 +88,7 @@ reduceMod mod tyEnv = case reduceIn tyEnv mod of
   where
     reduceIn tyEnv = runReduce' (ExprRedEnv {tyEnv = tyEnv, relEnv = Map.empty})
 
-preproc mod = runRename $ fmap (fmap desugar) mod
+preproc = runRename . fmap (fmap desugar)
 
 runTypeMod mod = runExcept (typeMod 0 mod)
 

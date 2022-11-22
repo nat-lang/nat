@@ -101,7 +101,7 @@ spec = do
       let f = mkEVar "f"
       -- y = λf. (λx . f (x x)) (λx . f (x x))
       -- y * (λfλn. if n ≤ 1 then 1 else n * f (n - 1))
-      let fact = EFix (mkVar "f") (n ~> EBinOp LTE n (iE 1) ? iE 1 > EBinOp Mul n (f * EBinOp Sub n (iE 1)))
+      let fact = EFix (mkVar "f") (n ~> ECond (EBinOp LTE n (iE 1)) (iE 1) (EBinOp Mul n (EApp f (EBinOp Sub n (iE 1)))))
       infer fact `shouldBe` Right (TyFun tyInt tyInt)
 
     it "types abstractions over trees" $ do

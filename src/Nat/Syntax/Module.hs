@@ -16,7 +16,6 @@ import Text.Megaparsec.Debug (dbg)
 
 data ModuleExprR e
   = MDecl Var e
-  | MLetRec Var e
   | MExec e
   deriving (Eq, Show, Ord, Functor, Foldable, Traversable)
 
@@ -27,13 +26,6 @@ type Module = [ModuleExpr]
 -------------------------------------------------------------------------------
 -- Parsing
 -------------------------------------------------------------------------------
-
-pMLetRec :: P.Parser ModuleExpr
-pMLetRec = do
-  P.reserved "letrec"
-  v <- pVar
-  P.symbol "="
-  MLetRec v <$> pExpr
 
 pMDecl :: P.Parser ModuleExpr
 pMDecl = do
@@ -53,7 +45,7 @@ pMDom = do
   P.symbol "="
   MDecl v <$> pEDom v
 
-pMExpr = P.choice [pMExec, pMLetRec, pMDecl, pMDom]
+pMExpr = P.choice [pMExec, pMDecl, pMDom]
 
 pModule :: P.Parser Module
 pModule = pMExpr `P.sepEndBy` P.delimiter

@@ -61,8 +61,8 @@ spec = do
       -- TODO: write me
       True `shouldBe` False
 
-  describe "renameETypes" $ do
-    let rename = evalRename' . renameETypes
+  describe "renameExprTypes" $ do
+    let rename = evalRename' . renameExprTypes
 
     it "preserves the syntactic identity of type variables in the scope of a lambda binding" $ do
       let tA = mkTv "A"

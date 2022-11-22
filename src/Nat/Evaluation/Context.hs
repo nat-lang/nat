@@ -144,8 +144,8 @@ instance AlphaComparable Expr where
 
 -- | Take care to preserve the syntactic identity of variables
 --   within the scopes of typed lambdas and tycase patterns
-renameETypes :: Expr -> FreshM Expr
-renameETypes = walkM $ \case
+renameExprTypes :: Expr -> FreshM Expr
+renameExprTypes = walkM $ \case
   ELam b e -> do
     b' <- renameB b
     return $ ELam b e
@@ -169,13 +169,11 @@ renameETypes = walkM $ \case
 
 instance Contextual ModuleExpr where
   fv = \case
-    MDecl _ e -> fv e
-    MLetRec v e -> fv e Set.\\ Set.singleton v
+    MDecl v e -> fv e Set.\\ Set.singleton v
     MExec e -> fv e
   bv = \case
     MDecl v _ -> Set.singleton v
-    MLetRec v _ -> Set.singleton v
-    _ -> Set.empty
+    MExec _ -> Set.empty
 
 instance {-# OVERLAPPING #-} Contextual Module where
   fv mod = foldSet fv mod Set.\\ bv mod
@@ -185,15 +183,13 @@ instance Substitutable Expr ModuleExpr where
   sub v expr mExpr =
     let sub' = sub v expr
      in case mExpr of
-          MDecl v e -> MDecl v (sub' e)
-          MLetRec v' e | v /= v' -> MLetRec v' (sub' e)
+          MDecl v' e | v /= v' -> MDecl v' (sub' e)
           MExec e -> MExec (sub' e)
           _ -> mExpr
 
 instance Renamable ModuleExpr where
   rename' vs mExpr = case mExpr of
     MDecl v e -> MDecl v <$> rename' vs e
-    MLetRec v e -> MLetRec v <$> rename' vs e
     MExec e -> MExec <$> rename' vs e
 
 instance Renamable Module where
@@ -203,7 +199,6 @@ instance Renamable Module where
       firstPass :: Module -> FreshM Module
       firstPass mod = forM mod $ \case
         MDecl v e -> MDecl <$> next' v <*> return e
-        MLetRec v e -> MLetRec <$> next' v <*> return e
         mExpr -> return mExpr
 
       -- update topmost let vars bound in every expr. their declarations
@@ -215,10 +210,8 @@ instance Renamable Module where
 
       -- now rename each expr, ignoring the bound let vars
       thirdPass :: Module -> FreshM Module
-      thirdPass mod =
-        let rename e = rename' vs e
-         in mapM rename mod
+      thirdPass mod = mapM (rename' vs) mod
 
-  evalRename = evalRename' . (renameTypes <=< rename)
+  evalRename = evalRename' . (renameModTypes <=< rename)
     where
-      renameTypes mod = forM mod (mapM renameETypes)
+      renameModTypes mod = forM mod (mapM renameExprTypes)

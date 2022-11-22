@@ -5,7 +5,7 @@ module Nat.Evaluation.ModuleSpec where
 
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
-import Nat.Context (mkVar)
+import Nat.Context (Var (..), mkVar)
 import Nat.Evaluation.Module
 import Nat.Evaluation.Surface (Normalization)
 import Nat.Inference
@@ -26,8 +26,27 @@ spec = do
   let p = parse pModule
 
   describe "eval" $ do
-    it "evaluates let declarations" $ do True `shouldBe` False
-    it "evaluates recursive let declarations" $ do True `shouldBe` False
+    it "evaluates let declarations" $ do
+      let (Right mod) =
+            p
+              [r|let succ = \x. x + 1
+                 let four = succ 3|]
+      case eval mod of
+        Left err -> traceM (show err)
+        Right mod' -> do
+          let (MDecl (Var v _) e) = last mod'
+          v `shouldBe` "four"
+          e `shouldBe` mkI 4
+
+    it "evaluates recursive let declarations" $ do
+      let (Right mod) =
+            p
+              [r|let fact = \n. if n <= 1 then 1 else n * (fact(n - 1))
+                 fact(10)|]
+      case eval mod of
+        Left err -> traceM (show err)
+        Right mod' -> last mod' `shouldBe` MExec (mkI 3628800)
+
     it "evaluates executables" $ do True `shouldBe` False
     it "evaluates domain declarations" $ do True `shouldBe` False
 
