@@ -1,3 +1,5 @@
+set comprehension
+
 structured domains
     mereology
     temporality
@@ -16,3 +18,4 @@ monadic composition
 generalized quantifiers & proofs of their properties
 generalized stars / plurality
 continuations
+
