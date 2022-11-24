@@ -38,6 +38,8 @@ data Type
   | TyTup [Type]
   | TyUnion (Set.Set Type)
   | TyTyCase Type [(Type, Type)]
+  | -- TyCase eliminates a uniontype and introduces a monotype
+    TyCase (Set.Set Type) Type
   | -- TyNil is a placeholder left by the parser and factory functions in
     -- lieu of an explicit type annotation. It says "make me a fresh tv"
     TyNil
@@ -74,7 +76,7 @@ instance Pretty Type where
   ppr p (TyCon v) = text (show v)
   ppr p (TyVar v) = text (show v)
   ppr p (TyFun a b) =
-    ppr p a <> text "->" <> brackets (ppr p b)
+    ppr p a <> text "->" <> ppr p b
   ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
@@ -91,6 +93,9 @@ instance Show Type where
 
 type TyParser = P.Parser Type
 
+pTyUnion :: TyParser
+pTyUnion = P.curlies (P.pipeSep pType) <&> mkTyUnion
+
 pTyTerm :: TyParser
 pTyTerm =
   P.choice
@@ -100,7 +105,8 @@ pTyTerm =
       P.reserved "undef" >> pure TyUndef,
       P.titularIdentifier <&> mkTv,
       pVar <&> TyCon,
-      P.parens $ P.commaSep pTyTerm <&> TyTup
+      P.parens $ P.commaSep pTyTerm <&> TyTup,
+      pTyUnion
     ]
 
 tyNil :: TyParser

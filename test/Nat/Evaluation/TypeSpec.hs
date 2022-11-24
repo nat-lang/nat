@@ -61,17 +61,16 @@ spec = do
       inferFnTy tyInt
 
     it "infers the types of function applications" $ do
-      let inferAppTy ty = inferIn (mkTypeEnv [(yV, ty')]) ((fn "x" ty x) * y) `shouldBe` Right ty' where ty' = ty
+      let inferAppTy ty = inferIn (mkTypeEnv [(yV, ty')]) (fn "x" ty x * y) `shouldBe` Right ty' where ty' = ty
 
       inferAppTy tyBool
       inferAppTy tyInt
 
     it "infers the type of equalities" $ do
-      let tb = tyBool
-      infer (one === one) `shouldBe` Right tb
-      infer (one === zero) `shouldBe` Right tb
-      infer (true === true) `shouldBe` Right tb
-      infer (true === false) `shouldBe` Right tb
+      infer (one === one) `shouldBe` Right tyBool
+      infer (one === zero) `shouldBe` Right tyBool
+      infer (true === true) `shouldBe` Right tyBool
+      infer (true === false) `shouldBe` Right tyBool
 
     it "enforces constraints on type variables" $ do
       let env = mkTypeEnv [(yV, tyA)]
@@ -183,10 +182,15 @@ spec = do
       inferIn env tyCase `shouldBe` Right (TyTup [tyInt, tyInt])
 
   describe "the union type" $ do
-    it "is unified with other types intersectively" $ do
+    it "is unified with other types by membership" $ do
       let [tA, tB, tC] = TyCon . mkVar <$> ["A", "B", "C"]
       let unionTy = mkTyUnion [tA, tB]
 
       unionTy <=> tA `shouldBe` True
       unionTy <=> tB `shouldBe` True
       unionTy <=> tC `shouldBe` False
+
+    it "is inferrable" $ do
+      let (Right expr) = parse pExpr "\\f. (f 1) && (f True)"
+
+      infer expr `shouldBe` Right (TyFun (mkTyUnion [tyInt, tyBool]) tyBool)

@@ -17,8 +17,6 @@ import Text.LaTeX.Base.Syntax (LaTeX (..))
 import Text.LaTeX.Packages.Inputenc
 import Text.LaTeX.Packages.TikZ hiding (Node)
 
--- import Text.LaTeX.Packages.Trees.Qtree (qtree)
-
 pp = T.pack . prettyLaTeX
 
 ppf f = renderFile f . pp

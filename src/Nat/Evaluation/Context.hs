@@ -25,16 +25,15 @@ import Nat.Walk
 instance Substitutable Type Type where
   sub v t = walkC $
     \ctn t' -> case t' of
-      -- FIXME: this is a bandaid on e.g.
-      -- λa. [a [0][1]], where
-      --   a:A ⊢ [a [0][1]]: T<{A | n}>, but
-      --   [a [0][1]]: T<{A | n}> ⊢ a:{A | n}
-      TyUnion u | Set.member (TyVar v) u && t == t' -> t'
       -- base case. do not continue the substitution
-      -- over `t`, as this will diverge for recursive types.
+      -- over `t`, as recursive types will diverge.
       TyVar v' | v' == v -> t
       -- otherwise recurse
       _ -> ctn t'
+
+instance {-# OVERLAPPING #-} Substitutable Type (Env Type) where
+  sub :: Var -> Type -> Env Type -> Env Type
+  sub v a = Map.map (sub v a)
 
 instance Contextual Type where
   fv = \case

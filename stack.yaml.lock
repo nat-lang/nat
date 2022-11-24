@@ -7,27 +7,34 @@ packages:
 - completed:
     hackage: binary-tree-0.1.0.0@sha256:ea4e5f636570eeaf27b5ba28a1adad252e5e4997063c7172c387c7574508815a,2846
     pantry-tree:
-      size: 711
       sha256: 92581994d6fe0106cbb46c959a298e305d1ae54c7523d6b3893ba8525612686b
+      size: 711
   original:
     hackage: binary-tree-0.1.0.0@sha256:ea4e5f636570eeaf27b5ba28a1adad252e5e4997063c7172c387c7574508815a,2846
 - completed:
     hackage: servant-js-0.9.4.2@sha256:b2d973b43bfa69f35900bf46e989348b7300c398b599ddf74b90a06173c023f2,3522
     pantry-tree:
-      size: 961
       sha256: ba201c0f2aa274afa40dfd3c31abe6e5b0791f14320f7167e750c57508dc70f6
+      size: 961
   original:
     hackage: servant-js-0.9.4.2@sha256:b2d973b43bfa69f35900bf46e989348b7300c398b599ddf74b90a06173c023f2,3522
 - completed:
     hackage: monad-gen-0.3.0.1@sha256:a2569465cfbd468d3350ef25de56b3362580e77537224313aab1210f40804a3b,821
     pantry-tree:
-      size: 288
       sha256: a825dc8dcc3ee27dbbc1b71f6853703790ed320249b8f8510bb36d726664e795
+      size: 288
   original:
     hackage: monad-gen-0.3.0.1@sha256:a2569465cfbd468d3350ef25de56b3362580e77537224313aab1210f40804a3b,821
+- completed:
+    hackage: exceptions-0.10.5@sha256:b2c634a95ba2a68e0df3ae67d006f0dabb02edbe4dc77b321133551e308ca047,2832
+    pantry-tree:
+      sha256: 55b1a4123104e57b5e72b1c5354408807beded8a52ff1900521fed7007812715
+      size: 738
+  original:
+    hackage: exceptions-0.10.5@sha256:b2c634a95ba2a68e0df3ae67d006f0dabb02edbe4dc77b321133551e308ca047,2832
 snapshots:
 - completed:
+    sha256: c1eab787a04ee119fc611d04a5e58517b32c170c4576388fea36c515c4e754fb
     size: 554667
     url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2022/4/21.yaml
-    sha256: c1eab787a04ee119fc611d04a5e58517b32c170c4576388fea36c515c4e754fb
   original: nightly-2022-04-21

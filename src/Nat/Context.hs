@@ -5,7 +5,6 @@
 
 module Nat.Context where
 
-import Control.Monad (replicateM)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT, runStateT, state)
 import Data.Foldable (Foldable (foldl'))
@@ -40,7 +39,7 @@ instance Ord Var where
 
 instance Show Var where
   show :: Var -> String
-  show (Var vPub vPri) = vPub ++ "(" ++ vPri ++ ")"
+  show (Var vPub vPri) = vPub -- ++ "(" ++ vPri ++ ")"
 
 instance Pretty [Var] where
   ppr p (v : vs) = text (show v) <> char ',' <> text (show v)
@@ -78,7 +77,7 @@ instance Substitutable a b => Substitutable a [b] where
   sub :: Substitutable a b => Var -> a -> [b] -> [b]
   sub v a = map (sub v a)
 
-instance Substitutable a b => Substitutable a (Env b) where
+instance {-# OVERLAPPABLE #-} Substitutable a b => Substitutable a (Env b) where
   sub :: Substitutable a b => Var -> a -> Env b -> Env b
   sub v a = Map.map (sub v a)
 

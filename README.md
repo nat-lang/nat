@@ -14,8 +14,16 @@ Nat is a language for modeling computation over typed domains, with applications
 - [x] Quantifiers
 - [x] Ternary conditionals
 - [x] Case statements
+  - [x] Literal cases
+  - [x] Type cases
+  - [x] Pattern matching on types
+  - [x] Pattern matching on expressions
+  - [x] Wildcards
 - [x] First-class binders
 - [ ] Set comprehensions
+- [ ] Infinite sets
+- [ ] Bounded domains
+- [ ] Modules
 
 ### Lambda Abstraction & Application
 
@@ -35,24 +43,30 @@ id 1
 succ 1
 >>> 2
 
-succ(succ 1)
+succ (succ 1)
 >>> 3
 ```
 
 Functions may reference themselves in their own bodies.
 
 ```
+\\ explicit recursion with the y combinator
 let Y = \f. (\x. f(x x)) (\x. f(x x))
 let fact = Y(\f.\n. if n <= 1 then 1 else n * f(n - 1))
+
+\\ implicit recursion with the y combinator
 let fact' = \n. if n <= 1 then 1 else n * fact'(n - 1)
 
-(fact 5) == (fact' 5)
->>> True
+fact 5
+>>> 120
+
+fact' 5
+>>> 120
 ```
 
 ### Simply, Statically Typed
 
-Nat has a monomorphic type system that rules out ill-formed terms. Its syntax is as follows, where `a` ranges over variables:
+Nat has a monomorphic type system that rules out ill-formed terms at compile-time. Its syntax is as follows, where `a` ranges over variables:
 
 ```math
 type := \langle t \rangle
@@ -73,7 +87,7 @@ The boolean and integral domains have built in types, namely `<t>` and `<n>`, an
 ```
 let applySucc = \f:<n,n>.\x. f(x)
 
-applySucc(succ)(True)
+applySucc succ True
 >>> UnificationError (NotUnifiable <t> <n>)
 ```
 

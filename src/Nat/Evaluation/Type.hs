@@ -6,13 +6,13 @@
 
 module Nat.Evaluation.Type where
 
-import Control.Monad (liftM, replicateM)
+import Control.Monad.Error (MonadError (catchError))
 import Control.Monad.Except
   ( Except,
     ExceptT,
     MonadError (throwError),
+    catchError,
     liftEither,
-    replicateM,
     runExcept,
     runExceptT,
   )
@@ -33,7 +33,7 @@ import Control.Monad.State
 import Control.Monad.Trans (lift)
 import Data.Either (isRight)
 import Data.Foldable (toList)
-import Data.List (find, foldl', nub)
+import Data.List (find, partition)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
@@ -81,7 +81,7 @@ checkTy x = do
   env <- ask
   case Map.lookup x env of
     Nothing -> throwError $ IUnboundVariable x env
-    Just t -> pure t
+    Just t -> return t
 
 tyOp op = case op of S.Add -> tyInt; S.Sub -> tyInt; S.Mul -> tyInt; _ -> tyBool
 
@@ -118,7 +118,11 @@ mkChurchTree bTy t = do
 freshIfNil :: Type -> TypeConstrainT Type
 freshIfNil t = case t of
   TyNil -> fresh
-  _ -> pure t
+  _ -> return t
+
+liftUnion t' = case t' of
+  TyUnion {} -> t'
+  _ -> mkTyUnion [t']
 
 instance Inferrable Type S.Expr where
   fresh = mkTv' <$> fresh'
@@ -133,12 +137,12 @@ instance Inferrable Type S.Expr where
       (t, cs) <- principal' e
       let (TyTyCase bT ts) = t
       if isVar bT
-        then pure (t, cs)
+        then return (t, cs)
         else case find (unifiable bT . fst) ts of
           Nothing -> throwError $ IInexhaustiveCase t
           Just (pT, eT) -> do
             s <- liftEither (unify' ((pT, bT) : cs) e)
-            pure (inEnv s eT, cs)
+            return (inEnv s eT, cs)
     _ -> principal' e
 
   constrain expr = case expr of
@@ -148,18 +152,18 @@ instance Inferrable Type S.Expr where
       t <- checkTy v
       return (t, [])
     S.ELam (S.Binder v t) e -> do
-      t <- freshIfNil t
-      (t', cs) <- constrainWith e v t
-      return (t `TyFun` t', cs)
-    -- fact, if n <= 1 then 1 else n * fact(n - 1)
-    S.EFix v e -> do
-      tv <- fresh
-      constrainWith e v (TyFun tv tv)
+      range <- freshIfNil t
+
+      (dom, cs) <- constrainWith e v range
+      return (range `TyFun` dom, cs)
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
       tv <- fresh
       return (tv, c0 ++ c1 ++ [(t0, t1 `TyFun` tv)])
+    S.EFix v e -> do
+      tv <- fresh
+      constrainWith e v (TyFun tv tv)
     S.EBinOp op e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
@@ -194,7 +198,7 @@ instance Inferrable Type S.Expr where
       t' <- mkChurchTree branchTy t
       (tv, cs) <- principal t'
       return (tv, concat $ cs : branchConstrs)
-    S.EUndef -> pure (TyUndef, [])
+    S.EUndef -> return (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
 
 refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
@@ -206,19 +210,42 @@ refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
 -------------------------------------------------------------------------------
 
 instance Unifiable Type where
-  unify t0 t1 =
-    let some t ts = or (unifiable t <$> Set.toList ts)
-     in case (t0, t1) of
-          _ | t0 == t1 -> pure mempty
-          (TyWild, _) -> pure mempty
-          (_, TyWild) -> pure mempty
-          (TyVar v, t) -> pure $ mkEnv v t
-          (t, TyVar v) -> pure $ mkEnv v t
-          (TyFun t0 t1, TyFun t0' t1') -> do
-            u0 <- unify t0 t0'
-            u1 <- unify t1 t1'
-            pure (u0 <.> u1)
-          (TyUnion ts, t) | some t ts -> pure mempty
-          (t, TyUnion ts) | some t ts -> pure mempty
-          (TyTup ts, TyTup ts') | length ts == length ts' -> unifyMany (zip ts ts')
-          _ -> throwError $ NotUnifiable t0 t1
+  unifyMany = unifyMany' <=< unifyUnions
+    where
+      unifyUnions pairs = do
+        let (fns, rest) = partition isFnSub pairs
+            fns' = map leftOrd fns
+        fns'' <- unifyUnions' fns'
+        return (fns'' ++ rest)
+
+      unifyUnions' (p : ps) = unifyUnions' (merge p ps)
+
+      merge (a, TyFun r d) pairs =
+        pairs <&> \case
+          (a', TyFun r' d') | a <=> a', d <=> d' -> (a, TyCase (Set.fromList [r, r']))
+          p -> p
+      leftOrd = \case
+        (a, b@TyVar {}) -> (b, a)
+        p -> p
+      isFnSub = \case
+        (TyVar {}, TyFun {}) -> True
+        (TyFun {}, TyVar {}) -> True
+        _ -> False
+
+  unify t0 t1 = case (t0, t1) of
+    _ | t0 == t1 -> eliminate
+    (TyWild, _) -> eliminate
+    (_, TyWild) -> eliminate
+    (TyVar v, t) -> return $ mkEnv v t
+    (t, TyVar v) -> return $ mkEnv v t
+    (TyFun r d, TyFun r' d') -> do
+      u <- unify r r'
+      u' <- unify d d'
+      return (u <.> u')
+    (TyUnion ts, t) | some t ts -> eliminate
+    (t, TyUnion ts) | some t ts -> eliminate
+    (TyTup ts, TyTup ts') | length ts == length ts' -> unifyMany (zip ts ts')
+    _ -> throwError $ NotUnifiable t0 t1
+    where
+      eliminate = return mempty
+      some t ts = or (unifiable t <$> Set.toList ts)

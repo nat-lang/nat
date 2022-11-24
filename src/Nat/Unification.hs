@@ -22,13 +22,16 @@ type UnifyM a = ExceptT (UnificationError a) Identity (Env a)
 class (Substitutable a a, Show a) => Unifiable a where
   unify :: a -> a -> UnifyM a
 
-  unifyMany :: [Pair a] -> UnifyM a
-  unifyMany cs = case cs of
+  unifyMany' :: [Pair a] -> UnifyM a
+  unifyMany' cs = case cs of
     [] -> pure mempty
     ((a0, a1) : cs') -> do
       u <- unify a0 a1
-      us <- unifyMany (inEnv u cs')
+      us <- unifyMany' (inEnv u cs')
       return (u <.> us)
+
+  unifyMany :: [Pair a] -> UnifyM a
+  unifyMany = unifyMany'
 
   runUnify :: [Pair a] -> Either (UnificationError a) (Env a)
   runUnify = runIdentity . runExceptT . unifyMany

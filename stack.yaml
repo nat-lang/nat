@@ -43,6 +43,7 @@ extra-deps:
   - binary-tree-0.1.0.0@sha256:ea4e5f636570eeaf27b5ba28a1adad252e5e4997063c7172c387c7574508815a,2846
   - servant-js-0.9.4.2@sha256:b2d973b43bfa69f35900bf46e989348b7300c398b599ddf74b90a06173c023f2,3522
   - monad-gen-0.3.0.1@sha256:a2569465cfbd468d3350ef25de56b3362580e77537224313aab1210f40804a3b,821
+  - exceptions-0.10.5@sha256:b2c634a95ba2a68e0df3ae67d006f0dabb02edbe4dc77b321133551e308ca047,2832
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
