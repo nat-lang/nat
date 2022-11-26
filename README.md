@@ -109,7 +109,7 @@ Types may be partially or completely omitted and Nat will infer them.
 
 ### Trees
 
-Trees are first class citizens, with a dedicated syntax that desugars to a church encoding. Defining a new tree yields a fold, which can in turn be used to perform arbitrary computations over the tree.
+Trees are first class citizens, with a dedicated syntax that desugars to a church encoding. Defining a new tree yields a fold, which can in turn be used to perform arbitrary operations on the tree.
 
 ```
 let tree = [0 [1][1]]
@@ -133,6 +133,16 @@ forall n in N. n < 5
 
 exists n in N. n > 5
 >>> False
+```
+
+The iota quantifier finds the unique member of the restricted scope that satisfies its nuclear predicate, and otherwise returns `undefined`. Its type, for any domain `X`, is `X ⋃ undefined`.
+
+```
+the n in N. n == 4
+>>> 4
+
+the n in N. n > 4
+>>> undefined
 ```
 
 ## Modeling Linguistic Semantics
