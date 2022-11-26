@@ -21,13 +21,14 @@ Nat is a language for modeling computation over typed domains, with applications
   - [x] Wildcards
 - [x] First-class binders
 - [ ] Set comprehensions
-- [ ] Infinite sets
+- [ ] Infinite domains
+- [ ] Recursive domains
 - [ ] Bounded domains
 - [ ] Modules
 
 ### Lambda Abstraction & Application
 
-At its heart, Nat is an implementation of the lambda calculus. This means that you may define functions and apply them. Functions may be named via `let` declarations or left anonymous.
+At its heart, Nat is an implementation of the lambda calculus. This means that you may define functions and apply them to arguments. Functions are named via `let` declarations or left anonymous.
 
 ```
 let id = \x. x
@@ -134,11 +135,11 @@ exists n in N. n > 5
 >>> False
 ```
 
-## Developing Common Semantic Features
+## Modeling Linguistic Semantics
 
 ### Composition Operations
 
-Type-driven function application over a tree may be modeled with the `tycase` expression.
+**Type-driven function application** over a tree may be modeled with the `tycase` expression.
 
 ```
 let succ = \x. x + 1
@@ -167,6 +168,38 @@ compose tree TDFA
 >>> 2
 ```
 
+**Type driven predicate coordination** proceeds similarly.
+
+```
+// define a tree with two children of the same type
+let tree = [undef [True] [False]]
+
+// pattern match on the types of the children, conjoining
+// children of the same type
+let TDPC = \l.\r. tycase (l, r) of
+    (l',r'):(<A>, <A>) -> l' && r'
+  | _ -> undef
+
+compose tree TDPC
+>>> False
+```
+
+**Type driven predicate abstraction** requires a construct that will be unfamiliar to anyone with a background purely in computer science. In Nat, binders have a semantics of their own: to introduce a solitary binder over the variable `x`, write `\x`. To eliminate it, apply it, as if it were a function, to an arbitrary expression. This will produce a function that binds any free occurences of `x` in its body. As a practical matter, Nat only allows first-class binders as the expression nodes of trees, but since trees reduce to lambdas under the hood, first-class binders are fully integrated into Nat's semantics.
+
+```
+// a tree with a binding child and a free variable child
+let tree = [undef [\x][x]]
+
+// pattern match on the type of a binder
+let TDPA = \l.\r. tycase (l, r) of
+   (l',r'):(<A,>, <B>) -> l' r'
+  | _ -> undef
+
+// using our previously defined utility functions
+compose tree TDPA
+>>> \x. x
+```
+
 ### Generalized Quantifiers
 
 We have functions and quantifiers, so generalizing quantifiers is straightforward.
@@ -193,16 +226,12 @@ some N lessThan5 lessThan2
 >>> True
 ```
 
-### Traces
-
-#### The semantics of first-class binders
-
-### Structured Domains
+### Structuring Domains
 
 #### mereology
 
 #### mass & plurality
 
-### Intensionality
+#### intensionality
 
 ### Context Change

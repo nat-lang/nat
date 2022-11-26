@@ -31,10 +31,6 @@ instance Substitutable Type Type where
       -- otherwise recurse
       _ -> ctn t'
 
-instance {-# OVERLAPPING #-} Substitutable Type (Env Type) where
-  sub :: Var -> Type -> Env Type -> Env Type
-  sub v a = Map.map (sub v a)
-
 instance Contextual Type where
   fv = \case
     TyVar a -> Set.singleton a

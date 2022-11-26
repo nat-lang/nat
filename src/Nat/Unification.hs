@@ -17,7 +17,9 @@ data UnificationError a
   = NotUnifiable !a !a
   deriving (Eq, Show)
 
-type UnifyM a = ExceptT (UnificationError a) Identity (Env a)
+type UnifyT e r = ExceptT (UnificationError e) Identity r
+
+type UnifyM a = UnifyT a (Env a)
 
 class (Substitutable a a, Show a) => Unifiable a where
   unify :: a -> a -> UnifyM a

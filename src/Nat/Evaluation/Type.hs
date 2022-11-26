@@ -6,6 +6,7 @@
 
 module Nat.Evaluation.Type where
 
+import Control.Monad ((<=<))
 import Control.Monad.Error (MonadError (catchError))
 import Control.Monad.Except
   ( Except,
@@ -33,6 +34,7 @@ import Control.Monad.State
 import Control.Monad.Trans (lift)
 import Data.Either (isRight)
 import Data.Foldable (toList)
+import Data.Functor ((<&>))
 import Data.List (find, partition)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -212,20 +214,25 @@ refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
 instance Unifiable Type where
   unifyMany = unifyMany' <=< unifyUnions
     where
+      unifyUnions :: [Pair Type] -> UnifyT Type [Pair Type]
       unifyUnions pairs = do
         let (fns, rest) = partition isFnSub pairs
             fns' = map leftOrd fns
-        fns'' <- unifyUnions' fns'
+            fns'' = unifyUnions' fns
         return (fns'' ++ rest)
 
+      unifyUnions' :: [Pair Type] -> [Pair Type]
+      unifyUnions' [] = []
       unifyUnions' (p : ps) = unifyUnions' (merge p ps)
 
+      merge :: Pair Type -> [Pair Type] -> [Pair Type]
       merge (a, TyFun r d) pairs =
         pairs <&> \case
-          (a', TyFun r' d') | a <=> a', d <=> d' -> (a, TyCase (Set.fromList [r, r']))
+          (a', TyFun r' d') | a <=> a', d <=> d' -> (a, TyFun (mkTyUnion [r, r']) d)
           p -> p
+
       leftOrd = \case
-        (a, b@TyVar {}) -> (b, a)
+        (b@TyFun {}, a) -> (a, b)
         p -> p
       isFnSub = \case
         (TyVar {}, TyFun {}) -> True

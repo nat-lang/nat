@@ -72,14 +72,17 @@ tyInt, tyBool :: Type
 tyInt = TyCon (mkVar "n")
 tyBool = TyCon (mkVar "t")
 
+pTySet s = curlies $ text (intercalate " | " (show <$> Set.toList s))
+
 instance Pretty Type where
   ppr p (TyCon v) = text (show v)
   ppr p (TyVar v) = text (show v)
   ppr p (TyFun a b) =
     ppr p a <> text "->" <> ppr p b
-  ppr p (TyUnion ts) = curlies $ text (intercalate " | " (show <$> Set.toList ts))
+  ppr p (TyUnion ts) = pTySet ts
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)
+  ppr p (TyCase ts t) = pTySet ts <+> text "->" <+> ppr p t
   ppr p TyUndef = text "TyUndef"
   ppr p TyNil = text "TyNil"
   ppr p TyWild = text "_"
