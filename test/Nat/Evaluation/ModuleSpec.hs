@@ -24,6 +24,7 @@ mkB = ELit . LBool
 spec :: Spec
 spec = do
   let p = parse pModule
+  let ev = last . fromRight . eval
 
   describe "eval" $ do
     it "evaluates let declarations" $ do
@@ -31,21 +32,21 @@ spec = do
             p
               [r|let succ = \x. x + 1
                  let four = succ 3|]
-      case eval mod of
-        Left err -> traceM (show err)
-        Right mod' -> do
-          let (MDecl (Var v _) e) = last mod'
-          v `shouldBe` "four"
-          e `shouldBe` mkI 4
+
+          (MDecl (Var v _) e) = ev mod
+
+      v `shouldBe` "four"
+      e `shouldBe` mkI 4
 
     it "evaluates recursive let declarations" $ do
       let (Right mod) =
             p
-              [r|let fact = \n. if n <= 1 then 1 else n * (fact(n - 1))
+              [r|let fact = \n. if n <= 1 then 1 else n * (fact (n - 1))
                  fact(10)|]
-      case eval mod of
-        Left err -> traceM (show err)
-        Right mod' -> last mod' `shouldBe` MExec (mkI 3628800)
+
+          expr = ev mod
+
+      expr `shouldBe` MExec (mkI 3628800)
 
     it "evaluates executables" $ do True `shouldBe` False
     it "evaluates domain declarations" $ do True `shouldBe` False
@@ -66,8 +67,11 @@ spec = do
 
                  (t0'(0)(acc)) == (t1(0)(acc))|]
 
-      let (Right mod') = eval mod
-      last mod' `shouldBe` MExec (mkB True)
+      ev mod `shouldBe` MExec (mkB True)
+
+    it "evaluates applicative functors over trees" $ do True `shouldBe` False
+    it "evaluates traversals over trees" $ do True `shouldBe` False
+    it "evaluates monads over trees" $ do True `shouldBe` False
 
     it "evaluates type driven composition" $ do
       let (Right mod) =
@@ -84,5 +88,4 @@ spec = do
                  let compose = \tree.\op. tree(undef)(guard op)
                  compose(tree)(opFA)|]
 
-      let (Right mod') = eval mod
-      last mod' `shouldBe` MExec (mkI 2)
+      ev mod `shouldBe` MExec (mkI 2)

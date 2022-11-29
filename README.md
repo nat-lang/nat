@@ -194,11 +194,11 @@ compose tree TDPC
 >>> False
 ```
 
-**Type driven predicate abstraction** requires a construct that will be unfamiliar to anyone with a background purely in computer science. In Nat, binders have a semantics of their own: to introduce a solitary binder over the variable `x`, write `\x`. To eliminate it, apply it, as if it were a function, to an arbitrary expression. This will produce a function that binds any free occurences of `x` in its body. As a practical matter, Nat only allows first-class binders as the expression nodes of trees, but since trees reduce to lambdas under the hood, first-class binders are fully integrated into Nat's semantics.
+**Type driven predicate abstraction** requires a construct that will be unfamiliar to anyone with a background purely in computer science. In Nat, binders have a semantics of their own: to introduce a solitary binder over the variable `x`, write `\x`. To eliminate it, apply it, as if it were a function, to an arbitrary expression `e`. This will produce a function that binds any free occurences of `x` in `e`. As a practical matter, Nat only allows first-class binders as the expression nodes of trees, but since trees reduce to lambdas under the hood, binders are fully integrated into Nat's semantics.
 
 ```
 // a tree with a binding child and a free variable child
-let tree = [undef [\x][x]]
+let tree = [undef [\x] [x]]
 
 // pattern match on the type of a binder
 let TDPA = \l.\r. tycase (l, r) of
