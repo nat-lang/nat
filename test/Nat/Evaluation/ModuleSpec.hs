@@ -51,27 +51,39 @@ spec = do
     it "evaluates executables" $ do True `shouldBe` False
     it "evaluates domain declarations" $ do True `shouldBe` False
 
-    it "evaluates functors over trees" $ do
+    it "evaluates trees as functors" $ do
       let (Right mod) =
             p
-              [r|let t0 = [0 [0][0]]
-                 let t1 = [1 [1][1]]
-
-                 let L = \e.\b.e
+              [r|let L = \e.\b.e
                  let B = \x.\l.\r.\e.\b. b(x)(l e b)(r e b)
 
                  let fmap = \f.\t. t(L)(\x. B(f x))
                  let acc = \x.\l.\r. x + l + r
 
-                 let t0' = fmap (\x. x + 1) t0
-
-                 (t0'(0)(acc)) == (t1(0)(acc))|]
+                 let t = [0 [0][0]]
+                 (fmap (\x. x + 1) t0) == [1 [1][1]]
+              |]
 
       ev mod `shouldBe` MExec (mkB True)
 
-    it "evaluates applicative functors over trees" $ do True `shouldBe` False
+    it "evaluates trees as applicative functors" $ do
+      let (Right mod) =
+            p
+              [r|let L = \e.\b.e
+                 let B = \x.\l.\r.\e.\b. b(x)(l e b)(r e b)
+                 let pure = \e.[e [e][e]]
+                 let fuse = \ft.\xt. xt(\x.\lx.\rx. ft(\f.\lf.\rf. B(f x (fuse lf lx) (fuse rf rx))))
+                 let sequence = \t0.\t1. fuse (t0 L) (t1 L)
+
+                 let succ = \x. x + 1
+                 let t = sequence (pure succ) [0 [0][0]]
+
+                 t == [1 [1][1]]
+              |]
+
+      ev mod `shouldBe` MExec (mkB True)
+
     it "evaluates traversals over trees" $ do True `shouldBe` False
-    it "evaluates monads over trees" $ do True `shouldBe` False
 
     it "evaluates type driven composition" $ do
       let (Right mod) =
