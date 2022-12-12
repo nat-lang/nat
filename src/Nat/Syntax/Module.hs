@@ -14,14 +14,19 @@ import Nat.Syntax.Type
 import Nat.Walk
 import Text.Megaparsec.Debug (dbg)
 
+type ModulePath = [String]
+
 data ModuleExprR e
   = MDecl Var e
+  | MImport [Var] ModulePath
   | MExec e
   deriving (Eq, Show, Ord, Functor, Foldable, Traversable)
 
 type ModuleExpr = ModuleExprR Expr
 
 type Module = [ModuleExpr]
+
+data NamedModule = NMod ModulePath Module
 
 -------------------------------------------------------------------------------
 -- Parsing
@@ -34,6 +39,13 @@ pMDecl = do
   P.symbol "="
   MDecl v <$> pExpr
 
+pMImport :: P.Parser ModuleExpr
+pMImport = do
+  P.reserved "import"
+  vs <- P.parens (P.commaSep pVar)
+  P.symbol "from"
+  MImport vs <$> P.dotSep P.identifier
+
 pMExec :: P.Parser ModuleExpr
 pMExec = MExec <$> pExpr
 
@@ -45,7 +57,7 @@ pMDom = do
   P.symbol "="
   MDecl v <$> pEDom v
 
-pMExpr = P.choice [pMExec, pMDecl, pMDom]
+pMExpr = P.choice [pMExec, pMDecl, pMDom, pMImport]
 
 pModule :: P.Parser Module
 pModule = pMExpr `P.sepEndBy` P.delimiter

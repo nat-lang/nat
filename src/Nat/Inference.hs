@@ -65,8 +65,6 @@ class (Unifiable a, Show a, Show b) => Inferrable a b where
   principal' b = do
     (a, cs) <- constrain b
     s <- liftEither (unify' cs b)
-    traceM ("EXPR T: " ++ show b ++ ": " ++ show a)
-    traceM ("SUB: " ++ show s)
     pure (C.inEnv s a, cs)
 
   principal :: b -> Constrain a b

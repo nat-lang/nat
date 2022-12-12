@@ -11,6 +11,8 @@ import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.Reader (MonadReader (local), ReaderT (runReaderT), ask)
 import Control.Monad.State (evalStateT)
 import Data.Foldable (Foldable (foldl'))
+import Data.Functor ((<&>))
+import Data.List (partition)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
@@ -39,9 +41,7 @@ instance Reducible ModuleExpr ModuleExpr ExprEvalError ExprReductionEnv where
   reduce = mapM reduce
 
 instance Reducible Module Module ExprEvalError ExprReductionEnv where
-  reduce mod = do
-    (_, mod') <- mapAccumM reduce' Map.empty mod
-    return mod'
+  reduce mod = snd <$> mapAccumM reduce' Map.empty mod
     where
       reduce' env expr = do
         expr' <- reduce (inEnv env expr)
@@ -88,11 +88,35 @@ reduceMod mod tyEnv = case reduceIn tyEnv mod of
   where
     reduceIn tyEnv = runReduce' (ExprRedEnv {tyEnv = tyEnv, relEnv = Map.empty})
 
-preproc = runRename . fmap (fmap desugar)
+collectDecls :: Module -> [Var] -> Module
+collectDecls mod ids = filter incl mod
+  where
+    incl = \case
+      MDecl v _ | elem v ids -> True
+      _ -> False
+
+dotSep :: [String] -> String
+dotSep [] = ""
+dotSep ws = foldr1 (\w s -> w ++ '.' : s) ws
+
+resolveImports :: [NamedModule] -> Module -> Module
+resolveImports mods mod = foldl' accum mod' imports
+  where
+    accum decls (MImport ids path) = case lookup path assoc of
+      Nothing -> decls
+      Just mod -> collectDecls mod ids <> decls
+    assoc = mods <&> \(NMod p mod) -> (p, mod)
+    (imports, mod') = partition (\case MImport {} -> True; _ -> False) mod
 
 runTypeMod mod = runExcept (typeMod 0 mod)
 
-eval :: Module -> Either ModuleEvalError Module
-eval mod = runExcept $ (reduceMod mod' <=< typeMod nameSupply) mod'
+eval' :: [NamedModule] -> Module -> Either ModuleEvalError Module
+eval' mods mod = runExcept $ (reduceMod mod' <=< typeMod nameSupply) mod'
   where
-    (mod', nameSupply) = preproc mod
+    rename :: Module -> (Module, Int)
+    rename = runRename . fmap (fmap desugar)
+
+    (mod', nameSupply) = (rename . resolveImports mods) mod
+
+eval :: Module -> Either ModuleEvalError Module
+eval = eval' []

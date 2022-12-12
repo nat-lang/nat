@@ -102,3 +102,14 @@ spec = do
                  compose(tree)(opFA)|]
 
       ev mod `shouldBe` MExec (mkI 2)
+
+    it "resolves module imports" $ do
+      let (Right mod0) = p [r|let succ = \x.x + 1|]
+      let (Right mod1) =
+            p
+              [r|import (succ) from StdLib.Arithmetic
+                 succ 0|]
+
+      let ev mods = last . fromRight [] . eval' mods
+
+      ev [NMod ["StdLib", "Arithmetic"] mod0] mod1 `shouldBe` MExec (mkI 1)

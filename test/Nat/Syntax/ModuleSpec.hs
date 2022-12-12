@@ -63,3 +63,10 @@ spec = do
       let mDom v s = MDecl v (EDom (Dom (TyCon v) (Set.fromList s)))
 
       parse pModule mod0 `shouldBe` Right [mDom vX vars, mDom vY ints, mDom vZ boos]
+
+    it "parses modules with import declarations" $ do
+      let mod0 =
+            [r|import (foo,bar) from StdLib.Foo.Bar
+               import (baz,bam) from StdLib.Baz.Bam|]
+
+      parse pModule mod0 `shouldBe` Right [MImport [mkVar "foo", mkVar "bar"] ["StdLib", "Foo", "Bar"], MImport [mkVar "baz", mkVar "bam"] ["StdLib", "Baz", "Bam"]]

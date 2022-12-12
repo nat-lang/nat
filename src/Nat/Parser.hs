@@ -58,8 +58,6 @@ keywords =
   [ "if",
     "then",
     "else",
-    "let",
-    "letrec",
     "dom",
     "case",
     "tycase",
@@ -69,7 +67,11 @@ keywords =
     "forall",
     "exists",
     "the",
-    "in"
+    "in",
+    -- module syntax
+    "let",
+    "import",
+    "from"
   ]
 
 lineComment = L.skipLineComment "//"
@@ -111,6 +113,9 @@ commaSep p = p `sepBy` comma
 
 pipeSep :: Parser a -> Parser [a]
 pipeSep p = p `sepBy` try (C.space >> C.char '|' >> C.space)
+
+dotSep :: Parser a -> Parser [a]
+dotSep p = p `sepBy` C.char '.'
 
 reserved :: Text -> Parser ()
 reserved w = (lexeme . try) (C.string w *> notFollowedBy C.alphaNumChar)
