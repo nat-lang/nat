@@ -3,6 +3,7 @@
 
 module Nat.Evaluation.ModuleSpec where
 
+import Data.Either (fromRight)
 import qualified Data.Map as Map
 import Debug.Trace (traceM)
 import Nat.Context (Var (..), mkVar)
@@ -24,7 +25,7 @@ mkB = ELit . LBool
 spec :: Spec
 spec = do
   let p = parse pModule
-  let ev = last . fromRight . eval
+  let ev = last . fromRight [] . eval
 
   describe "eval" $ do
     it "evaluates let declarations" $ do
@@ -61,7 +62,7 @@ spec = do
                  let acc = \x.\l.\r. x + l + r
 
                  let t = [0 [0][0]]
-                 (fmap (\x. x + 1) t0) == [1 [1][1]]
+                 (fmap (\x. x + 1) t) == [1 [1][1]]
               |]
 
       ev mod `shouldBe` MExec (mkB True)

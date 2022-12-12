@@ -43,3 +43,6 @@ class (Substitutable a a, Show a) => Unifiable a where
 
   (<=>) :: a -> a -> Bool
   (<=>) = unifiable
+
+  (<!>) :: a -> a -> Bool
+  (<!>) a0 a1 = not (a0 <=> a1)

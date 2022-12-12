@@ -1,6 +1,6 @@
 name: nat
 version: 0.1.0.0
-github: 'nat-lang/nat'
+github: 'nat-lang/nls'
 license: BSD3
 author: 'Alex Shilen'
 maintainer: 'shilen.alexander@gmail.com'
@@ -9,7 +9,7 @@ copyright: '2022 Alex Shilen'
 extra-source-files:
   - README.md
 
-description: Please see the README on GitHub at <https://github.com/nat-lang/nat#readme>
+description: Please see the README on GitHub at <https://github.com/nat-lang/nls#readme>
 
 dependencies:
   - base >= 4.7 && < 5

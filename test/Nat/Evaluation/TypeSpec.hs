@@ -193,4 +193,4 @@ spec = do
     it "is inferrable" $ do
       let (Right expr) = parse pExpr "\\f. (f 1) && (f True)"
 
-      infer expr `shouldBe` Right (TyFun (mkTyUnion [tyInt, tyBool]) tyBool)
+      infer expr `shouldBe` Right (TyFun (TyFun (mkTyUnion [tyInt, tyBool]) tyBool) tyBool)

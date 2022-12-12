@@ -85,7 +85,13 @@ checkTy x = do
     Nothing -> throwError $ IUnboundVariable x env
     Just t -> return t
 
-tyOp op = case op of S.Add -> tyInt; S.Sub -> tyInt; S.Mul -> tyInt; _ -> tyBool
+tyOp op = case op of
+  S.Add -> TyFun tyInt (TyFun tyInt tyInt)
+  S.Sub -> TyFun tyInt (TyFun tyInt tyInt)
+  S.Mul -> TyFun tyInt (TyFun tyInt tyInt)
+  S.And -> TyFun tyBool (TyFun tyBool tyBool)
+  S.Or -> TyFun tyBool (TyFun tyBool tyBool)
+  _ -> TyFun (mkTv "Z") (TyFun (mkTv "Z") tyBool)
 
 constrainWith e v t = inTypeEnv (v, t) (principal e)
 
@@ -113,8 +119,8 @@ constrainCase (S.Binder p t, expr) = do
 
 isVar = \case TyVar {} -> True; _ -> False
 
-mkChurchTree bTy t = do
-  let t' = S.mkTypedChurchTree bTy t
+mkChurchTree t = do
+  let t' = S.mkChurchTree t
   state (flip runFreshT $ renameExprTypes t')
 
 freshIfNil :: Type -> TypeConstrainT Type
@@ -170,7 +176,9 @@ instance Inferrable Type S.Expr where
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
       tv <- fresh
-      return (tv, c0 ++ c1 ++ [(t0, t1), (tyOp op, tv)])
+      tv' <- fresh
+      let (TyFun a (TyFun b c)) = tyOp op
+      return (tv, c0 ++ c1 ++ [(t0, a), (t1, b), (c, tv)])
     S.ECond x y z -> do
       (tX, cX) <- principal x
       (tY, cY) <- principal y
@@ -193,13 +201,8 @@ instance Inferrable Type S.Expr where
 
       return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
     S.ETree t -> do
-      (branchTys, branchConstrs) <- unzip <$> mapM principal (toList t)
-      branchTy <- TyFun (refine branchTys) <$> fresh
-      -- use the name supply of the inference monad
-      -- to instantiate a fresh typed church tree
-      t' <- mkChurchTree branchTy t
-      (tv, cs) <- principal t'
-      return (tv, concat $ cs : branchConstrs)
+      t' <- mkChurchTree t
+      principal t'
     S.EUndef -> return (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
 
@@ -212,24 +215,37 @@ refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
 -------------------------------------------------------------------------------
 
 instance Unifiable Type where
-  unifyMany = unifyMany' <=< unifyUnions
+  unifyMany ps = unifyMany' ps
     where
-      unifyUnions :: [Pair Type] -> UnifyT Type [Pair Type]
+      -- s <- unifyUnions ps
+      -- traceM ("=> " ++ show s)
+      -- traceM ("==> " ++ show (inEnv s ps))
+      -- z' <- unifyMany' (inEnv s ps)
+      -- traceM ("===> " ++ show z')
+      -- traceM ("====> " ++ show (s <.> z'))
+      -- return (s <.> z')
+
+      unifyUnions :: [Pair Type] -> UnifyM Type
       unifyUnions pairs = do
-        let (fns, rest) = partition isFnSub pairs
+        let (fns, _) = partition isFnSub pairs
             fns' = map leftOrd fns
-            fns'' = unifyUnions' fns
-        return (fns'' ++ rest)
+        traceM ("constraints ... " ++ show pairs)
+        traceM (" functional ... " ++ show fns')
+        overloadedEnv <- merge fns'
+        traceM ("post merge ... " ++ show overloadedEnv)
+        traceM ("post sub ... " ++ show (inEnv overloadedEnv pairs))
+        return overloadedEnv
 
-      unifyUnions' :: [Pair Type] -> [Pair Type]
-      unifyUnions' [] = []
-      unifyUnions' (p : ps) = unifyUnions' (merge p ps)
-
-      merge :: Pair Type -> [Pair Type] -> [Pair Type]
-      merge (a, TyFun r d) pairs =
-        pairs <&> \case
-          (a', TyFun r' d') | a <=> a', d <=> d' -> (a, TyFun (mkTyUnion [r, r']) d)
-          p -> p
+      merge :: [Pair Type] -> UnifyM Type
+      merge pairs = case pairs of
+        ((a@(TyVar v), TyFun r d) : (a', TyFun r' d') : ps) | a <=> a',
+                                                              d <=> d',
+                                                              r <!> r' -> do
+          let overloadedFn = TyFun (mkTyUnion [r, r']) d
+              sub = mkEnv v overloadedFn
+          us <- merge (inEnv sub ps)
+          return (sub <.> us)
+        _ -> return mempty
 
       leftOrd = \case
         (b@TyFun {}, a) -> (a, b)
