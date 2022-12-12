@@ -119,18 +119,14 @@ constrainCase (S.Binder p t, expr) = do
 
 isVar = \case TyVar {} -> True; _ -> False
 
-mkChurchTree t = do
-  let t' = S.mkChurchTree t
+mkChurchTree branchTy t = do
+  let t' = S.mkTypedChurchTree branchTy t
   state (flip runFreshT $ renameExprTypes t')
 
 freshIfNil :: Type -> TypeConstrainT Type
 freshIfNil t = case t of
   TyNil -> fresh
   _ -> return t
-
-liftUnion t' = case t' of
-  TyUnion {} -> t'
-  _ -> mkTyUnion [t']
 
 instance Inferrable Type S.Expr where
   fresh = mkTv' <$> fresh'
@@ -201,8 +197,13 @@ instance Inferrable Type S.Expr where
 
       return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
     S.ETree t -> do
-      t' <- mkChurchTree t
-      principal t'
+      (branchTys, branchConstrs) <- unzip <$> mapM principal (toList t)
+      branchTy <- TyFun (refine branchTys) <$> fresh
+      -- use the name supply of the inference monad
+      -- to instantiate a fresh typed church tree
+      t' <- mkChurchTree branchTy t
+      (tv, cs) <- principal t'
+      return (tv, concat $ cs : branchConstrs)
     S.EUndef -> return (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
 
@@ -214,47 +215,10 @@ refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
 -- Unification
 -------------------------------------------------------------------------------
 
+isTyFun TyFun {} = True
+isTyFun _ = False
+
 instance Unifiable Type where
-  unifyMany ps = unifyMany' ps
-    where
-      -- s <- unifyUnions ps
-      -- traceM ("=> " ++ show s)
-      -- traceM ("==> " ++ show (inEnv s ps))
-      -- z' <- unifyMany' (inEnv s ps)
-      -- traceM ("===> " ++ show z')
-      -- traceM ("====> " ++ show (s <.> z'))
-      -- return (s <.> z')
-
-      unifyUnions :: [Pair Type] -> UnifyM Type
-      unifyUnions pairs = do
-        let (fns, _) = partition isFnSub pairs
-            fns' = map leftOrd fns
-        traceM ("constraints ... " ++ show pairs)
-        traceM (" functional ... " ++ show fns')
-        overloadedEnv <- merge fns'
-        traceM ("post merge ... " ++ show overloadedEnv)
-        traceM ("post sub ... " ++ show (inEnv overloadedEnv pairs))
-        return overloadedEnv
-
-      merge :: [Pair Type] -> UnifyM Type
-      merge pairs = case pairs of
-        ((a@(TyVar v), TyFun r d) : (a', TyFun r' d') : ps) | a <=> a',
-                                                              d <=> d',
-                                                              r <!> r' -> do
-          let overloadedFn = TyFun (mkTyUnion [r, r']) d
-              sub = mkEnv v overloadedFn
-          us <- merge (inEnv sub ps)
-          return (sub <.> us)
-        _ -> return mempty
-
-      leftOrd = \case
-        (b@TyFun {}, a) -> (a, b)
-        p -> p
-      isFnSub = \case
-        (TyVar {}, TyFun {}) -> True
-        (TyFun {}, TyVar {}) -> True
-        _ -> False
-
   unify t0 t1 = case (t0, t1) of
     _ | t0 == t1 -> eliminate
     (TyWild, _) -> eliminate
