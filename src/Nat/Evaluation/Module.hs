@@ -60,18 +60,17 @@ toEnv t = \case
   MDecl v _ -> Map.singleton v t
   MExec _ -> Map.empty
 
-typeMod' :: Module -> Int -> Either (InferenceError Type Expr) TypeEnv
-typeMod' mod = run (foldM signifyIn mkCEnv mod)
+typeMod' :: Module -> InferenceState Type Expr -> Either (InferenceError Type Expr) TypeEnv
+typeMod' mod = run (foldM signifyIn Map.empty mod)
   where
-    run m s = runExcept $ evalStateT (runReaderT m mkCEnv) s
-    signifyIn :: TypeEnv -> ModuleExpr -> ConstrainT Type Expr TypeEnv
+    run m s = runExcept $ evalStateT (runReaderT m Map.empty) s
+    signifyIn :: TypeEnv -> ModuleExpr -> InferT Type Expr TypeEnv
     signifyIn env mExpr = local (Map.union env) $ do
       (t, env') <- signify (toExpr mExpr)
-      -- traceM
       pure $ Map.unions [toEnv t mExpr, env', env]
 
 typeMod ::
-  Int ->
+  InferenceState Type Expr ->
   Module ->
   ModuleEvalT TypeEnv
 typeMod s mod = case typeMod' mod s of
@@ -108,13 +107,15 @@ resolveImports mods mod = foldl' accum mod' imports
     assoc = mods <&> \(NMod p mod) -> (p, mod)
     (imports, mod') = partition (\case MImport {} -> True; _ -> False) mod
 
-runTypeMod mod = runExcept (typeMod 0 mod)
+runTypeMod mod = runExcept (typeMod mkIState mod)
 
 eval' :: [NamedModule] -> Module -> Either ModuleEvalError Module
-eval' mods mod = runExcept $ (reduceMod mod' <=< typeMod nameSupply) mod'
+eval' mods mod = runExcept $ (reduceMod mod' <=< typeMod infState) mod'
   where
     rename :: Module -> (Module, Int)
     rename = runRename . fmap (fmap desugar)
+
+    infState = IState {names = nameSupply, types = Map.empty}
 
     (mod', nameSupply) = (rename . resolveImports mods) mod
 

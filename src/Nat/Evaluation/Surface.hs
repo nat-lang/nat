@@ -143,7 +143,7 @@ primBiOpMap op = case op of
     si f (ESet s) = ELit (LInt (f s))
     si _ _ = error "set expressions only"
 
-mkReductionEnv = ExprRedEnv {tyEnv = mkCEnv, relEnv = Map.empty}
+mkReductionEnv = ExprRedEnv {tyEnv = Map.empty, relEnv = Map.empty}
 
 tyOf e = asks (\s -> inferIn (tyEnv s) e)
 
@@ -172,7 +172,7 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
       -- (1b) binders have a semantics of their own: they may be applied
       -- to terms, in which case they simply abstract a free variable.
       EBind b -> reduce (ELam b e1)
-      -- (1c) normal form for lhs, goto rhs
+      -- (1c) normal form for lhs, go to rhs
       -- here we allow unbound variables into the normal form
       -- as unreduced redexes. this also allows literals, but
       -- that doesn't type check.
@@ -188,7 +188,7 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
           EApp {} -> do
             e1' <- reduce e1
             pure (e0' * e1')
-          -- (1d.2) otherwise goto top
+          -- (1d.2) otherwise go to top
           _ -> reduce (e0' * e1)
     -- (2) sugar
     EUnOp op e -> do

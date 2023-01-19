@@ -6,7 +6,7 @@
 
 module Nat.Evaluation.Type where
 
-import Control.Monad ((<=<))
+import Control.Monad (foldM, (<=<), (>=>))
 import Control.Monad.Error (MonadError (catchError))
 import Control.Monad.Except
   ( Except,
@@ -45,6 +45,7 @@ import Nat.Context hiding (fresh, fresh')
 import qualified Nat.Context as C
 import Nat.Evaluation.Context
 import Nat.Inference
+import Nat.Reduction
 import qualified Nat.Syntax.Surface as S
 import Nat.Syntax.Type
 import Nat.Unification
@@ -56,7 +57,7 @@ import Text.PrettyPrint (vcat, (<+>))
 -- Classes
 -------------------------------------------------------------------------------
 
-type TypeConstrainT r = ConstrainT Type S.Expr r
+type TypeInferT r = InferT Type S.Expr r
 
 type TypeEnv = ConstraintEnv Type
 
@@ -74,11 +75,11 @@ instance Pretty [Constraint Type] where
 extend :: TypeEnv -> (Var, Type) -> TypeEnv
 extend env (v, t) = Map.insert v t env
 
-inTypeEnv :: (Var, Type) -> TypeConstrainT a -> TypeConstrainT a
+inTypeEnv :: (Var, Type) -> TypeInferT a -> TypeInferT a
 inTypeEnv t = local (`extend` t)
 
 -- | Lookup type in the environment
-checkTy :: Var -> TypeConstrainT Type
+checkTy :: Var -> TypeInferT Type
 checkTy x = do
   env <- ask
   case Map.lookup x env of
@@ -93,7 +94,7 @@ tyOp op = case op of
   S.Or -> TyFun tyBool (TyFun tyBool tyBool)
   _ -> TyFun (mkTv "Z") (TyFun (mkTv "Z") tyBool)
 
-constrainWith e v t = inTypeEnv (v, t) (principal e)
+principalInEnv e v t = inTypeEnv (v, t) (principal e)
 
 type Case = (S.Binder S.Expr, S.Expr)
 
@@ -106,7 +107,7 @@ type Case = (S.Binder S.Expr, S.Expr)
 --       alongside constraints incurred along the way
 constrainCase ::
   (S.Binder S.Expr, S.Expr) ->
-  ConstrainT Type S.Expr ((Type, Type), [Constraint Type])
+  InferT Type S.Expr ((Type, Type), [Constraint Type])
 constrainCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
   tvs <- mapM (const fresh) vs
@@ -119,11 +120,15 @@ constrainCase (S.Binder p t, expr) = do
 
 isVar = \case TyVar {} -> True; _ -> False
 
+mkChurchTree :: Type -> S.Tree S.Expr -> TypeInferT S.Expr
 mkChurchTree branchTy t = do
   let t' = S.mkTypedChurchTree branchTy t
-  state (flip runFreshT $ renameExprTypes t')
+  i <- gets names
+  let (t'', i') = runFreshT i $ renameExprTypes t'
+  modify (\s -> s {names = i'})
+  return t''
 
-freshIfNil :: Type -> TypeConstrainT Type
+freshIfNil :: Type -> TypeInferT Type
 freshIfNil t = case t of
   TyNil -> fresh
   _ -> return t
@@ -156,10 +161,9 @@ instance Inferrable Type S.Expr where
       t <- checkTy v
       return (t, [])
     S.ELam (S.Binder v t) e -> do
-      range <- freshIfNil t
-
-      (dom, cs) <- constrainWith e v range
-      return (range `TyFun` dom, cs)
+      dom <- freshIfNil t
+      (ran, cs) <- principalInEnv e v dom
+      return (dom `TyFun` ran, cs)
     S.EApp e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
@@ -167,12 +171,11 @@ instance Inferrable Type S.Expr where
       return (tv, c0 ++ c1 ++ [(t0, t1 `TyFun` tv)])
     S.EFix v e -> do
       tv <- fresh
-      constrainWith e v (TyFun tv tv)
+      principalInEnv e v (TyFun tv tv)
     S.EBinOp op e0 e1 -> do
       (t0, c0) <- principal e0
       (t1, c1) <- principal e1
       tv <- fresh
-      tv' <- fresh
       let (TyFun a (TyFun b c)) = tyOp op
       return (tv, c0 ++ c1 ++ [(t0, a), (t1, b), (c, tv)])
     S.ECond x y z -> do
@@ -196,6 +199,7 @@ instance Inferrable Type S.Expr where
       let cs = [(et, tv), (et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))]
 
       return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
+    S.ETree t -> (principal <=< mkChurchTree TyNil) t
     S.ETree t -> do
       (branchTys, branchConstrs) <- unzip <$> mapM principal (toList t)
       branchTy <- TyFun (refine branchTys) <$> fresh
@@ -215,19 +219,58 @@ refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
 -- Unification
 -------------------------------------------------------------------------------
 
-isTyFun TyFun {} = True
-isTyFun _ = False
+join :: Type -> Type -> Type
+join (TyUnion u) (TyUnion u') = TyUnion (Set.union u u')
+join (TyUnion u) t = TyUnion (Set.insert t u)
+join t (TyUnion u) = TyUnion (Set.insert t u)
+join t t' = mkTyUnion [t, t']
+
+maybeOverload :: Type -> Type -> [Pair Type] -> UnifyM Type
+maybeOverload v@TyVar {} f@(TyFun d r) cs = do
+  p <- foldM overload (v, f) cs0
+
+  let (_, f') = p
+  let (TyVar tv) = v
+
+  return (Map.singleton tv f')
+  where
+    (cs0, cs1) = partition domClash cs
+    domClash (v', TyFun d' r') = v == v' && d <!> d'
+    domClash (TyFun d' r', v') = v == v' && d <!> d'
+    domClash _ = False
+
+    overload :: Pair Type -> Pair Type -> UnifyT Type (Pair Type)
+    overload p (v', f'@TyFun {}) = overload p (f', v')
+    overload (_, TyFun d r) (TyFun d' r', _) = do
+      u <- unify r r'
+
+      let ran = inEnv u r
+      let dom = join d d'
+
+      return (v, TyFun dom ran)
+maybeOverload v t _ = unify v t
 
 instance Unifiable Type where
+  unifyMany cs = case cs of
+    [] -> pure mempty
+    ((a0, a1) : cs') -> do
+      u <- unify' a0 a1 cs'
+      us <- unifyMany (inEnv u cs')
+      return (u <.> us)
+    where
+      unify' v@TyVar {} f@TyFun {} cs = maybeOverload v f cs
+      unify' f@TyFun {} v@TyVar {} cs = maybeOverload v f cs
+      unify' a0 a1 _ = unify a0 a1
+
   unify t0 t1 = case (t0, t1) of
     _ | t0 == t1 -> eliminate
     (TyWild, _) -> eliminate
     (_, TyWild) -> eliminate
     (TyVar v, t) -> return $ mkEnv v t
     (t, TyVar v) -> return $ mkEnv v t
-    (TyFun r d, TyFun r' d') -> do
-      u <- unify r r'
-      u' <- unify d d'
+    (TyFun d r, TyFun d' r') -> do
+      u <- unify d d'
+      u' <- unify r r'
       return (u <.> u')
     (TyUnion ts, t) | some t ts -> eliminate
     (t, TyUnion ts) | some t ts -> eliminate

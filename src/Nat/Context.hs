@@ -67,7 +67,7 @@ class Contextual a where
   fv :: a -> Set.Set Var
   bv :: a -> Set.Set Var
   fvOf :: a -> Var -> Bool
-  fvOf = flip Set.member . fv
+  fvOf a v = Set.member v (fv a)
 
 instance Substitutable a b => Substitutable a (Pair b) where
   sub :: Substitutable a b => Var -> a -> Pair b -> Pair b
@@ -77,7 +77,7 @@ instance Substitutable a b => Substitutable a [b] where
   sub :: Substitutable a b => Var -> a -> [b] -> [b]
   sub v a = map (sub v a)
 
-instance {-# OVERLAPPABLE #-} Substitutable a b => Substitutable a (Env b) where
+instance Substitutable a b => Substitutable a (Env b) where
   sub :: Substitutable a b => Var -> a -> Env b -> Env b
   sub v a = Map.map (sub v a)
 

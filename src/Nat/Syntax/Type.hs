@@ -78,7 +78,7 @@ instance Pretty Type where
   ppr p (TyCon v) = text (show v)
   ppr p (TyVar v) = text (show v)
   ppr p (TyFun a b) =
-    ppr p a <> text "->" <> ppr p b
+    angles (ppr p a <> text ", " <> ppr p b)
   ppr p (TyUnion ts) = pTySet ts
   ppr p (TyTup ts) = parens $ text (intercalate ", " (show <$> ts))
   ppr p (TyTyCase v ts) = ppr p v <> text ":" <> text (show ts)

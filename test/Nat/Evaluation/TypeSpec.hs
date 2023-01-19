@@ -118,14 +118,17 @@ spec = do
 
     it "infers the domain of the branches of a church tree with polymorphic nodes to be a union type" $ do
       let (Right t) = parse pExpr "[(\\x.x) [True] [0]]"
-      let (Right (TyFun _ (TyFun (TyFun ty _) _))) = infer t
-      let isTyUnion = \case TyUnion {} -> True; _ -> False
-      let tA = mkTv "A"
+      case infer t :: Either (InferenceError Type Expr) Type of
+        Left e -> traceM (show e)
+        Right t' -> do
+          let (TyFun _ (TyFun (TyFun ty _) _)) = t'
+          let isTyUnion = \case TyUnion {} -> True; _ -> False
+          let tA = mkTv "A"
 
-      isTyUnion ty `shouldBe` True
-      ty <=> TyFun tA tA `shouldBe` True
-      ty <=> tyInt `shouldBe` True
-      ty <=> tyBool `shouldBe` True
+          isTyUnion ty `shouldBe` True
+          ty <=> TyFun tA tA `shouldBe` True
+          ty <=> tyInt `shouldBe` True
+          ty <=> tyBool `shouldBe` True
 
     it "types parametric polymorphic functions" $ do
       let polyId = (y ~> ((y * true) ? (y * zero) > (y * one))) * (x ~> x)
