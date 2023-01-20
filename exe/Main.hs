@@ -42,7 +42,7 @@ opts =
   Options
     <$> input
     <*> switch
-      ( long "check"
+      ( long "typecheck"
           <> short 'c'
           <> help "Typecheck without executing."
       )
