@@ -20,8 +20,9 @@ data Input
 
 data Options = Options
   { oInput :: Input,
-    oCheck :: Bool,
-    oTypeset :: Bool
+    oTypecheck :: Bool,
+    oTypeset :: Bool,
+    oEvaluate :: Bool
   }
   deriving (Show)
 
@@ -51,6 +52,11 @@ opts =
           <> short 't'
           <> help "Convert the output to LaTeX."
       )
+    <*> switch
+      ( long "evaluate"
+          <> short 'e'
+          <> help "Evaluate the file."
+      )
 
 entry :: ParserInfo Options
 entry =
@@ -77,10 +83,14 @@ main = do
   TiO.putStrLn $ case S.runPModule input of
     Left err -> pack $ show err
     Right mod ->
-      if oCheck options
+      -- todo: make a matrix of the options
+      if oTypecheck options
         then pack $ show $ E.runTypeMod mod
-        else case E.eval mod of
-          Left err -> pack $ show err
-          Right mod' -> out mod
+        else
+          if oEvaluate options
+            then case E.eval mod of
+              Left err -> pack $ show err
+              Right mod' -> out mod'
+            else out mod
 
   hFlush stderr

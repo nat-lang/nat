@@ -7,6 +7,7 @@ module Nat.TeX (render, toTeX, typeset, pp, typesetFile) where
 import Data.List (intersperse)
 import qualified Data.Text as T
 import Data.Tree.Binary.Preorder (Tree (..))
+import GHC.Real (Integral (toInteger), RealFrac (truncate))
 import Nat.Context
 import Nat.Syntax.Module
 import Nat.Syntax.Surface
@@ -71,7 +72,8 @@ instance TeX a => TeX (Binder a) where
   toTeX (Binder v _) = str "\\lambda" <+> toTeX v
 
 instance TeX Lit where
-  toTeX = traw
+  toTeX (LInt r) = traw (truncate $ fromRational r)
+  toTeX (LBool b) = str (show b)
 
 instance TeX Expr where
   toTeX = \case

@@ -69,18 +69,12 @@ typeMod' mod = run (foldM signifyIn Map.empty mod)
       (t, env') <- signify (toExpr mExpr)
       pure $ Map.unions [toEnv t mExpr, env', env]
 
-typeMod ::
-  InferenceState Type Expr ->
-  Module ->
-  ModuleEvalT TypeEnv
+typeMod :: InferenceState Type Expr -> Module -> ModuleEvalT TypeEnv
 typeMod s mod = case typeMod' mod s of
   Left err -> throwError $ MTypeError err
   Right tyEnv -> pure tyEnv
 
-reduceMod ::
-  Module ->
-  TypeEnv ->
-  ModuleEvalT Module
+reduceMod :: Module -> TypeEnv -> ModuleEvalT Module
 reduceMod mod tyEnv = case reduceIn tyEnv mod of
   Left err -> throwError $ MExprEvalError err
   Right mod' -> pure mod'
