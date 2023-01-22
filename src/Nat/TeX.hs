@@ -4,7 +4,7 @@
 
 module Nat.TeX (render, toTeX, typeset, pp, typesetFile) where
 
-import Data.List (intersperse)
+import Data.List (intersperse, replicate)
 import qualified Data.Text as T
 import Data.Tree.Binary.Preorder (Tree (..))
 import GHC.Real (Integral (toInteger), RealFrac (truncate))
@@ -40,7 +40,7 @@ class TeX a where
       <> usepackage [] tikzQTree
       <> usepackage [] tikzQTreeCompat
       <> usepackage [utf8] inputenc
-      <> document (TeXEnv "tikzpicture" [] (toTeX e))
+      <> document (toTeX e)
 
   typesetFile :: FilePath -> a -> IO ()
   typesetFile f = renderFile f . typeset
@@ -62,6 +62,8 @@ traw = TeXRaw . T.pack . show
 
 str = TeXRaw . T.pack
 
+lbreak n = str $ replicate n '\n'
+
 (<+>) :: LaTeX -> LaTeX -> LaTeX
 (<+>) l l' = between (str " ") l l'
 
@@ -77,7 +79,7 @@ instance TeX Lit where
 
 instance TeX Expr where
   toTeX = \case
-    ETree t -> commS "Tree" <+> toTeX t
+    ETree t -> TeXEnv "tikzpicture" [] $ commS "Tree" <+> toTeX t
     ELit l -> toTeX l
     EVar v -> traw v
     EBind b -> toTeX b
@@ -105,4 +107,4 @@ instance TeX ModuleExpr where
   toTeX = foldl1 (<>) . fmap toTeX
 
 instance TeX Module where
-  toTeX = mconcat . intersperse "\n" . fmap toTeX
+  toTeX = mconcat . fmap (\e -> lbreak 2 <> toTeX e <> lbreak 2 <> hspace (Cm 2))

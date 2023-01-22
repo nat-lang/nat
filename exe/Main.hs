@@ -76,10 +76,9 @@ main = do
   options <- execParser entry
   input <- chooseInput (oInput options)
   let out =
-        pack
-          . if oTypeset options
-            then prettyLaTeX . typeset
-            else show
+        if oTypeset options
+          then render . typeset
+          else pack . show
   TiO.putStrLn $ case S.runPModule input of
     Left err -> pack $ show err
     Right mod ->
