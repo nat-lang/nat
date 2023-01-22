@@ -36,6 +36,21 @@ spec = do
       parse pMExpr "[0 [1][2]]" `shouldBe` Right (MExec (ETree (Node (mkI 0) (Node (mkI 1) Leaf Leaf) (Node (mkI 2) Leaf Leaf))))
 
   describe "pModule" $ do
+    it "parses modules with line and block comments" $ do
+      let mod0 =
+            [r|/*
+                Block Comment
+               */
+               let x = 0
+               // Line Comment
+               let y = 1|]
+
+      parse pModule mod0
+        `shouldBe` Right
+          [ MDecl vX $ mkI 0,
+            MDecl vY $ mkI 1
+          ]
+
     it "parses modules with let declarations" $ do
       let mod0 =
             [r|let f = \x:<n>.\y:<n>. x + y

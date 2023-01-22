@@ -12,6 +12,7 @@ import qualified Nat.Parser as P
 import Nat.Syntax.Surface
 import Nat.Syntax.Type
 import Nat.Walk
+import qualified Text.Megaparsec.Char as C
 import Text.Megaparsec.Debug (dbg)
 
 type ModulePath = [String]
@@ -60,6 +61,6 @@ pMDom = do
 pMExpr = P.choice [pMExec, pMDecl, pMDom, pMImport]
 
 pModule :: P.Parser Module
-pModule = pMExpr `P.sepEndBy` P.delimiter
+pModule = P.anySpace >> (pMExpr `P.sepEndBy` P.delimiter)
 
 runPModule = P.parse pModule

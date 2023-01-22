@@ -400,7 +400,7 @@ pELitCase = do
   P.reserved "case"
   base <- pExpr
   P.reserved "of"
-  P.spaceN
+  P.someSpace
   cases <- P.pipeSep pCase
   pure $ ELitCase base cases
   where
@@ -423,7 +423,7 @@ pETyCase = do
   P.reserved "tycase"
   base <- pExpr
   P.reserved "of"
-  P.spaceN
+  P.someSpace
   cases <- P.pipeSep pCase
   pure $ ETyCase base cases
   where

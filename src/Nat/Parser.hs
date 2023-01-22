@@ -32,6 +32,7 @@ import Text.Megaparsec
     many,
     notFollowedBy,
     observing,
+    optional,
     parseError,
     runParserT,
     sepBy,
@@ -81,8 +82,11 @@ blockComment = L.skipBlockComment "/*" "*/"
 space :: Parser ()
 space = L.space C.hspace1 lineComment blockComment
 
-spaceN :: Parser ()
-spaceN = L.space C.space1 lineComment blockComment
+someSpace :: Parser ()
+someSpace = L.space C.space1 lineComment blockComment
+
+anySpace :: Parser (Maybe ())
+anySpace = optional someSpace
 
 delimiter = some (space >> some C.newline >> space)
 
