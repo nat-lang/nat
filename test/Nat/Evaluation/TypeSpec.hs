@@ -193,7 +193,13 @@ spec = do
       unionTy <=> tB `shouldBe` True
       unionTy <=> tC `shouldBe` False
 
-    it "is inferrable" $ do
+    it "is inferrable (1)" $ do
       let (Right expr) = parse pExpr "\\f. (f 1) && (f True)"
 
       infer expr `shouldBe` Right (TyFun (TyFun (mkTyUnion [tyInt, tyBool]) tyBool) tyBool)
+
+    it "is inferrable (2)" $ do
+      let (Right expr) = parse pExpr "(\\g.\\f.(f 1) && (g f))(\\f. f True)"
+      let (Right ty) = parse pType "<<{n | t}, t>, <<{n | t}, t>, t>>"
+
+      infer expr `shouldBe` Right ty

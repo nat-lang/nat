@@ -212,17 +212,17 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
       case x' of
         ELit LBool {} -> reduce $ if bool x' then y else z
         _ -> pure $ ECond x' y z
-    ETyCase b cs -> do
-      b' <- reduce b
-      bTy <- tryTyOf b'
+    ETyCase scrutinee cases -> do
+      scrutinee' <- reduce scrutinee
+      scrutineeTy <- tryTyOf scrutinee'
 
-      case cs of
-        ((Binder p pTy, e) : cs') ->
-          if unifiable bTy pTy
-            then case runUnify [(p, b')] of
+      case cases of
+        ((Binder pattern patternTy, scope) : cases') ->
+          if unifiable scrutineeTy patternTy
+            then case runUnify [(pattern, scrutinee')] of
               Left e -> throwError $ EUnificationError e
-              Right s -> reduce $ inEnv s e
-            else reduce $ ETyCase b cs'
+              Right signature -> reduce $ inEnv signature scope
+            else reduce $ ETyCase scrutinee cases'
         _ -> throwError $ InexhaustiveCase expr
     ELitCase b cs -> do
       b' <- reduce b
@@ -260,9 +260,15 @@ instance Reducible Expr Expr ExprEvalError ExprReductionEnv where
 
 -- | We pattern match via unification.
 instance Unifiable Expr where
+  invariants (a, b) = case (a, b) of
+    (ETup es, ETup es') ->
+      if length es == length es'
+        then expandInvariants (zip es es')
+        else throwError (NotUnifiable a b)
+    c -> return [c]
+
   unify e0 e1 = case (e0, e1) of
     (EVar v0, EVar v1) | v0 == v1 -> pure mempty
-    (ETup t0, ETup t1) | length t0 == length t1 -> unifyMany (zip t0 t1)
     (EUndef, EUndef) -> pure mempty
     (EVar v, _) -> pure $ mkEnv v e1
     (_, EVar v) -> pure $ mkEnv v e0

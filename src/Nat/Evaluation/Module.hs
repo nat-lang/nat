@@ -109,7 +109,7 @@ eval' mods mod = runExcept $ (reduceMod mod' <=< typeMod infState) mod'
     rename :: Module -> (Module, Int)
     rename = runRename . fmap (fmap desugar)
 
-    infState = IState {names = nameSupply, types = Map.empty}
+    infState = IState {names = nameSupply, assignments = Map.empty}
 
     (mod', nameSupply) = (rename . resolveImports mods) mod
 

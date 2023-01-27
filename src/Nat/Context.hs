@@ -7,6 +7,7 @@ module Nat.Context where
 
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT, runStateT, state)
+import Data.Char (isAlpha)
 import Data.Foldable (Foldable (foldl'))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -29,13 +30,28 @@ type Env a = Map.Map Var a
 
 type Pair a = (a, a)
 
+instance Pretty Var where
+  ppr _ = text . show
+
+instance Pretty a => Pretty (Env a) where
+  ppr _ = prettyPairs "->" . Map.toList
+
+instance Pretty a => Pretty [Pair a] where
+  ppr _ = prettyPairs "="
+
 instance Eq Var where
   (==) :: Var -> Var -> Bool
   (Var _ v) == (Var _ v') = v == v'
 
 instance Ord Var where
+  -- fixme, bad bad bad
   compare :: Var -> Var -> Ordering
-  compare (Var _ v0) (Var _ v1) = compare v0 v1
+  compare (Var _ v0) (Var _ v1) = compare (split v0) (split v1)
+    where
+      split v = (a, b')
+        where
+          (a, b) = span isAlpha v
+          b' = if not (null b) then read b :: Integer else 0
 
 instance Show Var where
   show :: Var -> String
@@ -99,8 +115,11 @@ instance Contextual a => Contextual (Env a) where
   fv :: Contextual a => Env a -> Set.Set Var
   fv env = fv $ Map.elems env
 
+compose :: (Substitutable a a, Show a) => Env a -> Env a -> Env a
+compose e0 e1 = Map.map (inEnv e0) e1 `Map.union` e0
+
 (<.>) :: (Substitutable a a, Show a) => Env a -> Env a -> Env a
-(<.>) e0 e1 = Map.map (inEnv e0) e1 `Map.union` e0
+(<.>) = compose
 
 type FreshT m = StateT Int m
 

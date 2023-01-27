@@ -7,10 +7,13 @@ module Nat.Viz
   )
 where
 
+import Data.List (intercalate)
 import Text.PrettyPrint
   ( Doc,
     char,
+    hcat,
     parens,
+    punctuate,
     text,
     (<+>),
     (<>),
@@ -43,3 +46,12 @@ parensIf = fnIf parens
 
 bracketsIf :: Bool -> Doc -> Doc
 bracketsIf = fnIf brackets
+
+sep :: String -> [Doc] -> Doc
+sep punc = hcat . punctuate (text punc)
+
+prettyPair :: (Pretty p1, Pretty p2) => String -> (p1, p2) -> Doc
+prettyPair delim (a, b) = text "\t" <> pp a <+> text delim <+> pp b
+
+prettyPairs :: (Pretty p1, Pretty p2) => String -> [(p1, p2)] -> Doc
+prettyPairs delim = sep "\n" . fmap (prettyPair delim)

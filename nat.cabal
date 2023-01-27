@@ -35,7 +35,6 @@ library
       Nat.Inference
       Nat.Parser
       Nat.Reduction
-      Nat.Syntax.Core
       Nat.Syntax.Module
       Nat.Syntax.Surface
       Nat.Syntax.Type
