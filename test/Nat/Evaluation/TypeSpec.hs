@@ -11,7 +11,6 @@ import Nat.Context
 import Nat.Evaluation.Surface
 import Nat.Evaluation.Type
 import Nat.Inference
-import Nat.Inference (Inferrable (runSignifyIn))
 import Nat.Parser
 import Nat.Syntax.Surface hiding (fromList)
 import Nat.Syntax.Type
@@ -104,9 +103,11 @@ spec = do
       infer fact `shouldBe` Right (TyFun tyInt tyInt)
 
     it "types abstractions over trees" $ do
-      let (Right t) = parse pExpr "\\a. [a [1] [0]]"
+      let (Right tree) = parse pExpr "\\a:<t>. [a [1] [0]]"
+      let (Right ty) = parse pType "<t, <<{n | t}, <A, <A, A>>>, A>>"
+      let (Right treeTy) = infer tree
 
-      infer t `shouldBe` Right (mkTv "a")
+      ty <=> treeTy `shouldBe` True
 
     it "types folds over trees" $ do
       let (Right t) = parse pExpr "[0 [1] [0]]"
@@ -193,7 +194,13 @@ spec = do
       unionTy <=> tB `shouldBe` True
       unionTy <=> tC `shouldBe` False
 
-    it "is inferrable" $ do
+    it "is inferrable (1)" $ do
       let (Right expr) = parse pExpr "\\f. (f 1) && (f True)"
 
       infer expr `shouldBe` Right (TyFun (TyFun (mkTyUnion [tyInt, tyBool]) tyBool) tyBool)
+
+    it "is inferrable (2)" $ do
+      let (Right expr) = parse pExpr "(\\g.\\f.(f 1) && (g f))(\\f. f True)"
+      let (Right ty) = parse pType "<<{n | t}, t>, <<{n | t}, t>, t>>"
+
+      infer expr `shouldBe` Right ty

@@ -3,12 +3,14 @@
 
 module Main where
 
+import qualified Data.Map as Map
 import Data.Text
 import qualified Data.Text.IO as TiO
 import qualified Nat.Evaluation.Module as E
 import qualified Nat.Parser as P
 import qualified Nat.Syntax.Module as S
 import Nat.TeX
+import Nat.Viz (prettyPairs)
 import Options.Applicative
 import System.IO (hFlush, stderr)
 import Text.LaTeX.Base.Pretty
@@ -84,7 +86,9 @@ main = do
     Right mod ->
       -- todo: make a matrix of the options
       if oTypecheck options
-        then pack $ show $ E.runTypeMod mod
+        then case E.runTypeMod mod of
+          Left err -> pack $ show err
+          Right (_, assignments) -> (pack . show . prettyPairs "->" . Map.toList) assignments
         else
           if oEvaluate options
             then case E.eval mod of
