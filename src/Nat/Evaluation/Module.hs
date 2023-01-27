@@ -60,19 +60,22 @@ toEnv t = \case
   MDecl v _ -> Map.singleton v t
   MExec _ -> Map.empty
 
-typeMod' :: Module -> InferenceState Type Expr -> Either (InferenceError Type Expr) TypeEnv
-typeMod' mod = run (foldM signifyIn Map.empty mod)
+type Assignments = Map.Map Expr Type
+
+typeMod' :: Module -> InferenceState Type Expr -> Either (InferenceError Type Expr) (TypeEnv, Assignments)
+typeMod' mod = run (foldM signifyIn (Map.empty, Map.empty) mod)
   where
     run m s = runExcept $ evalStateT (runReaderT m Map.empty) s
-    signifyIn :: TypeEnv -> ModuleExpr -> InferT Type Expr TypeEnv
-    signifyIn env mExpr = local (Map.union env) $ do
-      (t, env') <- signify (toExpr mExpr)
-      pure $ Map.unions [toEnv t mExpr, env', env]
 
-typeMod :: InferenceState Type Expr -> Module -> ModuleEvalT TypeEnv
+    signifyIn :: (TypeEnv, Assignments) -> ModuleExpr -> InferT Type Expr (TypeEnv, Assignments)
+    signifyIn (env, assigns) mExpr = local (Map.union env) $ do
+      (t, env', assigns') <- signify (toExpr mExpr)
+      pure (Map.unions [toEnv t mExpr, env', env], Map.union assigns assigns')
+
+typeMod :: InferenceState Type Expr -> Module -> ModuleEvalT (TypeEnv, Assignments)
 typeMod s mod = case typeMod' mod s of
   Left err -> throwError $ MTypeError err
-  Right tyEnv -> pure tyEnv
+  Right env -> return env
 
 reduceMod :: Module -> TypeEnv -> ModuleEvalT Module
 reduceMod mod tyEnv = case reduceIn tyEnv mod of
@@ -101,15 +104,16 @@ resolveImports mods mod = foldl' accum mod' imports
     assoc = mods <&> \(NMod p mod) -> (p, mod)
     (imports, mod') = partition (\case MImport {} -> True; _ -> False) mod
 
+runTypeMod :: Module -> Either ModuleEvalError (TypeEnv, Assignments)
 runTypeMod mod = runExcept (typeMod mkIState mod)
 
 eval' :: [NamedModule] -> Module -> Either ModuleEvalError Module
-eval' mods mod = runExcept $ (reduceMod mod' <=< typeMod infState) mod'
+eval' mods mod = runExcept $ (reduceMod mod' <=< (return . fst) <=< typeMod infState) mod'
   where
     rename :: Module -> (Module, Int)
     rename = runRename . fmap (fmap desugar)
 
-    infState = IState {names = nameSupply, types = Map.empty}
+    infState = IState {names = nameSupply, assignments = Map.empty}
 
     (mod', nameSupply) = (rename . resolveImports mods) mod
 

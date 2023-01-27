@@ -6,8 +6,7 @@
 
 module Nat.Evaluation.Type where
 
-import Control.Monad (foldM, (<=<), (>=>))
-import Control.Monad.Error (MonadError (catchError))
+import Control.Monad (filterM, foldM, (<=<), (>=>))
 import Control.Monad.Except
   ( Except,
     ExceptT,
@@ -32,6 +31,7 @@ import Control.Monad.State
     state,
   )
 import Control.Monad.Trans (lift)
+import Data.Bool (Bool (True))
 import Data.Either (isRight)
 import Data.Foldable (toList)
 import Data.Functor ((<&>))
@@ -43,6 +43,7 @@ import qualified Data.Set as Set
 import Debug.Trace (trace, traceM)
 import Nat.Context hiding (fresh, fresh')
 import qualified Nat.Context as C
+import Nat.Control (foldM1)
 import Nat.Evaluation.Context
 import Nat.Inference
 import Nat.Reduction
@@ -53,22 +54,12 @@ import Nat.Viz
 import Nat.Walk
 import Text.PrettyPrint (vcat, (<+>))
 
--------------------------------------------------------------------------------
--- Classes
--------------------------------------------------------------------------------
-
 type TypeInferT r = InferT Type S.Expr r
 
-type TypeEnv = ConstraintEnv Type
-
-instance Pretty (Constraint Type) where
-  ppr p (a0, a1) = ppr p a0 <+> text "=" <+> ppr p a1
-
-instance Pretty [Constraint Type] where
-  ppr p cs = vcat $ fmap ((text "\t" <>) . ppr p) cs
+type TypeEnv = Signature Type
 
 -------------------------------------------------------------------------------
--- Inference
+-- Inference - constraint generation
 -------------------------------------------------------------------------------
 
 -- | Extend type environment
@@ -103,12 +94,12 @@ type Case = (S.Binder S.Expr, S.Expr)
 --   (3) constrain the expr under these tvars
 --   (4) constrain the inferred type of the pattern
 --       and the pattern's type annotation to be equal
---   (5) return the sumtype of the pattern and body's types
+--   (5) return the pattern and body's types
 --       alongside constraints incurred along the way
-constrainCase ::
+principalCase ::
   (S.Binder S.Expr, S.Expr) ->
   InferT Type S.Expr ((Type, Type), [Constraint Type])
-constrainCase (S.Binder p t, expr) = do
+principalCase (S.Binder p t, expr) = do
   let vs = Set.toList $ fv p
   tvs <- mapM (const fresh) vs
   let env = Map.fromList (zip vs tvs)
@@ -120,6 +111,7 @@ constrainCase (S.Binder p t, expr) = do
 
 isVar = \case TyVar {} -> True; _ -> False
 
+-- | Make a church tree from an ETree and rename its variables.
 mkChurchTree :: Type -> S.Tree S.Expr -> TypeInferT S.Expr
 mkChurchTree branchTy t = do
   let t' = S.mkTypedChurchTree branchTy t
@@ -150,11 +142,11 @@ instance Inferrable Type S.Expr where
         else case find (unifiable bT . fst) ts of
           Nothing -> throwError $ IInexhaustiveCase t
           Just (pT, eT) -> do
-            s <- liftEither (unify' ((pT, bT) : cs) e)
+            s <- liftEither (liftUnify ((pT, bT) : cs) e)
             return (inEnv s eT, cs)
     _ -> principal' e
 
-  constrain expr = case expr of
+  constrain' expr = case expr of
     S.ELit (S.LInt _) -> return (tyInt, [])
     S.ELit (S.LBool _) -> return (tyBool, [])
     S.EVar v -> do
@@ -190,16 +182,14 @@ instance Inferrable Type S.Expr where
       let (ts, cs') = unzip cs
       return (tv, (tv, TyTup ts) : concat cs')
     S.EWild -> return (TyWild, [])
-    S.ETyCase e cases -> do
+    S.ETyCase scrutinee cases -> do
       tv <- fresh
-      (et, eCs) <- principal e
-      cTs <- mapM constrainCase cases
+      (scrutineeType, eCs) <- principal scrutinee
+      (caseTypes, caseConstraints) <- (mapM principalCase >=> (return . unzip)) cases
 
-      let (cTs', cCs) = unzip cTs
-      let cs = [(et, tv), (et, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))]
+      let cs = [(scrutineeType, tv), (scrutineeType, TyUnion (Set.fromList [t | (S.Binder _ t) <- map fst cases]))]
 
-      return (TyTyCase tv cTs', concat [cs, eCs, concat cCs])
-    S.ETree t -> (principal <=< mkChurchTree TyNil) t
+      return (TyTyCase tv caseTypes, concat [cs, eCs, concat caseConstraints])
     S.ETree t -> do
       (branchTys, branchConstrs) <- unzip <$> mapM principal (toList t)
       branchTy <- TyFun (refine branchTys) <$> fresh
@@ -208,6 +198,7 @@ instance Inferrable Type S.Expr where
       t' <- mkChurchTree branchTy t
       (tv, cs) <- principal t'
       return (tv, concat $ cs : branchConstrs)
+    S.ETree t -> (principal <=< mkChurchTree TyNil) t
     S.EUndef -> return (TyUndef, [])
     _ -> throwError $ IUnconstrainable expr
 
@@ -216,66 +207,36 @@ refine ts = if uniform ts then head ts else TyUnion $ Set.fromList ts
     uniform xs = all (== head xs) (tail xs)
 
 -------------------------------------------------------------------------------
--- Unification
+-- Inference - constraint unification
 -------------------------------------------------------------------------------
-
-join :: Type -> Type -> Type
-join (TyUnion u) (TyUnion u') = TyUnion (Set.union u u')
-join (TyUnion u) t = TyUnion (Set.insert t u)
-join t (TyUnion u) = TyUnion (Set.insert t u)
-join t t' = mkTyUnion [t, t']
-
-maybeOverload :: Type -> Type -> [Pair Type] -> UnifyM Type
-maybeOverload v@TyVar {} f@(TyFun d r) cs = do
-  p <- foldM overload (v, f) cs0
-
-  let (_, f') = p
-  let (TyVar tv) = v
-
-  return (Map.singleton tv f')
-  where
-    (cs0, cs1) = partition domClash cs
-    domClash (v', TyFun d' r') = v == v' && d <!> d'
-    domClash (TyFun d' r', v') = v == v' && d <!> d'
-    domClash _ = False
-
-    overload :: Pair Type -> Pair Type -> UnifyT Type (Pair Type)
-    overload p (v', f'@TyFun {}) = overload p (f', v')
-    overload (_, TyFun d r) (TyFun d' r', _) = do
-      u <- unify r r'
-
-      let ran = inEnv u r
-      let dom = join d d'
-
-      return (v, TyFun dom ran)
-maybeOverload v t _ = unify v t
-
 instance Unifiable Type where
-  unifyMany cs = case cs of
-    [] -> pure mempty
-    ((a0, a1) : cs') -> do
-      u <- unify' a0 a1 cs'
-      us <- unifyMany (inEnv u cs')
-      return (u <.> us)
+  -- Invariants, which remove the need for recursion in unify:
+  -- (1) no function constraints: they're expanded
+  -- (2) no tuple constraints: also expanded
+  invariants (a, b) = case (a, b) of
+    (TyTup ts, TyTup ts') ->
+      if length ts == length ts'
+        then expandInvariants (zip ts ts')
+        else throwContextualError (NotUnifiable a b)
+    (TyFun d r, TyFun d' r') -> do
+      cs <- invariants (d, d')
+      cs' <- invariants (r, r')
+      return (cs ++ cs')
+    c -> return [c]
     where
-      unify' v@TyVar {} f@TyFun {} cs = maybeOverload v f cs
-      unify' f@TyFun {} v@TyVar {} cs = maybeOverload v f cs
-      unify' a0 a1 _ = unify a0 a1
+      isTv = \case
+        TyVar {} -> True
+        _ -> False
 
   unify t0 t1 = case (t0, t1) of
     _ | t0 == t1 -> eliminate
-    (TyWild, _) -> eliminate
-    (_, TyWild) -> eliminate
     (TyVar v, t) -> return $ mkEnv v t
     (t, TyVar v) -> return $ mkEnv v t
-    (TyFun d r, TyFun d' r') -> do
-      u <- unify d d'
-      u' <- unify r r'
-      return (u <.> u')
+    (TyWild, _) -> eliminate
+    (_, TyWild) -> eliminate
     (TyUnion ts, t) | some t ts -> eliminate
     (t, TyUnion ts) | some t ts -> eliminate
-    (TyTup ts, TyTup ts') | length ts == length ts' -> unifyMany (zip ts ts')
-    _ -> throwError $ NotUnifiable t0 t1
+    _ -> throwContextualError $ NotUnifiable t0 t1
     where
       eliminate = return mempty
       some t ts = or (unifiable t <$> Set.toList ts)
