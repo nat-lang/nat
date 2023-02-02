@@ -83,7 +83,10 @@ instance TeX Expr where
     ELit l -> toTeX l
     EVar v -> traw v
     EBind b -> toTeX b
-    ELam b e -> math $ toTeX b <+> autoBrackets (str "[") (str "]") (toTeX e)
+    ELam b e ->
+      toTeX b <+> case e of
+        ELam {} -> toTeX e
+        _ -> autoBrackets (str "[") (str "]") (toTeX e)
     EApp e e' -> toTeX e <> autoParens (toTeX e')
     {-
     ECond Expr Expr Expr ->
@@ -107,4 +110,4 @@ instance TeX ModuleExpr where
   toTeX = foldl1 (<>) . fmap toTeX
 
 instance TeX Module where
-  toTeX = mconcat . fmap (\e -> lbreak 2 <> toTeX e <> lbreak 2 <> hspace (Cm 2))
+  toTeX = mconcat . fmap (\e -> lbreak 2 <> math (toTeX e) <> lbreak 2 <> hspace (Cm 2))
